@@ -1,0 +1,133 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PollStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+
+enum QuestionType {
+  SINGLE
+  RANKED
+}
+
+model User {
+  id               String      @id @default(uuid())
+  email            String      @unique
+  passwordHash     String
+  verified         Boolean     @default(false)
+  approvedByAdmin  Boolean     @default(false)
+  role             Role        @default(USER)
+  polls            Poll[]
+  auditLogs        AuditLog[]
+  createdAt        DateTime    @default(now())
+}
+
+model OTP {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id              String         @id @default(uuid())
+  creatorId       String
+  creator         User           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title           String
+  description     String
+  posterUrl       String?
+  isOpenVoting    Boolean        @default(true)
+  isAnonymous     Boolean        @default(true)
+  isResultPublic  Boolean        @default(false)
+  startTime       DateTime
+  endTime         DateTime
+  status          PollStatus     @default(DRAFT)
+  questions       Question[]
+  allowedVoters   AllowedVoter[]
+  settings        PollSettings?
+  votes           Vote[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime       @default(now())
+}
+
+model Question {
+  id           String       @id @default(uuid())
+  pollId       String
+  poll         Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  questionText String
+  type         QuestionType @default(SINGLE)
+  options      Option[]
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+}
+
+model Vote {
+  id                String   @id @default(uuid())
+  pollId            String
+  poll              Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  userIdentifier    String?  // custom e.g., Roll number
+  email             String?
+  ipAddress         String
+  isp               String?
+  device            String?  // Desktop or Mobile
+  latitude          Float?
+  longitude         Float?
+  answers           Json     // JSON string mapping question ID to options/rankings: { "q-id": ["opt-1", "opt-2"] }
+  flaggedSuspicious Boolean  @default(false)
+  createdAt         DateTime @default(now())
+}
+
+model AllowedVoter {
+  id          String  @id @default(uuid())
+  pollId      String
+  poll        Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  identifier  String  // e.g. "2021BCS003"
+  confirmer1  String  // e.g. "John Doe"
+  confirmer2  String? // e.g. optional secondary confirmation text
+  email       String
+  voted       Boolean @default(false)
+}
+
+model PollSettings {
+  id                    String  @id @default(uuid())
+  pollId                String  @unique
+  poll                  Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  limitOneVotePerUser   Boolean @default(false)
+  limitOneVotePerIP     Boolean @default(false)
+  limitOneVotePerISP    Boolean @default(false)
+  hideResultsUntilEnd   Boolean @default(false)
+  identifierLabel       String  @default("Roll Number")
+  confirmer1Label       String  @default("Student Name")
+  confirmer2Label       String  @default("Parent Name")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  adminId   String?
+  admin     User?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  pollId    String?
+  poll      Poll?    @relation(fields: [pollId], references: [id], onDelete: SetNull)
+  details   String
+  timestamp DateTime @default(now())
+}
