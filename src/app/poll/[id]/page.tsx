@@ -42,6 +42,9 @@ export default function VoterPortal({ params }: PageProps) {
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpSendLoading, setOtpSendLoading] = useState(false);
+  const [otpSentOnce, setOtpSentOnce] = useState(false);
 
   // Open voter email limit state
   const [openEmail, setOpenEmail] = useState('');
@@ -114,6 +117,15 @@ export default function VoterPortal({ params }: PageProps) {
 
     fetchPoll();
   }, [pollId]);
+
+  // OTP Verification countdown decrement effect
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setOtpCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [otpCooldown]);
 
   // 2. Real-Time Serverless Polling Connection
   useEffect(() => {
@@ -193,14 +205,20 @@ export default function VoterPortal({ params }: PageProps) {
 
   // Step 1: Submit allowed credentials to request email verification code
   const handleVoterRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
+
+    if (otpCooldown > 0) {
+      setError(`OTP rate limited. Please wait ${otpCooldown}s before requesting a new code.`);
+      return;
+    }
 
     if (!voterIdentifier || !confirmer1 || !voterEmail) {
       setError('Compulsory verification credentials are empty.');
       return;
     }
 
+    setOtpSendLoading(true);
     try {
       const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
         method: 'POST',
@@ -219,10 +237,14 @@ export default function VoterPortal({ params }: PageProps) {
         throw new Error(data.error || 'Failed to confirm credentials');
       }
 
+      setOtpSentOnce(true);
+      setOtpCooldown(60); // 60 seconds rate limit cooldown
       setShowOtpPopup(true);
       setOtpError('');
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setOtpSendLoading(false);
     }
   };
 
@@ -573,10 +595,19 @@ export default function VoterPortal({ params }: PageProps) {
 
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-sm flex items-center justify-center space-x-2"
+                disabled={otpSendLoading || otpCooldown > 0}
+                className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-sm flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>Confirm Profile & Send OTP</span>
-                <ArrowRight className="w-4 h-4" />
+                {otpSendLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : otpCooldown > 0 ? (
+                  <span>Resend OTP in {otpCooldown}s</span>
+                ) : otpSentOnce ? (
+                  <span>Resend OTP Code</span>
+                ) : (
+                  <span>Confirm Profile & Send OTP</span>
+                )}
+                {!otpSendLoading && <ArrowRight className="w-4 h-4" />}
               </button>
             </form>
           )}
@@ -616,6 +647,21 @@ export default function VoterPortal({ params }: PageProps) {
                 placeholder="123456"
                 className="w-full text-center tracking-[12px] pl-3 glass-input text-2xl font-bold font-mono placeholder-gray-800"
               />
+
+              <div className="text-center py-1 select-none">
+                {otpCooldown > 0 ? (
+                  <span className="text-gray-500 text-xs font-bold">Resend available in {otpCooldown}s</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={otpSendLoading}
+                    onClick={() => handleVoterRequestOtp(null as any)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all disabled:opacity-50"
+                  >
+                    {otpSendLoading ? 'Requesting resend...' : 'Didn\'t receive code? Resend OTP'}
+                  </button>
+                )}
+              </div>
 
               <div className="flex gap-3">
                 <button
