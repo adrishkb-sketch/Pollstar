@@ -59,13 +59,20 @@
   background: rgba(99, 102, 241, 0.4);
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+  position: relative;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter);
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
 }
 
 /* Glowing background ambient orbs */
