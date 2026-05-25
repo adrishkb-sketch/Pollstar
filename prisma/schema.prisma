@@ -22,6 +22,7 @@ enum PollStatus {
 enum QuestionType {
   SINGLE
   RANKED
+  KNOCKOUT
 }
 
 model User {

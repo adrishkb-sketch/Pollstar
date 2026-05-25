@@ -71,6 +71,118 @@ export default function VoterPortal({ params }: PageProps) {
   const [liveTotalVotes, setLiveTotalVotes] = useState(0);
   const [liveVoterLocations, setLiveVoterLocations] = useState<any[]>([]);
 
+  // Tournament Knockout states
+  const [knockoutRounds, setKnockoutRounds] = useState<any[]>([]);
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+
+  const initializeKnockout = (options: any[]) => {
+    let N = options.length;
+    if (N < 2) return;
+    
+    let nextPower = 2;
+    while (nextPower < N) {
+      nextPower *= 2;
+    }
+    
+    const padded = [...options];
+    for (let i = N; i < nextPower; i++) {
+      padded.push({ id: `BYE-${i}`, text: 'BYE' });
+    }
+
+    // Shuffle randomly to automate pairings
+    const shuffled = [...padded].sort(() => Math.random() - 0.5);
+
+    const firstRoundMatches: any[] = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+      const c1 = shuffled[i];
+      const c2 = shuffled[i + 1];
+      
+      let winnerId = null;
+      if (c1.id.startsWith('BYE-') && !c2.id.startsWith('BYE-')) {
+        winnerId = c2.id;
+      } else if (c2.id.startsWith('BYE-') && !c1.id.startsWith('BYE-')) {
+        winnerId = c1.id;
+      } else if (c1.id.startsWith('BYE-') && c2.id.startsWith('BYE-')) {
+        winnerId = c1.id;
+      }
+
+      firstRoundMatches.push({
+        c1,
+        c2,
+        winner: winnerId
+      });
+    }
+
+    setKnockoutRounds([firstRoundMatches]);
+    setCurrentRoundIndex(0);
+  };
+
+  const handleKnockoutSelect = (matchIndex: number, winnerId: string, questionId: string) => {
+    const updatedRounds = [...knockoutRounds];
+    const currentRound = [...updatedRounds[currentRoundIndex]];
+    
+    currentRound[matchIndex] = {
+      ...currentRound[matchIndex],
+      winner: winnerId
+    };
+    updatedRounds[currentRoundIndex] = currentRound;
+    setKnockoutRounds(updatedRounds);
+
+    const allDecided = currentRound.every((m) => m.winner !== null);
+    if (!allDecided) return;
+
+    if (currentRound.length === 1) {
+      const ultimateWinner = currentRound[0].winner;
+      setSelectedAnswers((prev) => ({
+        ...prev,
+        [questionId]: {
+          rounds: updatedRounds.map(r => r.map((m: any) => ({
+            c1: { id: m.c1.id, text: m.c1.text },
+            c2: { id: m.c2.id, text: m.c2.text },
+            winner: m.winner
+          }))),
+          winner: ultimateWinner
+        }
+      }));
+      return;
+    }
+
+    const nextRoundMatches: any[] = [];
+    for (let i = 0; i < currentRound.length; i += 2) {
+      const w1Id = currentRound[i].winner;
+      const w2Id = currentRound[i + 1].winner;
+
+      const w1Opt = [currentRound[i].c1, currentRound[i].c2].find((c) => c.id === w1Id);
+      const w2Opt = [currentRound[i + 1].c1, currentRound[i + 1].c2].find((c) => c.id === w2Id);
+
+      let autoWinnerId = null;
+      if (w1Opt.id.startsWith('BYE-') && !w2Opt.id.startsWith('BYE-')) {
+        autoWinnerId = w2Opt.id;
+      } else if (w2Opt.id.startsWith('BYE-') && !w1Opt.id.startsWith('BYE-')) {
+        autoWinnerId = w1Opt.id;
+      }
+
+      nextRoundMatches.push({
+        c1: w1Opt,
+        c2: w2Opt,
+        winner: autoWinnerId
+      });
+    }
+
+    updatedRounds.push(nextRoundMatches);
+    setKnockoutRounds(updatedRounds);
+    setCurrentRoundIndex(currentRoundIndex + 1);
+  };
+
+  const handleResetKnockout = (questionId: string, options: any[]) => {
+    initializeKnockout(options);
+    setSelectedAnswers((prev) => {
+      const copy = { ...prev };
+      delete copy[questionId];
+      return copy;
+    });
+  };
+
   // 1. Fetch Poll Metadata on Mount
   useEffect(() => {
     const fetchPoll = async () => {
@@ -85,6 +197,11 @@ export default function VoterPortal({ params }: PageProps) {
         setPoll(data.poll);
         setLiveStats(data.poll.stats || {});
         setLiveTotalVotes(data.poll.totalVotes || 0);
+
+        const activeQ = data.poll.questions?.[0];
+        if (activeQ && activeQ.type === 'KNOCKOUT') {
+          initializeKnockout(activeQ.options);
+        }
 
         if (data.poll.settings) {
           setIdentifierLabel(data.poll.settings.identifierLabel || 'Roll Number');
@@ -336,10 +453,16 @@ export default function VoterPortal({ params }: PageProps) {
     const activeQuestion = poll.questions[0]; // singular questions block
     const ans = selectedAnswers[activeQuestion.id];
 
-    if (!ans || (activeQuestion.type === 'RANKED' && ans.length !== activeQuestion.options.length)) {
+    if (
+      !ans || 
+      (activeQuestion.type === 'RANKED' && ans.length !== activeQuestion.options.length) ||
+      (activeQuestion.type === 'KNOCKOUT' && !ans.winner)
+    ) {
       setError(
         activeQuestion.type === 'RANKED'
           ? 'You must rank all candidate options in order of priority.'
+          : activeQuestion.type === 'KNOCKOUT'
+          ? 'You must complete the tournament bracket until a champion is chosen.'
           : 'Please select an option before submitting.'
       );
       setVoteLoading(false);
@@ -810,6 +933,113 @@ export default function VoterPortal({ params }: PageProps) {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* TOURNAMENT KNOCKOUT BRACKET LAYOUT */}
+              {activeQuestion.type === 'KNOCKOUT' && knockoutRounds.length > 0 && (
+                <div className="space-y-6 animate-fade-in">
+                  <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
+                    <div className="space-y-0.5">
+                      <span className="text-gray-300 text-xs font-bold uppercase tracking-wide">
+                        Tournament Round {currentRoundIndex + 1} of {Math.log2(knockoutRounds[0].length * 2)}
+                      </span>
+                      <p className="text-gray-500 text-[10px]">
+                        Select your preferred option in each match to advance them up the bracket.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleResetKnockout(activeQuestion.id, activeQuestion.options)}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Restart Bracket</span>
+                    </button>
+                  </div>
+
+                  {/* Present all matchups for the active round */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {knockoutRounds[currentRoundIndex].map((match: any, matchIdx: number) => {
+                      const isByeMatch = match.c1.text === 'BYE' || match.c2.text === 'BYE';
+                      
+                      return (
+                        <div 
+                          key={matchIdx} 
+                          className="glass-card rounded-2xl p-4 border border-white/5 space-y-3 shadow-md hover:border-indigo-500/20 transition-all"
+                        >
+                          <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
+                            <span>Matchup #{matchIdx + 1}</span>
+                            {isByeMatch && <span className="text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Auto-Resolved</span>}
+                          </div>
+
+                          <div className="space-y-2">
+                            {/* Candidate Option 1 */}
+                            <div
+                              onClick={() => {
+                                if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
+                                  handleKnockoutSelect(matchIdx, match.c1.id, activeQuestion.id);
+                                }
+                              }}
+                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                                match.c1.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
+                              } ${
+                                match.winner === match.c1.id
+                                  ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
+                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                              }`}
+                            >
+                              <span className="text-xs">{match.c1.text}</span>
+                              {match.winner === match.c1.id && (
+                                <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
+                                  ✓
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Versus indicator */}
+                            <div className="text-center text-[9px] font-extrabold text-indigo-400 tracking-wider">VS</div>
+
+                            {/* Candidate Option 2 */}
+                            <div
+                              onClick={() => {
+                                if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
+                                  handleKnockoutSelect(matchIdx, match.c2.id, activeQuestion.id);
+                                }
+                              }}
+                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                                match.c2.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
+                              } ${
+                                match.winner === match.c2.id
+                                  ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
+                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                              }`}
+                            >
+                              <span className="text-xs">{match.c2.text}</span>
+                              {match.winner === match.c2.id && (
+                                <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
+                                  ✓
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Showcase ultimate winner once decided! */}
+                  {selectedAnswers[activeQuestion.id] && (
+                    <div className="p-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 text-center space-y-3 animate-fade-in-up">
+                      <span className="text-indigo-400 text-xs font-bold uppercase tracking-wider block">Your Selected Champion</span>
+                      <h4 className="text-white text-xl font-black">
+                        🏆 {
+                          activeQuestion.options.find((o: any) => o.id === selectedAnswers[activeQuestion.id].winner)?.text || 'BYE'
+                        }
+                      </h4>
+                      <p className="text-gray-400 text-[10px]">Your final tournament bracket choice is locked. You can submit your ballot below.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

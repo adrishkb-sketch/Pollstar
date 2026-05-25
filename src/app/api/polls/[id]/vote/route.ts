@@ -233,6 +233,10 @@ export async function POST(
                 if (stats[qId] && stats[qId][val]) {
                   stats[qId][val].count += 1;
                 }
+              } else if (question.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
+                if (stats[qId] && stats[qId][val.winner]) {
+                  stats[qId][val.winner].count += 1;
+                }
               }
             }
           });

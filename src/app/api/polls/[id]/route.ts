@@ -77,6 +77,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
               if (stats[qId] && stats[qId][ans]) {
                 stats[qId][ans].count += 1;
               }
+            } else if (question.type === 'KNOCKOUT' && ans && typeof ans.winner === 'string') {
+              if (stats[qId] && stats[qId][ans.winner]) {
+                stats[qId][ans.winner].count += 1;
+              }
             }
           }
         });

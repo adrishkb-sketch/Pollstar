@@ -27,6 +27,12 @@ export default function AdminPortal() {
   // Toggling states
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // Override States
+  const [editingVote, setEditingVote] = useState<any | null>(null);
+  const [overrideAnswers, setOverrideAnswers] = useState<Record<string, any>>({});
+  const [overrideError, setOverrideError] = useState('');
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
   // 1. Fetch system details on mount
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -58,7 +64,7 @@ export default function AdminPortal() {
         }
 
         // Fetch System Polls
-        const pollsRes = await fetch('/api/polls');
+        const pollsRes = await fetch('/api/admin/override-vote');
         if (pollsRes.ok) {
           const pollsData = await pollsRes.json();
           setPolls(pollsData.polls || []);
@@ -135,6 +141,68 @@ export default function AdminPortal() {
       alert(e.message);
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleStartOverride = (v: any) => {
+    let parsedAns = {};
+    try {
+      parsedAns = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+    } catch {}
+    setEditingVote(v);
+    setOverrideAnswers(parsedAns);
+    setOverrideError('');
+  };
+
+  const handleSaveOverride = async () => {
+    setOverrideLoading(true);
+    setOverrideError('');
+    try {
+      const res = await fetch('/api/admin/override-vote', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voteId: editingVote.id,
+          newAnswers: overrideAnswers
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save override');
+
+      // Update selectedPoll votes state locally
+      setSelectedPoll((prev: any) => {
+        if (!prev) return null;
+        const updatedVotes = prev.votes.map((v: any) => 
+          v.id === editingVote.id ? { ...v, answers: JSON.stringify(overrideAnswers) } : v
+        );
+        return { ...prev, votes: updatedVotes };
+      });
+
+      // Update polls list state locally
+      setPolls((prev: any[]) => 
+        prev.map((p) => {
+          if (p.id === selectedPoll.id) {
+            const updatedVotes = p.votes.map((v: any) =>
+              v.id === editingVote.id ? { ...v, answers: JSON.stringify(overrideAnswers) } : v
+            );
+            return { ...p, votes: updatedVotes };
+          }
+          return p;
+        })
+      );
+
+      // Re-fetch audit logs to show override audit logs instantly!
+      const logsRes = await fetch('/api/admin/logs');
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+      }
+
+      setEditingVote(null);
+    } catch (err: any) {
+      setOverrideError(err.message);
+    } finally {
+      setOverrideLoading(false);
     }
   };
 
@@ -455,6 +523,8 @@ export default function AdminPortal() {
                       });
                     } else if (q.type === 'SINGLE' && typeof val === 'string') {
                       if (stats[val] !== undefined) { stats[val] += 1; }
+                    } else if (q.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
+                      if (stats[val.winner] !== undefined) { stats[val.winner] += 1; }
                     }
                   } catch (e) {}
                 });
@@ -466,7 +536,7 @@ export default function AdminPortal() {
                     <div className="flex items-center justify-between">
                       <h5 className="text-sm font-bold text-white">Q{idx + 1}: {q.questionText}</h5>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300">
-                        {q.type === 'RANKED' ? 'Order-based choice' : 'Single Choice'}
+                        {q.type === 'RANKED' ? 'Order-based choice' : q.type === 'KNOCKOUT' ? 'Knockout Tournament' : 'Single Choice'}
                       </span>
                     </div>
 
@@ -516,6 +586,7 @@ export default function AdminPortal() {
                             <th key={q.id} className="p-3 truncate max-w-[200px]">Choice: Q{qIdx + 1}</th>
                           ))}
                           <th className="p-3">Timestamp</th>
+                          <th className="p-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 text-xs text-gray-300">
@@ -539,6 +610,9 @@ export default function AdminPortal() {
                                     const optText = q.options.find((o: any) => o.id === optId)?.text || optId;
                                     return `${idx + 1}st Preference: ${optText}`;
                                   }).join(' | ');
+                                } else if (q.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
+                                  const champText = q.options.find((o: any) => o.id === val.winner)?.text || val.winner;
+                                  resolvedText = `🏆 Champion: ${champText}`;
                                 }
 
                                 return (
@@ -550,6 +624,14 @@ export default function AdminPortal() {
                               <td className="p-3 text-[10px] text-gray-500 font-mono">
                                 {new Date(v.createdAt).toLocaleString()}
                               </td>
+                              <td className="p-3 text-right">
+                                <button
+                                  onClick={() => handleStartOverride(v)}
+                                  className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-600 hover:text-white font-bold text-[10px] transition-all"
+                                >
+                                  Override Ballot
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -559,6 +641,133 @@ export default function AdminPortal() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Editing Override modal */}
+      {editingVote && (
+        <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-md flex items-center justify-center p-6 z-[60]">
+          <div className="glass-card rounded-3xl w-full max-w-md p-6 border border-white/5 space-y-6 relative">
+            <button
+              onClick={() => setEditingVote(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">Admin Override Panel</span>
+              <h4 className="text-white text-base font-bold mt-1">Modify Ballot Selection</h4>
+              <p className="text-gray-400 text-[10px] mt-0.5">
+                Voter Ref: <span className="font-mono text-purple-300 font-bold">{editingVote.userIdentifier}</span> ({editingVote.email})
+              </p>
+            </div>
+
+            {overrideError && <div className="text-xs text-red-400 font-semibold">{overrideError}</div>}
+
+            <div className="space-y-4">
+              {selectedPoll.questions.map((q: any) => {
+                const val = overrideAnswers[q.id];
+
+                return (
+                  <div key={q.id} className="space-y-2">
+                    <label className="block text-gray-300 text-xs font-bold uppercase tracking-wide">
+                      {q.questionText}
+                    </label>
+
+                    {/* SINGLE CHOICE OVERRIDE */}
+                    {q.type === 'SINGLE' && (
+                      <select
+                        value={typeof val === 'string' ? val : ''}
+                        onChange={(e) => setOverrideAnswers({ ...overrideAnswers, [q.id]: e.target.value })}
+                        className="w-full glass-input text-xs"
+                      >
+                        <option value="">-- Select Winner --</option>
+                        {q.options.map((opt: any) => (
+                          <option key={opt.id} value={opt.id}>{opt.text}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* RANKED CHOICE OVERRIDE */}
+                    {q.type === 'RANKED' && (
+                      <div className="space-y-2 bg-white/2 p-3 rounded-xl border border-white/5">
+                        <p className="text-[10px] text-gray-400 mb-1">Set preference order list by selecting candidate:</p>
+                        {q.options.map((opt: any, index: number) => {
+                          const currentRankVal = Array.isArray(val) ? val[index] : '';
+                          return (
+                            <div key={index} className="flex items-center space-x-2">
+                              <span className="text-[10px] text-gray-500 font-bold font-mono">Rank #{index + 1}:</span>
+                              <select
+                                value={currentRankVal || ''}
+                                onChange={(e) => {
+                                  const newRankList = Array.isArray(val) ? [...val] : [];
+                                  newRankList[index] = e.target.value;
+                                  setOverrideAnswers({ ...overrideAnswers, [q.id]: newRankList });
+                                }}
+                                className="flex-1 glass-input text-[11px] py-1 px-2"
+                              >
+                                <option value="">-- Choose Candidate --</option>
+                                {q.options.map((cand: any) => (
+                                  <option key={cand.id} value={cand.id}>{cand.text}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* KNOCKOUT CHOICE OVERRIDE */}
+                    {q.type === 'KNOCKOUT' && (
+                      <div className="space-y-2 bg-white/2 p-3 rounded-xl border border-white/5">
+                        <p className="text-[10px] text-gray-400 mb-1">Override Grand Champion Candidate directly:</p>
+                        <select
+                          value={val && typeof val.winner === 'string' ? val.winner : ''}
+                          onChange={(e) => {
+                            const existingVal = val || { rounds: [] };
+                            setOverrideAnswers({
+                              ...overrideAnswers,
+                              [q.id]: {
+                                ...existingVal,
+                                winner: e.target.value
+                              }
+                            });
+                          }}
+                          className="w-full glass-input text-xs"
+                        >
+                          <option value="">-- Select Champion --</option>
+                          {q.options.map((opt: any) => (
+                            <option key={opt.id} value={opt.id}>{opt.text}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setEditingVote(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveOverride}
+                disabled={overrideLoading}
+                className="flex-1 py-2.5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-purple-600/20"
+              >
+                {overrideLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <span>Apply Override</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -517,6 +517,8 @@ export default function PollInsights({ params }: PageProps) {
             questionText={activeQuestion.questionText}
             type={activeQuestion.type}
             stats={liveStats[activeQuestion.id] || {}}
+            votesList={liveVotesList}
+            optionsList={activeQuestion.options}
           />
         </div>
       </div>
