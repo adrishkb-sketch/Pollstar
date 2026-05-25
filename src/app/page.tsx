@@ -43,16 +43,18 @@ export default function Home() {
               Dashboard
             </Link>
           ) : (
-            <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="flex items-center flex-nowrap space-x-1.5 sm:space-x-4 shrink-0">
               <Link
                 href="/login"
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-gray-300 hover:text-white transition-all whitespace-nowrap"
+                style={{ whiteSpace: 'nowrap' }}
+                className="px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-300 hover:text-white transition-all whitespace-nowrap shrink-0"
               >
                 Log In
               </Link>
               <Link
                 href="/signup"
-                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold gradient-btn text-white whitespace-nowrap"
+                style={{ whiteSpace: 'nowrap' }}
+                className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold gradient-btn text-white whitespace-nowrap shrink-0"
               >
                 Sign Up
               </Link>

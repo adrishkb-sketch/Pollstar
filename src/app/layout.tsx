@@ -29,6 +29,23 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+const zoomBlockerScript = `
+  if (typeof window !== 'undefined') {
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('gesturechange', function (e) { e.preventDefault(); });
+    document.addEventListener('gestureend', function (e) { e.preventDefault(); });
+    document.addEventListener('touchstart', function (e) {
+      if (e.touches.length > 1) { e.preventDefault(); }
+    }, { passive: false });
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (e) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) { e.preventDefault(); }
+      lastTouchEnd = now;
+    }, false);
+  }
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,6 +56,10 @@ export default function RootLayout({
       lang="en"
       className={`${outfit.variable} ${inter.variable} h-full scroll-smooth antialiased`}
     >
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+        <script dangerouslySetInnerHTML={{ __html: zoomBlockerScript }} />
+      </head>
       <body className="font-sans antialiased text-gray-100 min-h-screen flex flex-col bg-[#030712]">
         {children}
       </body>
