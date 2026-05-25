@@ -25,11 +25,11 @@ export default function Home() {
       {/* Header */}
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
         <Link href="/" className="flex items-center space-x-2.5">
-          <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
+          <div className="p-2.5 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
             <Vote className="w-6 h-6 text-white" />
           </div>
           <span className="font-outfit text-2xl font-bold tracking-tight text-white">
-            Poll<span className="text-indigo-400">star</span>
+            Poll<span className="text-emerald-400">star</span>
           </span>
         </Link>
         <div className="flex items-center space-x-4">
@@ -38,7 +38,7 @@ export default function Home() {
           ) : user ? (
             <Link
               href="/dashboard"
-              className="px-5 py-2 rounded-xl text-sm font-semibold glass-element text-indigo-300 hover:text-white border border-indigo-500/30 hover:bg-indigo-500/10 transition-all"
+              className="px-5 py-2 rounded-xl text-sm font-semibold glass-element text-emerald-300 hover:text-white border border-emerald-500/30 hover:bg-emerald-500/10 transition-all"
             >
               Dashboard
             </Link>
@@ -65,7 +65,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <main className="flex-1 flex flex-col items-center justify-center text-center px-6 max-w-5xl mx-auto py-12 md:py-20 z-10">
-        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-8 animate-pulse-glow">
+        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold uppercase tracking-wider mb-8 animate-pulse-glow">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Real-time Decisive Polls</span>
         </div>
@@ -87,7 +87,7 @@ export default function Home() {
           ) : user ? (
             <Link
               href="/dashboard/create"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2"
+              className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2 transition-all transform hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <span>Create a Poll</span>
               <ArrowRight className="w-5 h-5" />
@@ -96,14 +96,14 @@ export default function Home() {
             <>
               <Link
                 href="/signup"
-                className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2"
+                className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2 transition-all transform hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 <span>Get Started Free</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <Link
                 href="/login"
-                className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold glass-card hover:bg-white/5 text-gray-300 hover:text-white text-base border border-white/10 flex items-center justify-center"
+                className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold glass-card hover:bg-white/5 text-gray-300 hover:text-white text-base border border-white/10 flex items-center justify-center transition-all transform hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 Create a Poll
               </Link>
@@ -114,7 +114,7 @@ export default function Home() {
         {/* Feature Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
           <div className="glass-card rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in-up">
-            <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 text-indigo-400 mb-6">
+            <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 mb-6">
               <Shield className="w-8 h-8" />
             </div>
             <h3 className="font-outfit text-xl font-bold text-white mb-3">Military-Grade Fraud Shield</h3>
@@ -134,7 +134,7 @@ export default function Home() {
           </div>
 
           <div className="glass-card rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in-up delay-200">
-            <div className="p-4 bg-pink-500/10 rounded-2xl border border-pink-500/20 text-pink-400 mb-6">
+            <div className="p-4 bg-cyan-500/10 rounded-2xl border border-cyan-500/20 text-cyan-400 mb-6">
               <Globe className="w-8 h-8" />
             </div>
             <h3 className="font-outfit text-xl font-bold text-white mb-3">Dynamic Geolocation Map</h3>
@@ -147,15 +147,21 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-gray-500 text-sm z-10">
-        <span>© 2026 Pollstar. Built with Advanced Agentic Coding tools.</span>
+        <span>
+          © 2026 Pollstar. Built with Advanced Agentic Coding tools.
+          {/* 
+            👉 DEVELOPER INSTRUCTION: 
+            This is your custom playground space to test GitHub commits!
+            Try changing the text below or appending your name/alias.
+            For example, uncomment the span below or write your own custom copyright note.
+          */}
+          {/* <span className="text-emerald-400 font-bold ml-1.5">• Custom Edition by Adrish</span> */}
+        </span>
         <div className="flex space-x-6 mt-4 sm:mt-0">
-          <Link href="/admin" className="hover:text-indigo-400 transition-colors">
-            Portal Control (/admin)
-          </Link>
-          <Link href="/privacy" className="hover:text-gray-300 transition-colors">
+          <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
             Privacy Policy
           </Link>
-          <Link href="/terms" className="hover:text-gray-300 transition-colors">
+          <Link href="/terms" className="hover:text-emerald-400 transition-colors">
             Terms of Service
           </Link>
         </div>
