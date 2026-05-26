@@ -1,14 +1,26 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-import { verifyAccessToken } from '@/lib/jwt';
+import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get('accessToken')?.value;
-  if (!token) return null;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
 
-  const payload = verifyAccessToken(token);
+  let payload = token ? verifyAccessToken(token) : null;
+
+  if (!payload && refreshToken) {
+    const refreshPayload = verifyRefreshToken(refreshToken);
+    if (refreshPayload) {
+      payload = {
+        userId: refreshPayload.userId,
+        email: refreshPayload.email,
+        role: refreshPayload.role,
+      };
+    }
+  }
+
   if (!payload) return null;
 
   return prisma.user.findUnique({
