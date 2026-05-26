@@ -172,8 +172,8 @@ export default function Dashboard() {
           options: editOptions,
           isResultPublic: editIsResultPublic,
           hideResultsUntilEnd: editHideResultsUntilEnd,
-          startTime: editStartTime,
-          endTime: editEndTime,
+          startTime: editStartTime ? new Date(editStartTime).toISOString() : undefined,
+          endTime: editEndTime ? new Date(editEndTime).toISOString() : undefined,
         })
       });
       

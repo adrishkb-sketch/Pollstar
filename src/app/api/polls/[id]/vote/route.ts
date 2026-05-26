@@ -37,7 +37,9 @@ export async function POST(
     }
 
     const now = new Date();
-    if (now < poll.startTime || now > poll.endTime) {
+    const startTimeWithBuffer = new Date(poll.startTime.getTime() - 60000);
+    const endTimeWithBuffer = new Date(poll.endTime.getTime() + 60000);
+    if (now < startTimeWithBuffer || now > endTimeWithBuffer) {
       return NextResponse.json(
         { error: 'Voting is restricted to the poll schedule. It has either not started or already closed.' },
         { status: 400 }
