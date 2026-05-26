@@ -29,11 +29,11 @@ if (isSMTPConfigured) {
 export async function sendOTPEmail(email: string, otp: string): Promise<boolean> {
   const subject = 'Your Pollstar Verification Code';
   const html = `
-    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 20px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
       <h2 style="text-align: center; color: #6366f1; font-size: 28px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.05em;">Pollstar Verification</h2>
       <p style="font-size: 16px; line-height: 24px; text-align: center; color: #9ca3af; margin-bottom: 32px;">Please use the 6-digit verification code below to verify your email. This code is active for 5 minutes.</p>
-      <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 32px;">
-        <span style="font-family: monospace; font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #818cf8; display: inline-block; padding-left: 12px;">${otp}</span>
+      <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 16px; padding: 20px 12px; text-align: center; margin-bottom: 32px;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #818cf8; display: inline-block; padding-left: 8px;">${otp}</span>
       </div>
       <p style="font-size: 12px; text-align: center; color: #4b5563; margin-top: 40px;">If you did not request this verification, please ignore this email.</p>
     </div>
@@ -391,6 +391,64 @@ export async function sendPollScheduleUpdatedEmail({
   console.log(`│ Subject: Poll Schedule Adjusted                        │`);
   console.log(`│ Start:   ${formatDateTime(newStartTime).padEnd(46)} │`);
   console.log(`│ End:     ${formatDateTime(newEndTime).padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+
+/**
+ * Sends an email notification to a creator confirming that their account has been approved and verified by the admin.
+ */
+export async function sendCreatorApprovalEmail(email: string): Promise<boolean> {
+  const subject = 'Your Pollstar Creator Account is Approved!';
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 20px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 16px; padding: 14px; display: inline-block; color: #10b981;">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+      </div>
+      <h2 style="color: #10b981; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Creator Account Verified!</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 24px; text-align: center;">
+        Congratulations! Your creator status on the Pollstar platform has been verified and approved by the system administrator.
+      </p>
+
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px; text-align: center;">
+        <span style="color: #9ca3af; font-size: 14px; display: block; margin-bottom: 4px;">You can now log in and build:</span>
+        <strong style="color: #ffffff; font-size: 16px;">Secure, High-Priority OTP Polls, Ranked Priorities, and Bracket Tournaments!</strong>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="http://localhost:3000/dashboard" style="background: #10b981; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);">Create a Poll Now</a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px; margin-top: 32px;">
+        Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending creator approval notice:', error);
+    }
+  }
+
+  // Fallback sandbox logs
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Creator Account Approved & Verified           │`);
+  console.log(`│ Status:  READY TO CREATE POLLS                         │`);
   console.log(`└────────────────────────────────────────────────────────┘\n`);
 
   return true;

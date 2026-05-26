@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
+import { sendCreatorApprovalEmail } from '@/lib/nodemailer';
 
 export const dynamic = 'force-dynamic';
 import { verifyAccessToken } from '@/lib/jwt';
@@ -77,6 +78,15 @@ export async function PATCH(req: Request) {
         details: `${approve ? 'Approved' : 'Revoked approval for'} user: ${updatedUser.email} (ID: ${userId})`,
       },
     });
+
+    // Send email to creator confirming their approved status
+    if (approve) {
+      try {
+        await sendCreatorApprovalEmail(updatedUser.email);
+      } catch (mailError) {
+        console.error('Error sending creator approval notice email:', mailError);
+      }
+    }
 
     return NextResponse.json({
       success: true,

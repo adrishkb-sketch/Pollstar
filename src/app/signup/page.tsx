@@ -291,7 +291,7 @@ export default function Signup() {
 
             <form onSubmit={handleVerifyOtp} className="space-y-6">
               {/* Professional horizontal 6-PIN grid */}
-              <div className="flex justify-between items-center gap-2 mb-4">
+              <div className="grid grid-cols-6 gap-2 mb-4 w-full">
                 {otpValues.map((val, idx) => (
                   <input
                     key={idx}
@@ -302,7 +302,7 @@ export default function Signup() {
                     value={val}
                     onChange={(e) => handleOtpChange(e.target.value, idx)}
                     onKeyDown={(e) => handleOtpKeyDown(e, idx)}
-                    className="w-12 h-12 text-center text-xl font-bold bg-white/5 border border-white/15 focus:border-indigo-500/60 focus:bg-white/10 rounded-xl focus:shadow-[0_0_12px_rgba(99,102,241,0.2)] outline-none text-white transition-all"
+                    className="w-full aspect-square max-w-[3rem] mx-auto text-center text-lg sm:text-xl font-bold bg-white/5 border border-white/15 focus:border-indigo-500/60 focus:bg-white/10 rounded-xl focus:shadow-[0_0_12px_rgba(99,102,241,0.2)] outline-none text-white transition-all"
                   />
                 ))}
               </div>
