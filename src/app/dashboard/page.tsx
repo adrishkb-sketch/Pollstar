@@ -90,6 +90,30 @@ export default function Dashboard() {
     }
   };
 
+  const handlePublishPoll = async (pollId: string) => {
+    if (!confirm('Are you ready to publish this poll? This will set it to ACTIVE and make it open for voting according to its schedule.')) return;
+
+    try {
+      const res = await fetch(`/api/polls/${pollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ACTIVE' }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to publish poll');
+      }
+
+      // Update local state immediately!
+      setPolls((prev) =>
+        prev.map((p) => (p.id === pollId ? { ...p, status: 'ACTIVE' } : p))
+      );
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   const handleOpenEdit = (poll: any) => {
     setEditingPoll(poll);
     setEditTitle(poll.title || '');
@@ -413,9 +437,17 @@ export default function Dashboard() {
                             </>
                           )}
                         </button>
+                      ) : poll.status === 'DRAFT' ? (
+                        <button
+                          onClick={() => handlePublishPoll(poll.id)}
+                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white text-xs font-semibold transition-all flex items-center justify-center space-x-1.5"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
+                          <span>Publish Poll</span>
+                        </button>
                       ) : (
                         <div className="flex-1 text-center py-2.5 text-xs text-gray-500 font-medium italic border border-white/5 bg-white/2 rounded-xl">
-                          {poll.status === 'DRAFT' ? 'Link inactive (draft)' : 'Link expired'}
+                          Link expired
                         </div>
                       )}
 

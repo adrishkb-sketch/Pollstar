@@ -44,6 +44,10 @@ export default function CreatePoll() {
     { identifier: '', confirmer1: '', confirmer2: '', email: '' },
   ]);
 
+  // Previous Voter Templates
+  const [voterTemplates, setVoterTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
   // Google Sheets import states
   const [sheetUrl, setSheetUrl] = useState('');
   const [importingSheet, setImportingSheet] = useState(false);
@@ -80,9 +84,60 @@ export default function CreatePoll() {
     setEndTime(format(end));
   }, []);
 
+  // Fetch previous closed poll rosters
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      setLoadingTemplates(true);
+      try {
+        const res = await fetch('/api/polls/voter-templates');
+        if (res.ok) {
+          const data = await res.json();
+          setVoterTemplates(data.templates || []);
+        }
+      } catch (err) {
+        console.error('Failed to load voter templates:', err);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
   // ────────────────────────────────────────────────────────
   // DYNAMIC HELPERS & VALIDATORS
   // ────────────────────────────────────────────────────────
+
+  const handleImportTemplate = (templateId: string) => {
+    if (!templateId) return;
+    const selected = voterTemplates.find((t) => t.id === templateId);
+    if (!selected) return;
+
+    if (selected.allowedVoters && selected.allowedVoters.length > 0) {
+      const mappedVoters = selected.allowedVoters.map((v: any) => ({
+        identifier: v.identifier || '',
+        confirmer1: v.confirmer1 || '',
+        confirmer2: v.confirmer2 || '',
+        email: v.email || '',
+      }));
+      setAllowedVoters(mappedVoters);
+      setNumVoters(mappedVoters.length);
+
+      const settingsObj = selected.settings || {};
+      setIdentifierLabel(settingsObj.identifierLabel || 'Roll Number');
+      setConfirmer1Label(settingsObj.confirmer1Label || 'Student Name');
+      if (settingsObj.confirmer2Label) {
+        setConfirmer2Label(settingsObj.confirmer2Label);
+        setUseConfirmer2(true);
+      } else {
+        setConfirmer2Label('');
+        setUseConfirmer2(false);
+      }
+      
+      alert(`Imported ${mappedVoters.length} voter profiles successfully from previous poll: "${selected.title}"!`);
+    } else {
+      alert("This previous poll does not have any allowed voters to import.");
+    }
+  };
 
   // Parse image to base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -724,6 +779,32 @@ export default function CreatePoll() {
                   </button>
                 </div>
               </div>
+
+              {!isOpenVoting && voterTemplates.length > 0 && (
+                <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Upload className="w-4 h-4 text-indigo-400" />
+                    <span className="text-sm font-bold text-white">Import Previous Voter Roster</span>
+                  </div>
+                  <p className="text-gray-400 text-xs leading-relaxed">
+                    Instantly re-import voter profiles, custom confirmation labels, and secondary settings from your past closed polls.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                    <select
+                      onChange={(e) => handleImportTemplate(e.target.value)}
+                      defaultValue=""
+                      className="flex-1 bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                    >
+                      <option value="" disabled>-- Select a previous closed poll --</option>
+                      {voterTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title} ({t.allowedVoters?.length || 0} Voters)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Voter Import Table */}
               {!isOpenVoting && (
