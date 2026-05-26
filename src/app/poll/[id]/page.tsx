@@ -74,47 +74,71 @@ export default function VoterPortal({ params }: PageProps) {
   // Tournament Knockout states
   const [knockoutRounds, setKnockoutRounds] = useState<any[]>([]);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+  const [knockoutWaiting, setKnockoutWaiting] = useState<any[]>([]);
+  const [totalKnockoutRounds, setTotalKnockoutRounds] = useState(0);
 
   const initializeKnockout = (options: any[]) => {
     let N = options.length;
     if (N < 2) return;
     
-    let nextPower = 2;
-    while (nextPower < N) {
-      nextPower *= 2;
+    // Calculate total rounds dynamically based on the play-in logic
+    let tempN = N;
+    let roundsCount = 0;
+    while (tempN > 1) {
+      let P = 2;
+      while (P * 2 <= tempN) {
+        P *= 2;
+      }
+      let matches = tempN - P;
+      if (matches === 0) {
+        roundsCount += Math.log2(tempN);
+        break;
+      } else {
+        roundsCount += 1;
+        tempN = matches + (tempN - matches * 2);
+      }
+    }
+    setTotalKnockoutRounds(roundsCount);
+
+    // Find largest power of 2 <= N
+    let P = 2;
+    while (P * 2 <= N) {
+      P *= 2;
     }
     
-    const padded = [...options];
-    for (let i = N; i < nextPower; i++) {
-      padded.push({ id: `BYE-${i}`, text: 'BYE' });
-    }
-
-    // Shuffle randomly to automate pairings
-    const shuffled = [...padded].sort(() => Math.random() - 0.5);
-
+    const shuffled = [...options].sort(() => Math.random() - 0.5);
+    
+    const numPlayInMatches = N - P;
+    const numPlayInCandidates = numPlayInMatches * 2;
+    
+    const playInCandidates = shuffled.slice(0, numPlayInCandidates);
+    const waitingCandidates = shuffled.slice(numPlayInCandidates);
+    
     const firstRoundMatches: any[] = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
-      const c1 = shuffled[i];
-      const c2 = shuffled[i + 1];
-      
-      let winnerId = null;
-      if (c1.id.startsWith('BYE-') && !c2.id.startsWith('BYE-')) {
-        winnerId = c2.id;
-      } else if (c2.id.startsWith('BYE-') && !c1.id.startsWith('BYE-')) {
-        winnerId = c1.id;
-      } else if (c1.id.startsWith('BYE-') && c2.id.startsWith('BYE-')) {
-        winnerId = c1.id;
+    
+    if (numPlayInMatches === 0) {
+      // Perfect power of 2: no play-ins needed
+      for (let i = 0; i < shuffled.length; i += 2) {
+        firstRoundMatches.push({
+          c1: shuffled[i],
+          c2: shuffled[i + 1],
+          winner: null
+        });
       }
-
-      firstRoundMatches.push({
-        c1,
-        c2,
-        winner: winnerId
-      });
+    } else {
+      // Generate play-in matches for the first round
+      for (let i = 0; i < playInCandidates.length; i += 2) {
+        firstRoundMatches.push({
+          c1: playInCandidates[i],
+          c2: playInCandidates[i + 1],
+          winner: null
+        });
+      }
     }
-
+    
     setKnockoutRounds([firstRoundMatches]);
     setCurrentRoundIndex(0);
+    setKnockoutWaiting(numPlayInMatches === 0 ? [] : waitingCandidates);
   };
 
   const handleKnockoutSelect = (matchIndex: number, winnerId: string, questionId: string) => {
@@ -131,8 +155,13 @@ export default function VoterPortal({ params }: PageProps) {
     const allDecided = currentRound.every((m) => m.winner !== null);
     if (!allDecided) return;
 
-    if (currentRound.length === 1) {
-      const ultimateWinner = currentRound[0].winner;
+    const winners = currentRound.map(m => [m.c1, m.c2].find(c => c.id === m.winner));
+    
+    // Retrieve waiting candidates for the first play-in transition
+    const nextPool = currentRoundIndex === 0 ? [...winners, ...knockoutWaiting] : winners;
+
+    if (nextPool.length === 1) {
+      const ultimateWinner = nextPool[0].id;
       setSelectedAnswers((prev) => ({
         ...prev,
         [questionId]: {
@@ -148,24 +177,11 @@ export default function VoterPortal({ params }: PageProps) {
     }
 
     const nextRoundMatches: any[] = [];
-    for (let i = 0; i < currentRound.length; i += 2) {
-      const w1Id = currentRound[i].winner;
-      const w2Id = currentRound[i + 1].winner;
-
-      const w1Opt = [currentRound[i].c1, currentRound[i].c2].find((c) => c.id === w1Id);
-      const w2Opt = [currentRound[i + 1].c1, currentRound[i + 1].c2].find((c) => c.id === w2Id);
-
-      let autoWinnerId = null;
-      if (w1Opt.id.startsWith('BYE-') && !w2Opt.id.startsWith('BYE-')) {
-        autoWinnerId = w2Opt.id;
-      } else if (w2Opt.id.startsWith('BYE-') && !w1Opt.id.startsWith('BYE-')) {
-        autoWinnerId = w1Opt.id;
-      }
-
+    for (let i = 0; i < nextPool.length; i += 2) {
       nextRoundMatches.push({
-        c1: w1Opt,
-        c2: w2Opt,
-        winner: autoWinnerId
+        c1: nextPool[i],
+        c2: nextPool[i + 1],
+        winner: null
       });
     }
 
@@ -175,6 +191,7 @@ export default function VoterPortal({ params }: PageProps) {
   };
 
   const handleResetKnockout = (questionId: string, options: any[]) => {
+    setKnockoutWaiting([]);
     initializeKnockout(options);
     setSelectedAnswers((prev) => {
       const copy = { ...prev };
@@ -942,7 +959,7 @@ export default function VoterPortal({ params }: PageProps) {
                   <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
                     <div className="space-y-0.5">
                       <span className="text-gray-300 text-xs font-bold uppercase tracking-wide">
-                        Tournament Round {currentRoundIndex + 1} of {Math.log2(knockoutRounds[0].length * 2)}
+                        Tournament Round {currentRoundIndex + 1} of {totalKnockoutRounds}
                       </span>
                       <p className="text-gray-500 text-[10px]">
                         Select your preferred option in each match to advance them up the bracket.

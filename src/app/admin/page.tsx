@@ -566,8 +566,8 @@ export default function AdminPortal() {
               })}
             </div>
 
-            {/* Who Voted For Whom details (Visible for Closed Type Polls OR any poll that has ENDED) */}
-            {(!selectedPoll.isOpenVoting || selectedPoll.status === 'ENDED') && (
+            {/* Who Voted For Whom details (Always Visible to Admin) */}
+            {selectedPoll && (
               <div className="space-y-4 pt-4">
                 <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
                   <Lock className="w-4 h-4 text-purple-400" />

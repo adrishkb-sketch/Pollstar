@@ -1040,7 +1040,13 @@ export default function CreatePoll() {
               <div className="space-y-4 pt-4">
                 {/* Results Visibility */}
                 <div
-                  onClick={() => setHideResultsUntilEnd(!hideResultsUntilEnd)}
+                  onClick={() => {
+                    const nextVal = !hideResultsUntilEnd;
+                    setHideResultsUntilEnd(nextVal);
+                    if (nextVal) {
+                      setIsResultPublic(false);
+                    }
+                  }}
                   className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
                     hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
                   }`}
@@ -1065,7 +1071,13 @@ export default function CreatePoll() {
 
                 {/* Make Report Public */}
                 <div
-                  onClick={() => setIsResultPublic(!isResultPublic)}
+                  onClick={() => {
+                    const nextVal = !isResultPublic;
+                    setIsResultPublic(nextVal);
+                    if (nextVal) {
+                      setHideResultsUntilEnd(false);
+                    }
+                  }}
                   className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
                     isResultPublic ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
                   }`}

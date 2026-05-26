@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, ArrowLeft, Loader2, AlertCircle, Calendar, 
   Trash2, ShieldCheck, Download, Check, FileDown, 
-  Users, AlertTriangle, Eye, ShieldAlert, BarChart3
+  Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
+  Brain, TrendingUp, Gauge, Zap, Award
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -270,6 +271,209 @@ export default function PollInsights({ params }: PageProps) {
       .slice(0, 4); // Display top 4 dominant segments
   };
 
+  // 1. Time & Speed Analytics Engine
+  const getTimeAnalytics = () => {
+    if (liveVotesList.length === 0) return { peakHour: 'N/A', avgInterval: 'N/A', acceleration: 'Stable' };
+    
+    const sortedVotes = [...liveVotesList].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    let totalDiff = 0;
+    for (let i = 1; i < sortedVotes.length; i++) {
+      totalDiff += new Date(sortedVotes[i].createdAt).getTime() - new Date(sortedVotes[i - 1].createdAt).getTime();
+    }
+    const avgSec = sortedVotes.length > 1 ? Math.round(totalDiff / (sortedVotes.length - 1) / 1000) : 0;
+    const avgInterval = avgSec > 60 ? `${Math.round(avgSec / 60)}m ${avgSec % 60}s` : `${avgSec}s`;
+    
+    const hours: Record<number, number> = {};
+    liveVotesList.forEach(v => {
+      const hr = new Date(v.createdAt).getHours();
+      hours[hr] = (hours[hr] || 0) + 1;
+    });
+    let peakHr = -1;
+    let peakCount = 0;
+    Object.entries(hours).forEach(([hr, cnt]) => {
+      if (cnt > peakCount) {
+        peakCount = cnt;
+        peakHr = parseInt(hr);
+      }
+    });
+    const peakHourLabel = peakHr !== -1 ? `${peakHr.toString().padStart(2, '0')}:00 - ${peakHr.toString().padStart(2, '0')}:59` : 'N/A';
+
+    let acceleration = 'Stable';
+    if (sortedVotes.length > 5) {
+      const lastSegmentCount = Math.max(2, Math.floor(sortedVotes.length * 0.2));
+      const segmentStartIndex = sortedVotes.length - lastSegmentCount;
+      const recentDiff = new Date(sortedVotes[sortedVotes.length - 1].createdAt).getTime() - new Date(sortedVotes[segmentStartIndex].createdAt).getTime();
+      const recentAvgSec = recentDiff / (lastSegmentCount - 1) / 1000;
+      if (recentAvgSec < avgSec * 0.5) {
+        acceleration = '💥 Accelerating';
+      } else if (recentAvgSec > avgSec * 1.5) {
+        acceleration = '📉 Decelerating';
+      }
+    }
+    
+    return { peakHour: peakHourLabel, avgInterval, acceleration };
+  };
+
+  const timeAnalytics = getTimeAnalytics();
+
+  // 2. Correlation Engine (Cross-tabulation & Pattern Finder)
+  const getCorrelationInsights = () => {
+    const insights: string[] = [];
+    if (liveVotesList.length < 3) return ['Gathering more data to establish statistical correlation patterns...'];
+
+    const deviceChoices: Record<string, Record<string, number>> = { Desktop: {}, Mobile: {} };
+    liveVotesList.forEach(v => {
+      const dev = v.device === 'Mobile' ? 'Mobile' : 'Desktop';
+      try {
+        const ansObj = JSON.parse(v.answers);
+        const selection = ansObj[activeQuestion.id];
+        if (selection) {
+          const optionId = Array.isArray(selection) ? selection[0] : selection;
+          const optText = activeQuestion.options.find((o: any) => o.id === optionId)?.text || 'Unknown';
+          deviceChoices[dev][optText] = (deviceChoices[dev][optText] || 0) + 1;
+        }
+      } catch (e) {}
+    });
+
+    const getDominant = (map: Record<string, number>) => {
+      let best = '';
+      let max = 0;
+      let total = 0;
+      Object.entries(map).forEach(([k, v]) => {
+        total += v;
+        if (v > max) {
+          max = v;
+          best = k;
+        }
+      });
+      return { best, percent: total > 0 ? Math.round((max / total) * 100) : 0 };
+    };
+
+    const dDom = getDominant(deviceChoices.Desktop);
+    const mDom = getDominant(deviceChoices.Mobile);
+
+    if (dDom.best && mDom.best) {
+      if (dDom.best === mDom.best) {
+        insights.push(`🎯 Strong platform alignment: Both desktop (${dDom.percent}%) and mobile (${mDom.percent}%) voters overwhelmingly prefer "${dDom.best}".`);
+      } else {
+        insights.push(`🎭 Device usage divergence: Desktop voters prefer "${dDom.best}" (${dDom.percent}%), while mobile users skew towards "${mDom.best}" (${mDom.percent}%).`);
+      }
+    }
+
+    const ispCounts: Record<string, number> = {};
+    liveVotesList.forEach(v => {
+      const provider = v.isp || 'Local ISP';
+      ispCounts[provider] = (ispCounts[provider] || 0) + 1;
+    });
+    const sortedIsps = Object.entries(ispCounts).sort((a, b) => b[1] - a[1]);
+    if (sortedIsps[0] && sortedIsps[0][1] > liveVotesList.length * 0.4) {
+      insights.push(`⚠️ Network density anomaly: ${Math.round((sortedIsps[0][1] / liveVotesList.length) * 100)}% of all traffic originates from the same network provider ("${sortedIsps[0][0]}").`);
+    }
+
+    const batchCounts: Record<string, number> = {};
+    liveVotesList.forEach(v => {
+      const roll = (v.userIdentifier || '').trim().toUpperCase();
+      const alphaMatch = roll.match(/^([A-Z]+|\d+[A-Z]+)/);
+      if (alphaMatch) {
+        batchCounts[alphaMatch[0]] = (batchCounts[alphaMatch[0]] || 0) + 1;
+      }
+    });
+    const sortedBatches = Object.entries(batchCounts).sort((a, b) => b[1] - a[1]);
+    if (sortedBatches[0]) {
+      insights.push(`👥 Batch influence: Segment "${sortedBatches[0][0]}" is the most active group, accounting for ${Math.round((sortedBatches[0][1] / liveVotesList.length) * 100)}% of the total turnout.`);
+    }
+
+    if (insights.length === 0) {
+      insights.push('📊 Vote choices are evenly distributed with no statistically significant cross-network skewing detected.');
+    }
+
+    return insights;
+  };
+
+  const correlationInsights = getCorrelationInsights();
+
+  // 3. Advanced Security & Anomaly Audit
+  const getSecurityAudit = () => {
+    if (liveVotesList.length === 0) return { ipCollisions: 0, concurrentBursts: 0 };
+
+    const ipMap: Record<string, string[]> = {};
+    liveVotesList.forEach(v => {
+      if (!ipMap[v.ipAddress]) ipMap[v.ipAddress] = [];
+      if (v.userIdentifier) ipMap[v.ipAddress].push(v.userIdentifier);
+    });
+    let ipCollisions = 0;
+    Object.values(ipMap).forEach(arr => {
+      if (arr.length > 1) ipCollisions++;
+    });
+
+    const sortedTimes = liveVotesList.map(v => new Date(v.createdAt).getTime()).sort((a, b) => a - b);
+    let concurrentBursts = 0;
+    for (let i = 0; i < sortedTimes.length; i++) {
+      let burstCount = 0;
+      for (let j = i + 1; j < sortedTimes.length; j++) {
+        if (sortedTimes[j] - sortedTimes[i] <= 5000) {
+          burstCount++;
+        } else {
+          break;
+        }
+      }
+      if (burstCount >= 4) {
+        concurrentBursts++;
+        i += burstCount;
+      }
+    }
+
+    return { ipCollisions, concurrentBursts };
+  };
+
+  const securityAuditVal = getSecurityAudit();
+
+  // 4. Polarization & Electoral Margin Index
+  const getConsensusIndex = () => {
+    if (liveVotesList.length === 0) return { gap: 0, polarization: 'Uniform Distribution', polarizationColor: 'text-gray-400' };
+
+    const choiceCounts: Record<string, number> = {};
+    liveVotesList.forEach(v => {
+      try {
+        const ansObj = JSON.parse(v.answers);
+        const selection = ansObj[activeQuestion.id];
+        if (selection) {
+          const optionId = Array.isArray(selection) ? selection[0] : selection;
+          choiceCounts[optionId] = (choiceCounts[optionId] || 0) + 1;
+        }
+      } catch (e) {}
+    });
+
+    const sortedChoices = Object.entries(choiceCounts).sort((a, b) => b[1] - a[1]);
+    const total = liveVotesList.length;
+    
+    if (sortedChoices.length === 0) {
+      return { gap: 0, polarization: 'No votes recorded', polarizationColor: 'text-gray-400' };
+    }
+
+    const firstPercent = Math.round((sortedChoices[0][1] / total) * 100);
+    const secondPercent = sortedChoices[1] ? Math.round((sortedChoices[1][1] / total) * 100) : 0;
+    const gap = firstPercent - secondPercent;
+
+    let polarization = 'Mild Consensus';
+    let polarizationColor = 'text-indigo-400';
+    if (firstPercent > 60) {
+      polarization = '⚡ Absolute Consensus (Landslide)';
+      polarizationColor = 'text-emerald-400';
+    } else if (gap < 8 && sortedChoices.length > 1) {
+      polarization = '⚖️ Highly Polarized (Dead Heat)';
+      polarizationColor = 'text-red-400';
+    } else if (sortedChoices.length > 2) {
+      polarization = '🧩 Distributed Preferences';
+      polarizationColor = 'text-purple-400';
+    }
+
+    return { gap, polarization, polarizationColor };
+  };
+
+  const consensusIndex = getConsensusIndex();
+
   return (
     <div className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 space-y-8 print:p-0 print:m-0">
       
@@ -429,7 +633,7 @@ export default function PollInsights({ params }: PageProps) {
         {!poll.isOpenVoting && (
           <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
             <div className="flex justify-between items-center border-b border-white/5 pb-2">
-              <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Voter Participation Rate</h4>
+              <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">Voter Participation Rate</h4>
               <span className="text-[10px] font-bold text-indigo-400">{turnoutPercent}% Turnout</span>
             </div>
             <div className="flex items-center space-x-4">
@@ -453,7 +657,7 @@ export default function PollInsights({ params }: PageProps) {
         {/* Insight Card 2: Hourly Voting Speed (Velocity) */}
         <div className={`glass-card rounded-2xl p-6 border border-white/5 space-y-4 ${poll.isOpenVoting ? 'md:col-span-2' : ''}`}>
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Voting Velocity Momentum</h4>
+            <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">Voting Velocity Momentum</h4>
             <span className="text-[10px] font-bold text-purple-400">Past 6 Hours</span>
           </div>
           <div className="flex items-end justify-between h-16 pt-2">
@@ -478,7 +682,7 @@ export default function PollInsights({ params }: PageProps) {
         {/* Insight Card 3: Platform Device Partitioning */}
         <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Device Source Distribution</h4>
+            <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">Device Source Distribution</h4>
             <span className="text-[10px] font-bold text-emerald-400">Verified Platform</span>
           </div>
           <div className="space-y-3.5 pt-1">
@@ -503,6 +707,105 @@ export default function PollInsights({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {/* NEW: AI Deep Pattern Intelligence Hub */}
+      {liveVotesList.length > 0 && (
+        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6">
+          <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
+            <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400">
+              <Brain className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-outfit text-xl font-bold text-white leading-tight">AI Trend & Pattern Intelligence</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Statistical correlation models resolving vote density anomalies, demographic skewing, and pace accelerations.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Pattern Metric 1: Momentum */}
+            <div className="bg-white/2 rounded-2xl p-5 border border-white/5 space-y-3">
+              <div className="flex items-center space-x-2 text-purple-400">
+                <TrendingUp className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Velocity Dynamics</span>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-extrabold text-white">{timeAnalytics.avgInterval}</div>
+                <div className="text-gray-500 text-[10px]">Average interval between submissions</div>
+              </div>
+              <div className="pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Peak Hour:</span>
+                <span className="text-white">{timeAnalytics.peakHour}</span>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Status:</span>
+                <span className="text-white">{timeAnalytics.acceleration}</span>
+              </div>
+            </div>
+
+            {/* Pattern Metric 2: Polarization */}
+            <div className="bg-white/2 rounded-2xl p-5 border border-white/5 space-y-3">
+              <div className="flex items-center space-x-2 text-indigo-400">
+                <Gauge className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Consensus Index</span>
+              </div>
+              <div className="space-y-1">
+                <div className={`text-sm font-extrabold truncate ${consensusIndex.polarizationColor}`}>
+                  {consensusIndex.polarization}
+                </div>
+                <div className="text-gray-500 text-[10px]">Consensus and preference polarization rating</div>
+              </div>
+              <div className="pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Winner Lead Margin:</span>
+                <span className="text-indigo-400 font-extrabold">{consensusIndex.gap}% lead gap</span>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Confidence Interval:</span>
+                <span className="text-white">{consensusIndex.gap > 20 ? '🏆 Decisive Lead' : '⚖️ High Contestation'}</span>
+              </div>
+            </div>
+
+            {/* Pattern Metric 3: Security & IP Density */}
+            <div className="bg-white/2 rounded-2xl p-5 border border-white/5 space-y-3">
+              <div className="flex items-center space-x-2 text-emerald-400">
+                <ShieldCheck className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Security & Concurrency</span>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-extrabold text-white">{suspiciousVotesCount}</div>
+                <div className="text-gray-500 text-[10px]">Total flagged anomalies detected</div>
+              </div>
+              <div className="pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Multi-Device IP Overlaps:</span>
+                <span className={`font-extrabold ${securityAuditVal.ipCollisions > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {securityAuditVal.ipCollisions} IPs
+                </span>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">Concurrent Bursts (5s):</span>
+                <span className={`font-extrabold ${securityAuditVal.concurrentBursts > 0 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
+                  {securityAuditVal.concurrentBursts} bursts
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Correlation Observation Bullet Points */}
+          <div className="border-t border-white/5 pt-4 space-y-2.5">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center space-x-1">
+              <Zap className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Statistical Pattern Observations</span>
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {correlationInsights.map((insight, idx) => (
+                <div key={idx} className="flex items-start space-x-2 text-xs text-gray-300 bg-white/2 p-3 rounded-xl border border-white/5">
+                  <span className="text-indigo-400 font-bold"># {idx + 1}</span>
+                  <p className="leading-relaxed">{insight}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Visual Analytics Graphs */}
       <div className="space-y-3">
@@ -602,6 +905,7 @@ export default function PollInsights({ params }: PageProps) {
                   <th className="py-3.5 px-4 w-12 text-center">No</th>
                   <th className="py-3.5 px-4">Identifier</th>
                   <th className="py-3.5 px-4">Email</th>
+                  {!poll.isAnonymous && <th className="py-3.5 px-4">Cast Selection</th>}
                   <th className="py-3.5 px-4">IP Address</th>
                   <th className="py-3.5 px-4">Internet Provider (ISP)</th>
                   <th className="py-3.5 px-4">Device</th>
@@ -610,28 +914,50 @@ export default function PollInsights({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody>
-                {liveVotesList.map((v, idx) => (
-                  <tr key={v.id} className="border-b border-white/5 hover:bg-white/2 transition-colors print:border-gray-200">
-                    <td className="py-3 px-4 text-center font-mono text-gray-500 print:text-gray-500">{idx + 1}</td>
-                    <td className="py-3 px-4 font-semibold text-white print:text-black">{v.userIdentifier}</td>
-                    <td className="py-3 px-4 text-gray-400 print:text-gray-700">{v.email}</td>
-                    <td className="py-3 px-4 font-mono text-gray-400 print:text-gray-700">{v.ipAddress}</td>
-                    <td className="py-3 px-4 text-gray-400 print:text-gray-700">{v.isp || 'Local ISP'}</td>
-                    <td className="py-3 px-4 text-gray-400 print:text-gray-700 font-semibold">{v.device === 'Mobile' ? '📱 Mobile' : '🖥️ Desktop'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                        v.flaggedSuspicious 
-                          ? 'bg-red-500/10 border border-red-500/20 text-red-400' 
-                          : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                      }`}>
-                        {v.flaggedSuspicious ? 'FLAGGED' : 'SECURE'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right text-gray-500 print:text-gray-600">
-                      {new Date(v.createdAt).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
+                {liveVotesList.map((v, idx) => {
+                  let choiceText = 'N/A';
+                  try {
+                    const ansObj = JSON.parse(v.answers);
+                    const selection = ansObj[activeQuestion.id];
+                    if (selection) {
+                      const optionId = Array.isArray(selection) ? selection[0] : selection;
+                      const opt = activeQuestion.options.find((o: any) => o.id === optionId);
+                      choiceText = opt ? opt.text : optionId;
+                    }
+                  } catch (e) {}
+
+                  return (
+                    <tr key={v.id} className="border-b border-white/5 hover:bg-white/2 transition-colors print:border-gray-200">
+                      <td className="py-3 px-4 text-center font-mono text-gray-500 print:text-gray-500">{idx + 1}</td>
+                      <td className="py-3 px-4 font-semibold text-white print:text-black">
+                        {poll.isAnonymous ? `Anonymous Voter #${idx + 1}` : v.userIdentifier}
+                      </td>
+                      <td className="py-3 px-4 text-gray-400 print:text-gray-700">
+                        {poll.isAnonymous ? '••••••••••••••••' : v.email}
+                      </td>
+                      {!poll.isAnonymous && (
+                        <td className="py-3 px-4 font-semibold text-indigo-400 print:text-indigo-600">
+                          {choiceText}
+                        </td>
+                      )}
+                      <td className="py-3 px-4 font-mono text-gray-400 print:text-gray-700">{v.ipAddress}</td>
+                      <td className="py-3 px-4 text-gray-400 print:text-gray-700">{v.isp || 'Local ISP'}</td>
+                      <td className="py-3 px-4 text-gray-400 print:text-gray-700 font-semibold">{v.device === 'Mobile' ? '📱 Mobile' : '🖥️ Desktop'}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          v.flaggedSuspicious 
+                            ? 'bg-red-500/10 border border-red-500/20 text-red-400' 
+                            : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                        }`}>
+                          {v.flaggedSuspicious ? 'FLAGGED' : 'SECURE'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-500 print:text-gray-600">
+                        {new Date(v.createdAt).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

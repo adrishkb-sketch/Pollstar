@@ -206,7 +206,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { status, isResultPublic } = await req.json();
+    const { status, isResultPublic, title, description, posterUrl, questionText, options, hideResultsUntilEnd } = await req.json();
 
     const updateData: any = {};
     if (status) {
@@ -215,10 +215,63 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (isResultPublic !== undefined) {
       updateData.isResultPublic = !!isResultPublic;
     }
+    if (title) {
+      updateData.title = title;
+    }
+    if (description) {
+      updateData.description = description;
+    }
+    if (posterUrl !== undefined) {
+      updateData.posterUrl = posterUrl;
+    }
 
-    const updatedPoll = await prisma.poll.update({
-      where: { id: pollId },
-      data: updateData,
+    const updatedPoll = await prisma.$transaction(async (tx) => {
+      // 1. Update Poll details
+      const pollObj = await tx.poll.update({
+        where: { id: pollId },
+        data: updateData,
+      });
+
+      // Update PollSettings
+      if (hideResultsUntilEnd !== undefined) {
+        await tx.pollSettings.upsert({
+          where: { pollId: pollId },
+          create: {
+            pollId: pollId,
+            hideResultsUntilEnd: !!hideResultsUntilEnd,
+          },
+          update: {
+            hideResultsUntilEnd: !!hideResultsUntilEnd,
+          },
+        });
+      }
+
+      // 2. Update Question Text
+      if (questionText) {
+        const question = await tx.question.findFirst({
+          where: { pollId },
+        });
+        if (question) {
+          await tx.question.update({
+            where: { id: question.id },
+            data: { questionText },
+          });
+
+          // 3. Update existing option labels
+          if (options && Array.isArray(options)) {
+            for (const opt of options) {
+              if (opt.id && opt.text) {
+                await tx.option.update({
+                  where: { id: opt.id },
+                  data: { text: opt.text },
+                });
+              }
+            }
+          }
+        }
+      }
+
+      return pollObj;
     });
 
     // Audit logs for admin actions

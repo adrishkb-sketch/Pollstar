@@ -37,6 +37,7 @@ export async function GET() {
           creator: { select: { email: true } },
           questions: { include: { options: true } },
           votes: true,
+          settings: true,
         },
       });
     } else {
@@ -46,6 +47,7 @@ export async function GET() {
         include: {
           questions: { include: { options: true } },
           votes: true,
+          settings: true,
         },
       });
     }

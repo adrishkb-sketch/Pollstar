@@ -73,15 +73,8 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Vote record not found' }, { status: 404 });
     }
 
-    // Verify if the poll is closed or is a closed (non-open) voting type poll
-    const isPollClosed = vote.poll.status === 'ENDED' || !vote.poll.isOpenVoting;
-    if (!isPollClosed) {
-      return NextResponse.json({ 
-        error: 'Vote Override Restricted: Admin can only override votes for closed polls or closed-type authenticated polls.' 
-      }, { status: 400 });
-    }
-
     const oldAnswers = vote.answers;
+    const pollId = vote.pollId;
 
     // Persist overridden answers
     const updatedVote = await prisma.vote.update({
@@ -99,6 +92,67 @@ export async function PATCH(req: Request) {
         details: `Overridden vote ID: ${voteId} (Voter: ${vote.userIdentifier}, Poll: ${vote.poll.title}). Old Answers: ${oldAnswers} -> New Answers: ${JSON.stringify(newAnswers)}`,
       },
     });
+
+    // WebSocket Live Update Broadcast (Real-Time Chart Sync on Override)
+    if ((global as any).io) {
+      const questions = await prisma.question.findMany({
+        where: { pollId },
+        include: { options: true },
+      });
+      const allVotes = await prisma.vote.findMany({
+        where: { pollId },
+      });
+
+      const stats: Record<string, any> = {};
+      questions.forEach((q) => {
+        stats[q.id] = {};
+        q.options.forEach((o) => {
+          stats[q.id][o.id] = { text: o.text, count: 0 };
+        });
+      });
+
+      allVotes.forEach((v) => {
+        try {
+          const ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+          Object.keys(ans).forEach((qId) => {
+            const val = ans[qId];
+            const question = questions.find((q) => q.id === qId);
+
+            if (question) {
+              if (question.type === 'RANKED' && Array.isArray(val)) {
+                const numOpts = question.options.length;
+                val.forEach((optId: string, idx: number) => {
+                  if (stats[qId] && stats[qId][optId]) {
+                    stats[qId][optId].count += numOpts - idx;
+                  }
+                });
+              } else if (question.type === 'SINGLE' && typeof val === 'string') {
+                if (stats[qId] && stats[qId][val]) {
+                  stats[qId][val].count += 1;
+                }
+              } else if (question.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
+                if (stats[qId] && stats[qId][val.winner]) {
+                  stats[qId][val.winner].count += 1;
+                }
+              }
+            }
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      (global as any).io.to(`poll-${pollId}`).emit('vote-cast', {
+        stats,
+        totalVotes: allVotes.length,
+        newVote: {
+          ipAddress: updatedVote.ipAddress,
+          isp: updatedVote.isp,
+          flaggedSuspicious: updatedVote.flaggedSuspicious,
+          createdAt: updatedVote.createdAt,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
