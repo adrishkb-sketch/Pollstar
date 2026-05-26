@@ -169,26 +169,27 @@ export default function PollInsights({ params }: PageProps) {
   // Hourly Velocity
   const getVotingVelocity = () => {
     const hourlyGroups: Record<string, number> = {};
+    const now = Date.now();
+    
+    // Initialize 6 hourly buckets in IST
+    const buckets: { start: number; end: number; label: string }[] = [];
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 60 * 60 * 1000);
-      const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const d = new Date(now - i * 60 * 60 * 1000);
+      const label = d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
+      
+      const bucketStart = now - (i + 0.5) * 60 * 60 * 1000;
+      const bucketEnd = now - (i - 0.5) * 60 * 60 * 1000;
+      
+      buckets.push({ start: bucketStart, end: bucketEnd, label });
       hourlyGroups[label] = 0;
     }
 
     liveVotesList.forEach((v) => {
       try {
-        const voteDate = new Date(v.createdAt);
-        const hourStr = voteDate.toLocaleTimeString([], { hour: '2-digit' });
-        let matched = false;
-        Object.keys(hourlyGroups).forEach((k) => {
-          if (k.startsWith(hourStr.substring(0, 2))) {
-            hourlyGroups[k]++;
-            matched = true;
-          }
-        });
-        if (!matched) {
-          const fallbackLabel = voteDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          hourlyGroups[fallbackLabel] = (hourlyGroups[fallbackLabel] || 0) + 1;
+        const voteTime = new Date(v.createdAt).getTime();
+        const matchingBucket = buckets.find(b => voteTime >= b.start && voteTime < b.end);
+        if (matchingBucket) {
+          hourlyGroups[matchingBucket.label]++;
         }
       } catch (e) {}
     });
@@ -593,8 +594,8 @@ export default function PollInsights({ params }: PageProps) {
           <div>
             <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1 print:text-gray-600">Timeline Schedule</span>
             <span className="font-outfit text-xs font-bold text-white block mt-1.5 leading-relaxed print:text-black">
-              Start: {new Date(poll.startTime).toLocaleDateString()}<br/>
-              End: {new Date(poll.endTime).toLocaleDateString()}
+              Start: {new Date(poll.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}<br/>
+              End: {new Date(poll.endTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}
             </span>
           </div>
           <div className="p-4 bg-purple-500/10 rounded-2xl text-purple-400 print:hidden">

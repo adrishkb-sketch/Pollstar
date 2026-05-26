@@ -69,19 +69,39 @@ export default function CreatePoll() {
   const [hideResultsUntilEnd, setHideResultsUntilEnd] = useState(false);
   const [isResultPublic, setIsResultPublic] = useState(false);
 
-  // Initialize date defaults
+  // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
     const start = new Date();
     const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days later
     
-    // Format to YYYY-MM-DDTHH:MM
-    const format = (d: Date) => {
-      const pad = (n: number) => n.toString().padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    // Format to YYYY-MM-DDTHH:MM in Asia/Kolkata timezone
+    const formatIST = (d: Date) => {
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = fmt.formatToParts(d);
+      const getVal = (type: string) => parts.find(p => p.type === type)?.value || '';
+      
+      const year = getVal('year');
+      const month = getVal('month');
+      const day = getVal('day');
+      let hour = getVal('hour');
+      const minute = getVal('minute');
+      
+      // Handle edge cases where hour12: false might output '24' for midnight
+      if (hour === '24') hour = '00';
+      
+      return `${year}-${month}-${day}T${hour}:${minute}`;
     };
     
-    setStartTime(format(start));
-    setEndTime(format(end));
+    setStartTime(formatIST(start));
+    setEndTime(formatIST(end));
   }, []);
 
   // Fetch previous closed poll rosters

@@ -124,14 +124,32 @@ export default function Dashboard() {
     setEditIsResultPublic(!!poll.isResultPublic);
     setEditHideResultsUntilEnd(!!poll.settings?.hideResultsUntilEnd);
 
-    const format = (dateInput: any) => {
+    const formatIST = (dateInput: any) => {
       if (!dateInput) return '';
       const d = new Date(dateInput);
-      const pad = (n: number) => n.toString().padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = fmt.formatToParts(d);
+      const getVal = (type: string) => parts.find(p => p.type === type)?.value || '';
+      
+      const year = getVal('year');
+      const month = getVal('month');
+      const day = getVal('day');
+      let hour = getVal('hour');
+      const minute = getVal('minute');
+      
+      if (hour === '24') hour = '00';
+      return `${year}-${month}-${day}T${hour}:${minute}`;
     };
-    setEditStartTime(format(poll.startTime));
-    setEditEndTime(format(poll.endTime));
+    setEditStartTime(formatIST(poll.startTime));
+    setEditEndTime(formatIST(poll.endTime));
     
     const question = poll.questions?.[0] || { questionText: '', options: [] };
     setEditQuestionText(question.questionText || '');
@@ -383,7 +401,7 @@ export default function Dashboard() {
                       </span>
                       <span className="text-gray-500 text-xs flex items-center space-x-1">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>{new Date(poll.startTime).toLocaleDateString()}</span>
+                        <span>{new Date(poll.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</span>
                       </span>
                     </div>
 

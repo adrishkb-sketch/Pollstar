@@ -336,7 +336,7 @@ export default function AdminPortal() {
                     <div className="space-y-1">
                       <span className="text-sm font-semibold text-white block truncate max-w-[200px]">{c.email}</span>
                       <div className="flex items-center space-x-3 text-[10px]">
-                        <span className="text-gray-500 font-bold">{new Date(c.createdAt).toLocaleDateString()}</span>
+                        <span className="text-gray-500 font-bold">{new Date(c.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</span>
                         <div className="w-1 h-1 rounded-full bg-white/10" />
                         <span className={c.verified ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
                           {c.verified ? 'Verified Email' : 'Email Unverified'}

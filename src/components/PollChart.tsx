@@ -54,11 +54,11 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
   // SINGLE CHOICE: Turnout Velocity Chart Data
   // ----------------------------------------------------
   const getVelocityData = () => {
-    // Group votes by hour
+    // Group votes by hour explicitly in Asia/Kolkata (IST) timezone
     const countsByHour: Record<string, number> = {};
     votesList.forEach(v => {
       const date = new Date(v.createdAt);
-      const hourStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const hourStr = date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
       countsByHour[hourStr] = (countsByHour[hourStr] || 0) + 1;
     });
 

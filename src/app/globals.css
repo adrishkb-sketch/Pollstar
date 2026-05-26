@@ -110,6 +110,8 @@ body::after {
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transform: translate3d(0, 0, 0); /* Stabilize GPU compositing layer to prevent backdrop-filter layout blur flickers */
+  backface-visibility: hidden;
 }
 .glass-card:hover {
   border-color: rgba(16, 185, 129, 0.25);
@@ -167,4 +169,14 @@ body::after {
   opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* Prevent Recharts/SVG focus outlines causing layout shifts or composition blur */
+svg, svg *, .recharts-wrapper, .recharts-wrapper * {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.recharts-wrapper:focus, .recharts-wrapper *:focus {
+  outline: none !important;
 }

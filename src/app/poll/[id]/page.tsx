@@ -1445,6 +1445,8 @@ export default function VoterPortal({ params }: PageProps) {
               questionText={activeQuestion.questionText}
               type={activeQuestion.type}
               stats={liveStats[activeQuestion.id] || {}}
+              votesList={poll?.votes || []}
+              optionsList={activeQuestion.options || []}
             />
           </div>
 
