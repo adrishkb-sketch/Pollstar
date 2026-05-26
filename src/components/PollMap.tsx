@@ -78,10 +78,6 @@ export default function PollMap({ locations }: PollMapProps) {
           const radius = 0.15 * Math.ceil(occurrences / 8); // scale radius per 8 overlapping votes
           finalLat += Math.sin(angle) * radius;
           finalLon += Math.cos(angle) * radius;
-        } else {
-          // Even for the 0th occurrence, add a tiny bit of random jitter so they aren't exactly stacked
-          finalLat += (Math.random() - 0.5) * 0.04;
-          finalLon += (Math.random() - 0.5) * 0.04;
         }
 
         const markerColor = loc.flaggedSuspicious ? '#ef4444' : '#6366f1';
