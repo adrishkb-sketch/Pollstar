@@ -69,14 +69,18 @@ export default function PollMap({ locations }: PollMapProps) {
         const occurrences = coordFreqMap.get(coordKey) || 0;
         coordFreqMap.set(coordKey, occurrences + 1);
 
-        // Apply a small spiral offset to duplicate coordinates to disperse overlapping markers
+        // Apply a distinct dispersion offset to duplicate coordinates to scatter overlapping markers beautifully
         let finalLat = loc.lat;
         let finalLon = loc.lon;
         if (occurrences > 0) {
           const angle = (occurrences * 45) * (Math.PI / 180); // disperse at 45 degree steps
-          const radius = 0.0035 * Math.ceil(occurrences / 8); // scale radius per 8 overlapping votes
+          const radius = 0.15 * Math.ceil(occurrences / 8); // scale radius per 8 overlapping votes
           finalLat += Math.sin(angle) * radius;
           finalLon += Math.cos(angle) * radius;
+        } else {
+          // Even for the 0th occurrence, add a tiny bit of random jitter so they aren't exactly stacked
+          finalLat += (Math.random() - 0.5) * 0.04;
+          finalLon += (Math.random() - 0.5) * 0.04;
         }
 
         const markerColor = loc.flaggedSuspicious ? '#ef4444' : '#6366f1';

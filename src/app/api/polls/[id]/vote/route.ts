@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, userAgent } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getClientIP, lookupIP } from '@/lib/geo';
 import jwt from 'jsonwebtoken';
@@ -19,12 +19,23 @@ export async function POST(
     const body = await req.json();
     const { answers, captchaResponse, voterToken, email: openEmail, latitude, longitude, device } = body;
 
-    // Detect mobile browser signals from server-side User-Agent header as a robust fallback
-    const userAgent = req.headers.get('user-agent') || '';
-    const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    // 1. Bulletproof Device detection using Client body, Next.js userAgent, and Vercel edge headers
+    const ua = userAgent(req);
+    const vercelDevice = req.headers.get('x-vercel-device-type') || '';
+    const isMobileUA = ua.device.type === 'mobile' || ua.device.type === 'tablet' || vercelDevice === 'mobile' || vercelDevice === 'tablet' || /Mobi|Android|iPhone|iPad|iPod|BlackBerry/i.test(ua.ua || '');
     const resolvedDevice = (device === 'Mobile' || isMobileUA) ? 'Mobile' : 'Desktop';
 
-    // 1. Core checks
+    // 2. High-Fidelity Geolocation using Client high-accuracy GPS, Vercel edge headers, and backup Geo-IP
+    const vercelLat = req.headers.get('x-vercel-ip-latitude');
+    const vercelLon = req.headers.get('x-vercel-ip-longitude');
+    
+    const parseCoord = (val: any) => {
+      if (val === null || val === undefined || val === '') return null;
+      const num = parseFloat(val);
+      return isNaN(num) ? null : num;
+    };
+
+    // 3. Core checks
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { settings: true },
@@ -233,8 +244,8 @@ export async function POST(
           device: resolvedDevice,
           answers: JSON.stringify(answers),
           flaggedSuspicious: false,
-          latitude: typeof latitude === 'number' ? latitude : (geoData.lat !== 0 ? geoData.lat : null),
-          longitude: typeof longitude === 'number' ? longitude : (geoData.lon !== 0 ? geoData.lon : null),
+          latitude: parseCoord(latitude) ?? (vercelLat ? parseFloat(vercelLat) : (geoData.lat !== 0 ? geoData.lat : null)),
+          longitude: parseCoord(longitude) ?? (vercelLon ? parseFloat(vercelLon) : (geoData.lon !== 0 ? geoData.lon : null)),
         },
       });
 
