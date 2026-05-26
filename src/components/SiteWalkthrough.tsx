@@ -340,7 +340,11 @@ export default function SiteWalkthrough() {
       {/* 1. Permanent Help FAB Launcher (Bottom Right corner) */}
       <button
         onClick={handleStartManualTour}
-        className="fixed bottom-6 right-6 z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-all transform hover:scale-105 active:scale-95 animate-pulse-glow"
+        className={`fixed z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-all transform hover:scale-105 active:scale-95 animate-pulse-glow ${
+          pathname === "/dashboard/create"
+            ? "bottom-24 sm:bottom-6 right-6"
+            : "bottom-6 right-6"
+        }`}
         title="Need help? Start the Page Tour Guide!"
       >
         <HelpCircle className="w-5 h-5 shrink-0" />
