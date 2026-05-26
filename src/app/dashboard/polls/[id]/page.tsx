@@ -244,8 +244,8 @@ export default function PollInsights({ params }: PageProps) {
 
       // 2. Resolve vote choices
       try {
-        const ansObj = JSON.parse(v.answers);
-        const selection = ansObj[activeQuestion.id];
+        const ansObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const selection = ansObj?.[activeQuestion.id];
         if (selection) {
           const optionId = Array.isArray(selection) ? selection[0] : selection;
           const optText = activeQuestion.options.find((o: any) => o.id === optionId)?.text || optionId;
@@ -327,8 +327,8 @@ export default function PollInsights({ params }: PageProps) {
     liveVotesList.forEach(v => {
       const dev = v.device === 'Mobile' ? 'Mobile' : 'Desktop';
       try {
-        const ansObj = JSON.parse(v.answers);
-        const selection = ansObj[activeQuestion.id];
+        const ansObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const selection = ansObj?.[activeQuestion.id];
         if (selection) {
           const optionId = Array.isArray(selection) ? selection[0] : selection;
           const optText = activeQuestion.options.find((o: any) => o.id === optionId)?.text || 'Unknown';
@@ -437,8 +437,8 @@ export default function PollInsights({ params }: PageProps) {
     const choiceCounts: Record<string, number> = {};
     liveVotesList.forEach(v => {
       try {
-        const ansObj = JSON.parse(v.answers);
-        const selection = ansObj[activeQuestion.id];
+        const ansObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const selection = ansObj?.[activeQuestion.id];
         if (selection) {
           const optionId = Array.isArray(selection) ? selection[0] : selection;
           choiceCounts[optionId] = (choiceCounts[optionId] || 0) + 1;
@@ -926,8 +926,8 @@ export default function PollInsights({ params }: PageProps) {
                 {liveVotesList.map((v, idx) => {
                   let choiceText = 'N/A';
                   try {
-                    const ansObj = JSON.parse(v.answers);
-                    const selection = ansObj[activeQuestion.id];
+                    const ansObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                    const selection = ansObj?.[activeQuestion.id];
                     if (selection) {
                       const optionId = Array.isArray(selection) ? selection[0] : selection;
                       const opt = activeQuestion.options.find((o: any) => o.id === optionId);

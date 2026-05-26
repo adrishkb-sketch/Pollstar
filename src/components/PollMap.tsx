@@ -21,6 +21,7 @@ export default function PollMap({ locations }: PollMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const markersGroup = useRef<any>(null);
+  const hasFitBounds = useRef<boolean>(false);
 
   useEffect(() => {
     // Dynamically load Leaflet on client-side only to prevent Next.js SSR crashes
@@ -150,13 +151,14 @@ export default function PollMap({ locations }: PollMapProps) {
         }
       });
 
-      // Fit map bounds to encompass all active coordinates beautifully
-      if (validLocations.length > 0 && mapInstance.current && markersGroup.current) {
+      // Fit map bounds only on the very first load — never reset zoom on subsequent data refreshes
+      if (validLocations.length > 0 && mapInstance.current && markersGroup.current && !hasFitBounds.current) {
         try {
           mapInstance.current.fitBounds(markersGroup.current.getBounds(), {
             padding: [40, 40],
             maxZoom: 6,
           });
+          hasFitBounds.current = true;
         } catch (e) {
           // Fallback if bounds fit fails
         }
