@@ -59,9 +59,11 @@ export async function POST(
       }
 
       if (allowedVoter.voted && poll.settings?.limitOneVotePerUser) {
-        return NextResponse.json({ 
-          error: 'Your unique identifier has already cast a vote in this poll.' 
-        }, { status: 403 });
+        if (!poll.isResultPublic) {
+          return NextResponse.json({ 
+            error: 'Your unique identifier has already cast a vote in this poll. Results are private.' 
+          }, { status: 403 });
+        }
       }
 
       return NextResponse.json({
