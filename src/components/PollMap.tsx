@@ -62,8 +62,23 @@ export default function PollMap({ locations }: PollMapProps) {
 
       // Add custom glowing pulsing markers for each location
       const validLocations = locations.filter((loc) => loc.lat !== 0 && loc.lon !== 0);
+      const coordFreqMap = new Map<string, number>();
 
       validLocations.forEach((loc) => {
+        const coordKey = `${loc.lat.toFixed(4)},${loc.lon.toFixed(4)}`;
+        const occurrences = coordFreqMap.get(coordKey) || 0;
+        coordFreqMap.set(coordKey, occurrences + 1);
+
+        // Apply a small spiral offset to duplicate coordinates to disperse overlapping markers
+        let finalLat = loc.lat;
+        let finalLon = loc.lon;
+        if (occurrences > 0) {
+          const angle = (occurrences * 45) * (Math.PI / 180); // disperse at 45 degree steps
+          const radius = 0.0035 * Math.ceil(occurrences / 8); // scale radius per 8 overlapping votes
+          finalLat += Math.sin(angle) * radius;
+          finalLon += Math.cos(angle) * radius;
+        }
+
         const markerColor = loc.flaggedSuspicious ? '#ef4444' : '#6366f1';
         
         // Dynamic pulsing neon dot Icon
@@ -100,7 +115,7 @@ export default function PollMap({ locations }: PollMapProps) {
         });
 
         // Add to map
-        const marker = L.marker([loc.lat, loc.lon], { icon: pulsingIcon });
+        const marker = L.marker([finalLat, finalLon], { icon: pulsingIcon });
         
         const popupContent = `
           <div style="

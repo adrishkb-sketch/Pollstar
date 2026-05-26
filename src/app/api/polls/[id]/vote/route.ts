@@ -19,6 +19,11 @@ export async function POST(
     const body = await req.json();
     const { answers, captchaResponse, voterToken, email: openEmail, latitude, longitude, device } = body;
 
+    // Detect mobile browser signals from server-side User-Agent header as a robust fallback
+    const userAgent = req.headers.get('user-agent') || '';
+    const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const resolvedDevice = (device === 'Mobile' || isMobileUA) ? 'Mobile' : 'Desktop';
+
     // 1. Core checks
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
@@ -225,11 +230,11 @@ export async function POST(
           email: voterEmail,
           ipAddress: geoData.ip, // Save resolved unique IP (e.g. 8.8.8.8) to prevent ::1
           isp: ispName,
-          device: device || 'Desktop',
+          device: resolvedDevice,
           answers: JSON.stringify(answers),
           flaggedSuspicious: false,
-          latitude: typeof latitude === 'number' ? latitude : null,
-          longitude: typeof longitude === 'number' ? longitude : null,
+          latitude: typeof latitude === 'number' ? latitude : (geoData.lat !== 0 ? geoData.lat : null),
+          longitude: typeof longitude === 'number' ? longitude : (geoData.lon !== 0 ? geoData.lon : null),
         },
       });
 
