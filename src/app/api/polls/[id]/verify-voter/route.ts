@@ -115,10 +115,34 @@ export async function POST(
 
       // If user limits is checked and voter already voted
       if (allowedVoter.voted && poll.settings?.limitOneVotePerUser) {
-        return NextResponse.json(
-          { error: 'You have already cast your vote in this poll. Duplicate entries are blocked.' },
-          { status: 403 }
+        if (!poll.isResultPublic) {
+          return NextResponse.json(
+            { error: 'You have already cast your vote in this poll. Results are private.' },
+            { status: 403 }
+          );
+        }
+      }
+
+      // If low priority, bypass OTP entirely!
+      const isLowPriority = poll.description && /\[priority:\s*LOW\]/i.test(poll.description);
+      if (isLowPriority) {
+        const voterToken = jwt.sign(
+          {
+            voterId: allowedVoter.id,
+            identifier: allowedVoter.identifier,
+            email: allowedVoter.email,
+            pollId,
+          },
+          JWT_SECRET,
+          { expiresIn: '15m' }
         );
+        return NextResponse.json({
+          success: true,
+          isLowPriority: true,
+          message: 'Identity confirmed! Access granted (Low Priority Mode).',
+          voterToken,
+          hasVotedAlready: allowedVoter.voted,
+        });
       }
 
       // Generate 6-digit verification code
@@ -199,6 +223,7 @@ export async function POST(
         success: true,
         message: 'OTP verified successfully!',
         voterToken,
+        hasVotedAlready: allowedVoter.voted,
       });
     }
 

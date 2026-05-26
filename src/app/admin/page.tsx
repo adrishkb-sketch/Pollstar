@@ -144,6 +144,33 @@ export default function AdminPortal() {
     }
   };
 
+  const handleDeletePoll = async (pollId: string, title: string) => {
+    if (!confirm(`Are you sure you want to permanently delete poll "${title}"? This action is destructive and removes all vote records, questions, and allowed voter logs permanently.`)) return;
+
+    try {
+      const res = await fetch(`/api/polls/${pollId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete poll');
+      }
+
+      // Update polls list state locally
+      setPolls((prev) => prev.filter((p) => p.id !== pollId));
+
+      // Re-fetch logs to update audit trails immediately
+      const logsRes = await fetch('/api/admin/logs');
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   const handleStartOverride = (v: any) => {
     let parsedAns = {};
     try {
@@ -459,13 +486,22 @@ export default function AdminPortal() {
                       <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                         {poll.isOpenVoting ? '🔓 Public' : '🔒 Closed'} ({poll.votes?.length || 0} Votes)
                       </div>
-                      <button
-                        onClick={() => setSelectedPoll(poll)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Inspect Results</span>
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setSelectedPoll(poll)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect Results</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeletePoll(poll.id, poll.title)}
+                          className="p-1.5 rounded-lg text-red-400 hover:text-white hover:bg-red-500/20 border border-red-500/20 transition-all"
+                          title="Delete Poll permanently"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

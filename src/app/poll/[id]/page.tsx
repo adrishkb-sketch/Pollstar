@@ -371,8 +371,24 @@ export default function VoterPortal({ params }: PageProps) {
         throw new Error(data.error || 'Failed to confirm credentials');
       }
 
+      if (data.isLowPriority && data.voterToken) {
+        setVoterToken(data.voterToken);
+        setVerifiedVoter(true);
+        if (data.hasVotedAlready) {
+          setVotedSuccessfully(true);
+        }
+        setShowOtpPopup(false);
+        setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+        setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+        setCaptchaAnswer('');
+        return;
+      }
+
       setOtpSentOnce(true);
-      setOtpCooldown(60); // 60 seconds rate limit cooldown
+      setOtpCooldown(15); // 15 seconds rate limit cooldown
+      if (data.hasVotedAlready) {
+        (window as any)._hasVotedAlready = true;
+      }
       setShowOtpPopup(true);
       setOtpError('');
     } catch (err: any) {
@@ -406,6 +422,9 @@ export default function VoterPortal({ params }: PageProps) {
 
       setVoterToken(data.voterToken);
       setVerifiedVoter(true);
+      if (data.hasVotedAlready || (window as any)._hasVotedAlready) {
+        setVotedSuccessfully(true);
+      }
       setShowOtpPopup(false);
       
       // Load standard captcha refresh
@@ -610,13 +629,27 @@ export default function VoterPortal({ params }: PageProps) {
             <img src={poll.posterUrl} alt="Poll Poster" className="w-full h-full object-cover" />
           </div>
         )}
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1">
           <h1 className="font-outfit text-3xl font-extrabold text-white leading-tight">
             {poll.title}
           </h1>
           <p className="text-gray-400 text-sm leading-relaxed max-w-2xl">
-            {poll.description}
+            {poll.description ? poll.description.replace(/\[domains:\s*([^\]]+)\]/i, '').replace(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i, '').trim() : ''}
           </p>
+          <div className="flex flex-wrap gap-2.5 pt-1">
+            {poll.description && poll.description.match(/\[domains:\s*([^\]]+)\]/i) && (
+              <span className="px-3 py-1 rounded-xl text-[10px] font-extrabold bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center space-x-1.5 uppercase tracking-wider animate-pulse">
+                <span>🛡️ Domain Lock:</span>
+                <span className="font-mono text-white/90">{poll.description.match(/\[domains:\s*([^\]]+)\]/i)?.[1]}</span>
+              </span>
+            )}
+            {poll.description && poll.description.match(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i) && (
+              <span className="px-3 py-1 rounded-xl text-[10px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center space-x-1.5 uppercase tracking-wider">
+                <span>📍 GEOLOCKED:</span>
+                <span className="text-white/90">Within {poll.description.match(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i)?.[3]}km</span>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -742,6 +775,8 @@ export default function VoterPortal({ params }: PageProps) {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : otpCooldown > 0 ? (
                   <span>Resend OTP in {otpCooldown}s</span>
+                ) : (poll.description && /\[priority:\s*LOW\]/i.test(poll.description)) ? (
+                  <span>Confirm Profile & Access Ballot</span>
                 ) : otpSentOnce ? (
                   <span>Resend OTP Code</span>
                 ) : (

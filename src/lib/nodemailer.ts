@@ -119,3 +119,136 @@ export async function sendPollInvitationEmail(
 
   return true;
 }
+
+/**
+ * Sends a Vote Confirmation / Cryptographic Ballot Receipt Email.
+ */
+export async function sendVoteConfirmationEmail({
+  email,
+  pollTitle,
+  voteId,
+  resultsUrl,
+}: {
+  email: string;
+  pollTitle: string;
+  voteId: string;
+  resultsUrl: string;
+}): Promise<boolean> {
+  const subject = `🗳️ Vote Cast Confirmed: "${pollTitle}"`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&bgcolor=0b0f19&color=ffffff&data=${encodeURIComponent(resultsUrl)}`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.1em;">✓ Vote Successfully Cast</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Ballot Receipt Secured</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        Your vote has been securely recorded and cryptographically sealed in the Pollstar ecosystem.
+      </p>
+      
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+        <strong style="color: #f3f4f6; font-size: 15px; display: block; margin-bottom: 4px;">Ballot Details:</strong>
+        <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 10px;">Poll Name: <strong style="color: #ffffff">${pollTitle}</strong></span>
+        <span style="color: #9ca3af; font-size: 13px; display: block;">Cryptographic Receipt Hash:</span>
+        <code style="font-family: monospace; font-size: 11px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 4px 8px; color: #818cf8; display: block; margin-top: 4px; word-break: break-all;">${voteId}</code>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">Scan this QR code or click the button below to check real-time results:</p>
+        <img src="${qrCodeUrl}" alt="Check Live Results QR" style="border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 16px; width: 130px; height: 130px;" />
+        <br/>
+        <a href="${resultsUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">View Live Results</a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
+        This is an automated security receipt. Do not reply to this message.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending receipt:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Vote Confirmation Receipt                    │`);
+  console.log(`│ Hash:    ${voteId.padEnd(46)} │`);
+  console.log(`│ QR Code link: ${resultsUrl.padEnd(41)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+
+/**
+ * Sends a Poll Closed notification email.
+ */
+export async function sendPollClosedEmail({
+  email,
+  pollTitle,
+  reportUrl,
+}: {
+  email: string;
+  pollTitle: string;
+  reportUrl: string;
+}): Promise<boolean> {
+  const subject = `📢 The Poll "${pollTitle}" is now Closed`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 0.1em;">🔒 Voting Session Closed</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Official Results Published</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        The voting window for <strong style="color: #ffffff">"${pollTitle}"</strong> has ended, and all ballots are officially locked.
+      </p>
+
+      <div style="text-align: center; margin-bottom: 24px; padding: 20px; background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">The electoral report has been compiled and is ready for analysis:</p>
+        <a href="${reportUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">See & Download Report</a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
+        Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending closed notice:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Poll Closed Notification                      │`);
+  console.log(`│ Report:  ${reportUrl.padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken } from '@/lib/jwt';
-import { sendPollInvitationEmail } from '@/lib/nodemailer';
+import { sendPollInvitationEmail, sendPollClosedEmail } from '@/lib/nodemailer';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -194,7 +194,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      include: { allowedVoters: true },
+      include: { allowedVoters: true, votes: true },
     });
 
     if (!poll) {
@@ -300,6 +300,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           poll.description
         ).catch((e) => console.error('Failed to send invite email to:', voter.email, e));
       });
+    }
+
+    // If poll was just moved to ENDED (closed), send poll closed notification to everyone
+    if (status === 'ENDED' && poll.status !== 'ENDED') {
+      const host = req.headers.get('host') || 'localhost:3000';
+      const protocol = req.headers.get('x-forwarded-proto') || 'http';
+      const reportUrl = `${protocol}://${host}/poll/${poll.id}`;
+
+      if (!poll.isOpenVoting && poll.allowedVoters.length) {
+        poll.allowedVoters.forEach((voter) => {
+          sendPollClosedEmail({
+            email: voter.email,
+            pollTitle: poll.title,
+            reportUrl,
+          }).catch((e) => console.error('Failed to send poll closed email:', e));
+        });
+      } else if (poll.votes && poll.votes.length) {
+        const uniqueVoters = Array.from(new Set(poll.votes.map((v) => v.email).filter(Boolean)));
+        uniqueVoters.forEach((email) => {
+          sendPollClosedEmail({
+            email: email as string,
+            pollTitle: poll.title,
+            reportUrl,
+          }).catch((e) => console.error('Failed to send poll closed email:', e));
+        });
+      }
     }
 
     // Trigger dynamic socket update to all connected poll dashboard clients

@@ -7,7 +7,7 @@ import {
   Vote, ArrowLeft, Loader2, AlertCircle, Calendar, 
   Trash2, ShieldCheck, Download, Check, FileDown, 
   Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
-  Brain, TrendingUp, Gauge, Zap, Award
+  Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -494,6 +494,14 @@ export default function PollInsights({ params }: PageProps) {
         </Link>
 
         <div className="flex items-center space-x-3">
+          <Link
+            href={`/dashboard/polls/${poll.id}/present`}
+            target="_blank"
+            className="px-4 py-2.5 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 text-xs font-semibold transition-all flex items-center space-x-2"
+          >
+            <MonitorPlay className="w-4 h-4" />
+            <span>Live Presentation Mode</span>
+          </Link>
           <button
             onClick={handleExportPDF}
             className="px-4 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-all flex items-center space-x-2"

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getClientIP, lookupIP } from '@/lib/geo';
 import jwt from 'jsonwebtoken';
+import { sendVoteConfirmationEmail } from '@/lib/nodemailer';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
 
@@ -135,6 +136,55 @@ export async function POST(
       }
     }
 
+    // Advanced Allowed Domains check
+    if (voterEmail && poll.description) {
+      const domainMatch = poll.description.match(/\[domains:\s*([^\]]+)\]/i);
+      if (domainMatch) {
+        const allowedDomains = domainMatch[1].split(',').map((d: string) => d.trim().toLowerCase());
+        const voterDomain = voterEmail.split('@')[1]?.toLowerCase();
+        if (!allowedDomains.includes(voterDomain)) {
+          return NextResponse.json(
+            { error: `Authorized Domains Restriction: Only email addresses ending with ${allowedDomains.join(', ')} are eligible to vote.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
+    // Advanced Geofencing check
+    if (poll.description) {
+      const geoMatch = poll.description.match(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i);
+      if (geoMatch) {
+        const targetLat = parseFloat(geoMatch[1]);
+        const targetLon = parseFloat(geoMatch[2]);
+        const targetRadius = parseInt(geoMatch[3]);
+
+        if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+          return NextResponse.json(
+            { error: 'Geofence Restriction: This ballot requires active geolocation coordinates to cast. Please enable browser location services and try again.' },
+            { status: 403 }
+          );
+        }
+
+        const R = 6371; // km
+        const dLat = (latitude - targetLat) * Math.PI / 180;
+        const dLon = (longitude - targetLon) * Math.PI / 180;
+        const a = 
+          Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.cos(targetLat * Math.PI / 180) * Math.cos(latitude * Math.PI / 180) * 
+          Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c;
+
+        if (distance > targetRadius) {
+          return NextResponse.json(
+            { error: `Geofence Restriction: Access Denied. You are ${Math.round(distance)}km away, but this ballot is strictly geofenced to within a ${targetRadius}km radius.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // Check Limit 2: Duplicate IP (Device Uniqueness)
     const isLoopbackIP = ipAddress === '::1' || ipAddress === '127.0.0.1' || ipAddress.startsWith('127.');
     if (poll.settings?.limitOneVotePerIP && !isLoopbackIP) {
@@ -191,6 +241,23 @@ export async function POST(
 
       return vote;
     });
+
+    // Dispatch Vote Confirmation / Receipt Email
+    if (voterEmail) {
+      try {
+        const protocol = req.headers.get('x-forwarded-proto') || 'http';
+        const host = req.headers.get('host') || 'localhost:3000';
+        const resultsUrl = `${protocol}://${host}/poll/${pollId}`;
+        sendVoteConfirmationEmail({
+          email: voterEmail,
+          pollTitle: poll.title,
+          voteId: savedVote.id,
+          resultsUrl,
+        }).catch((e) => console.error('Failed to send vote confirmation email:', e));
+      } catch (err) {
+        console.error('Failed to send vote confirmation email:', err);
+      }
+    }
 
     // Clear registry after successful submit
     setTimeout(() => activeCastingRegistry.delete(concurrentRegistryKey), 3000);

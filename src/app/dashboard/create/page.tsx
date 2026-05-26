@@ -35,6 +35,7 @@ export default function CreatePoll() {
   const [identifierLabel, setIdentifierLabel] = useState('Roll Number');
   const [confirmer1Label, setConfirmer1Label] = useState('Student Name');
   const [confirmer2Label, setConfirmer2Label] = useState('Parent Name');
+  const [useConfirmer2, setUseConfirmer2] = useState(false);
   const [allowedVoters, setAllowedVoters] = useState<any[]>([
     { identifier: '', confirmer1: '', confirmer2: '', email: '' },
     { identifier: '', confirmer1: '', confirmer2: '', email: '' },
@@ -47,12 +48,11 @@ export default function CreatePoll() {
   const [sheetUrl, setSheetUrl] = useState('');
   const [importingSheet, setImportingSheet] = useState(false);
   const [sheetImportError, setSheetImportError] = useState('');
-  const [sheetImportSuccess, setSheetImportSuccess] = useState('');
-
-  // Step 5: Restrictions
+  const [sheetImportSuccess, setSheetImportSuccess] = useState('');  // Step 5: Restrictions
   const [limitOneVotePerUser, setLimitOneVotePerUser] = useState(true);
   const [limitOneVotePerIP, setLimitOneVotePerIP] = useState(false);
   const [limitOneVotePerISP, setLimitOneVotePerISP] = useState(false);
+  const [ballotPriority, setBallotPriority] = useState<'HIGH' | 'LOW'>('HIGH');
 
   // Step 6: Anonymity
   const [isAnonymous, setIsAnonymous] = useState(true);
@@ -257,6 +257,51 @@ export default function CreatePoll() {
     setAllowedVoters(updated);
   };
 
+  const handleTablePaste = (e: React.ClipboardEvent<HTMLTableElement>) => {
+    e.preventDefault();
+    const clipboardData = e.clipboardData.getData('Text');
+    if (!clipboardData) return;
+
+    const parsedRows = clipboardData
+      .trim()
+      .split(/\r?\n/)
+      .map((row) => {
+        if (row.includes('\t')) {
+          return row.split('\t');
+        }
+        return row.split(',');
+      });
+
+    if (parsedRows.length === 0) return;
+
+    const updated = [...allowedVoters];
+    parsedRows.forEach((cols, rIdx) => {
+      const trimmedCols = cols.map(c => c.trim());
+      if (trimmedCols.length === 0 || trimmedCols.every(c => c === '')) return;
+
+      const voterRow: any = { identifier: '', confirmer1: '', confirmer2: '', email: '' };
+
+      if (useConfirmer2) {
+        voterRow.identifier = trimmedCols[0] || '';
+        voterRow.confirmer1 = trimmedCols[1] || '';
+        voterRow.confirmer2 = trimmedCols[2] || '';
+        voterRow.email = trimmedCols[3] || '';
+      } else {
+        voterRow.identifier = trimmedCols[0] || '';
+        voterRow.confirmer1 = trimmedCols[1] || '';
+        voterRow.email = trimmedCols[2] || '';
+      }
+
+      updated[rIdx] = voterRow;
+    });
+
+    const filtered = updated.filter(v => v.identifier || v.confirmer1 || v.email);
+    const finalRows = filtered.length > 0 ? filtered : [{ identifier: '', confirmer1: '', confirmer2: '', email: '' }];
+    
+    setAllowedVoters(finalRows);
+    setNumVoters(finalRows.length);
+  };
+
   // Wizard Step verification
   const validateStep = () => {
     setError('');
@@ -291,12 +336,6 @@ export default function CreatePoll() {
         return false;
       }
     }
-    if (currentStep === 7) {
-      if (new Date(startTime) >= new Date(endTime)) {
-        setError('Poll end date must fall after the starting date.');
-        return false;
-      }
-    }
     return true;
   };
 
@@ -318,7 +357,7 @@ export default function CreatePoll() {
 
     const payload = {
       title,
-      description,
+      description: ballotPriority === 'LOW' && !isOpenVoting ? `${description} [priority: LOW]` : description,
       posterUrl,
       isOpenVoting,
       isAnonymous,
@@ -339,10 +378,17 @@ export default function CreatePoll() {
         limitOneVotePerISP,
         hideResultsUntilEnd,
       },
-      allowedVoters: isOpenVoting ? [] : allowedVoters,
+      allowedVoters: isOpenVoting 
+        ? [] 
+        : allowedVoters.map(v => ({
+            identifier: v.identifier,
+            confirmer1: v.confirmer1,
+            confirmer2: useConfirmer2 ? v.confirmer2 : '',
+            email: v.email
+          })),
       identifierLabel: isOpenVoting ? 'Roll Number' : identifierLabel,
       confirmer1Label: isOpenVoting ? 'Student Name' : confirmer1Label,
-      confirmer2Label: isOpenVoting ? 'Parent Name' : confirmer2Label,
+      confirmer2Label: isOpenVoting ? 'Parent Name' : (useConfirmer2 ? confirmer2Label : ''),
     };
 
     try {
@@ -744,8 +790,30 @@ export default function CreatePoll() {
                     )}
                   </div>
 
+                  {/* Confirmer 2 Toggle Option Selector */}
+                  <div className="flex items-center space-x-3 bg-white/2 p-4 rounded-xl border border-white/5 mb-4">
+                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-xs font-bold text-white">Enable 2nd Voter Confirmer Field (Optional)</h4>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Voters must match two confirmation items (e.g. Student Name AND Parent Name) before voting.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUseConfirmer2(!useConfirmer2)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        useConfirmer2 
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md' 
+                          : 'bg-white/5 hover:bg-white/10 text-gray-400'
+                      }`}
+                    >
+                      {useConfirmer2 ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
                   {/* Header Rename controls */}
-                  <div className="grid grid-cols-3 gap-4 bg-white/2 p-4 rounded-xl border border-white/5">
+                  <div className={`grid gap-4 bg-white/2 p-4 rounded-xl border border-white/5 ${useConfirmer2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div>
                       <label className="block text-gray-500 text-[10px] uppercase font-bold tracking-wider mb-1.5">
                         Rename Unique Field
@@ -768,78 +836,118 @@ export default function CreatePoll() {
                         className="w-full glass-input text-xs py-1.5"
                       />
                     </div>
-                    <div>
-                      <label className="block text-gray-500 text-[10px] uppercase font-bold tracking-wider mb-1.5">
-                        Rename Confirmer 2 (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={confirmer2Label}
-                        onChange={(e) => setConfirmer2Label(e.target.value)}
-                        className="w-full glass-input text-xs py-1.5"
-                      />
-                    </div>
+                    {useConfirmer2 && (
+                      <div>
+                        <label className="block text-gray-500 text-[10px] uppercase font-bold tracking-wider mb-1.5">
+                          Rename Confirmer 2
+                        </label>
+                        <input
+                          type="text"
+                          value={confirmer2Label}
+                          onChange={(e) => setConfirmer2Label(e.target.value)}
+                          className="w-full glass-input text-xs py-1.5"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Interactive Spreadsheet-like layout */}
-                  <div className="overflow-x-auto border border-white/5 rounded-2xl">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
-                          <th className="py-3.5 px-4 w-12 text-center">Row</th>
-                          <th className="py-3.5 px-4 min-w-[120px]">{identifierLabel} <span className="text-red-400">*</span></th>
-                          <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
-                          <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>
-                          <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allowedVoters.map((voter, idx) => (
-                          <tr key={idx} className="border-b border-white/5 hover:bg-white/2 transition-colors">
-                            <td className="py-2.5 px-4 text-center font-mono text-gray-500 font-bold">{idx + 1}</td>
-                            <td className="py-2.5 px-2">
-                              <input
-                                type="text"
-                                required
-                                value={voter.identifier}
-                                onChange={(e) => handleVoterCellChange(e.target.value, idx, 'identifier')}
-                                placeholder="e.g. 2021BCS012"
-                                className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-2">
-                              <input
-                                type="text"
-                                required
-                                value={voter.confirmer1}
-                                onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer1')}
-                                placeholder="e.g. Alan Turing"
-                                className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-2">
-                              <input
-                                type="text"
-                                value={voter.confirmer2}
-                                onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer2')}
-                                placeholder="Optional text"
-                                className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-2">
-                              <input
-                                type="email"
-                                required
-                                value={voter.email}
-                                onChange={(e) => handleVoterCellChange(e.target.value, idx, 'email')}
-                                placeholder="e.g. alan@turing.edu"
-                                className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
-                              />
-                            </td>
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto border border-white/5 rounded-2xl">
+                      <table 
+                        onPaste={handleTablePaste}
+                        className="w-full text-left text-xs"
+                      >
+                        <thead>
+                          <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
+                            <th className="py-3.5 px-4 w-12 text-center">Row</th>
+                            <th className="py-3.5 px-4 min-w-[120px]">{identifierLabel} <span className="text-red-400">*</span></th>
+                            <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
+                            {useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>}
+                            <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
+                            <th className="py-3.5 px-4 w-16 text-center">Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {allowedVoters.map((voter, idx) => (
+                            <tr key={idx} className="border-b border-white/5 hover:bg-white/2 transition-colors">
+                              <td className="py-2.5 px-4 text-center font-mono text-gray-500 font-bold">{idx + 1}</td>
+                              <td className="py-2.5 px-2">
+                                <input
+                                  type="text"
+                                  required
+                                  value={voter.identifier}
+                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'identifier')}
+                                  placeholder="e.g. 2021BCS012"
+                                  className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                />
+                              </td>
+                              <td className="py-2.5 px-2">
+                                <input
+                                  type="text"
+                                  required
+                                  value={voter.confirmer1}
+                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer1')}
+                                  placeholder="e.g. Adrish Kumar Banerjee"
+                                  className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                />
+                              </td>
+                              {useConfirmer2 && (
+                                <td className="py-2.5 px-2">
+                                  <input
+                                    type="text"
+                                    value={voter.confirmer2}
+                                    onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer2')}
+                                    placeholder="Optional text"
+                                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                  />
+                                </td>
+                              )}
+                              <td className="py-2.5 px-2">
+                                <input
+                                  type="email"
+                                  required
+                                  value={voter.email}
+                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'email')}
+                                  placeholder="e.g. adrish@banerjee.edu"
+                                  className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                />
+                              </td>
+                              <td className="py-2.5 px-4 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = allowedVoters.filter((_, vIdx) => vIdx !== idx);
+                                    setAllowedVoters(updated.length > 0 ? updated : [{ identifier: '', confirmer1: '', confirmer2: '', email: '' }]);
+                                    setNumVoters(updated.length > 0 ? updated.length : 1);
+                                  }}
+                                  className="text-red-400 hover:text-red-300 hover:scale-105 active:scale-95 transition-all text-xs font-bold font-mono"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Add row manually & pasting advice */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAllowedVoters([...allowedVoters, { identifier: '', confirmer1: '', confirmer2: '', email: '' }]);
+                          setNumVoters(allowedVoters.length + 1);
+                        }}
+                        className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-xs font-bold transition-all border border-indigo-500/10 shrink-0 flex items-center justify-center gap-1.5"
+                      >
+                        <span>➕ Add New Row</span>
+                      </button>
+                      <span className="text-[10px] text-gray-500 font-medium">
+                        💡 Pro-Tip: You can directly copy-paste cells from Excel / Google Sheets onto this table wrapper!
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -855,6 +963,43 @@ export default function CreatePoll() {
               </div>
 
               <div className="space-y-4 pt-4">
+                {/* Priority Selection for Closed Polls */}
+                {!isOpenVoting && (
+                  <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      Ballot Security Priority (Closed Voting Only)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div
+                        onClick={() => setBallotPriority('HIGH')}
+                        className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                          ballotPriority === 'HIGH' 
+                            ? 'border-indigo-500 bg-indigo-500/10 text-white' 
+                            : 'border-white/5 bg-white/2 text-gray-400 hover:border-white/10'
+                        }`}
+                      >
+                        <span className="block font-bold text-sm">🔴 High Priority</span>
+                        <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Requires secure 6-digit email OTP verification both for voting and logging in to check live results.
+                        </span>
+                      </div>
+                      <div
+                        onClick={() => setBallotPriority('LOW')}
+                        className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                          ballotPriority === 'LOW' 
+                            ? 'border-amber-500 bg-amber-500/10 text-white' 
+                            : 'border-white/5 bg-white/2 text-gray-400 hover:border-white/10'
+                        }`}
+                      >
+                        <span className="block font-bold text-sm">🟢 Low Priority</span>
+                        <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          OTP verification is disabled. Voters can directly cast their vote and access/view results instantly without wait.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Limit 1: Email */}
                 <div
                   onClick={() => setLimitOneVotePerUser(!limitOneVotePerUser)}
