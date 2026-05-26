@@ -349,25 +349,41 @@ export default function CreatePoll() {
 
     if (parsedRows.length === 0) return;
 
+    // Detect focused cell starting point
+    const activeEl = document.activeElement as HTMLInputElement;
+    let startRow = 0;
+    let startFieldKey = 'identifier';
+
+    if (activeEl && activeEl.hasAttribute('data-row-idx') && activeEl.hasAttribute('data-field-key')) {
+      startRow = parseInt(activeEl.getAttribute('data-row-idx') || '0', 10);
+      startFieldKey = activeEl.getAttribute('data-field-key') || 'identifier';
+    }
+
+    const fieldOrder = useConfirmer2
+      ? ['identifier', 'confirmer1', 'confirmer2', 'email']
+      : ['identifier', 'confirmer1', 'email'];
+
+    const startFieldIdx = fieldOrder.indexOf(startFieldKey);
+    const startIdx = startFieldIdx >= 0 ? startFieldIdx : 0;
+
     const updated = [...allowedVoters];
-    parsedRows.forEach((cols, rIdx) => {
-      const trimmedCols = cols.map(c => c.trim());
-      if (trimmedCols.length === 0 || trimmedCols.every(c => c === '')) return;
-
-      const voterRow: any = { identifier: '', confirmer1: '', confirmer2: '', email: '' };
-
-      if (useConfirmer2) {
-        voterRow.identifier = trimmedCols[0] || '';
-        voterRow.confirmer1 = trimmedCols[1] || '';
-        voterRow.confirmer2 = trimmedCols[2] || '';
-        voterRow.email = trimmedCols[3] || '';
-      } else {
-        voterRow.identifier = trimmedCols[0] || '';
-        voterRow.confirmer1 = trimmedCols[1] || '';
-        voterRow.email = trimmedCols[2] || '';
+    parsedRows.forEach((cols, rOffset) => {
+      const targetRowIdx = startRow + rOffset;
+      if (!updated[targetRowIdx]) {
+        updated[targetRowIdx] = { identifier: '', confirmer1: '', confirmer2: '', email: '' };
       }
 
-      updated[rIdx] = voterRow;
+      // Preserve other fields of the row, only modifying targeted ones
+      const voter = { ...updated[targetRowIdx] };
+      cols.forEach((cellVal, cOffset) => {
+        const targetFieldIdx = startIdx + cOffset;
+        if (targetFieldIdx < fieldOrder.length) {
+          const fieldKey = fieldOrder[targetFieldIdx];
+          voter[fieldKey] = cellVal.trim();
+        }
+      });
+
+      updated[targetRowIdx] = voter;
     });
 
     const filtered = updated.filter(v => v.identifier || v.confirmer1 || v.email);
@@ -979,6 +995,8 @@ export default function CreatePoll() {
                                   required
                                   value={voter.identifier}
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'identifier')}
+                                  data-row-idx={idx}
+                                  data-field-key="identifier"
                                   placeholder="e.g. 2021BCS012"
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
@@ -989,6 +1007,8 @@ export default function CreatePoll() {
                                   required
                                   value={voter.confirmer1}
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer1')}
+                                  data-row-idx={idx}
+                                  data-field-key="confirmer1"
                                   placeholder="e.g. Adrish Kumar Banerjee"
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
@@ -999,6 +1019,8 @@ export default function CreatePoll() {
                                     type="text"
                                     value={voter.confirmer2}
                                     onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer2')}
+                                    data-row-idx={idx}
+                                    data-field-key="confirmer2"
                                     placeholder="Optional text"
                                     className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                   />
@@ -1010,6 +1032,8 @@ export default function CreatePoll() {
                                   required
                                   value={voter.email}
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'email')}
+                                  data-row-idx={idx}
+                                  data-field-key="email"
                                   placeholder="e.g. adrish@banerjee.edu"
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
