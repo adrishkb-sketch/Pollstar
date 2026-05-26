@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken } from '@/lib/jwt';
-import { sendPollInvitationEmail, sendPollClosedEmail } from '@/lib/nodemailer';
+import { sendPollInvitationEmail, sendPollClosedEmail, sendPollScheduleUpdatedEmail } from '@/lib/nodemailer';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -224,11 +224,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (posterUrl !== undefined) {
       updateData.posterUrl = posterUrl;
     }
+    const originalStartTime = poll.startTime;
+    const originalEndTime = poll.endTime;
+
+    let scheduleUpdated = false;
+    let newStartVal: Date | null = null;
+    let newEndVal: Date | null = null;
+
     if (startTime) {
-      updateData.startTime = new Date(startTime);
+      newStartVal = new Date(startTime);
+      updateData.startTime = newStartVal;
+      if (!originalStartTime || originalStartTime.getTime() !== newStartVal.getTime()) {
+        scheduleUpdated = true;
+      }
     }
     if (endTime) {
-      updateData.endTime = new Date(endTime);
+      newEndVal = new Date(endTime);
+      updateData.endTime = newEndVal;
+      if (!originalEndTime || originalEndTime.getTime() !== newEndVal.getTime()) {
+        scheduleUpdated = true;
+      }
     }
 
     const updatedPoll = await prisma.$transaction(async (tx) => {
@@ -278,6 +293,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
       return pollObj;
+    }, {
+      maxWait: 15000,
+      timeout: 20000,
     });
 
     // Audit logs for admin actions
@@ -331,6 +349,40 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             reportUrl,
           }).catch((e) => console.error('Failed to send poll closed email:', e));
         });
+      }
+    }
+
+    if (scheduleUpdated) {
+      const finalStart = newStartVal || originalStartTime;
+      const finalEnd = newEndVal || originalEndTime;
+      
+      if (finalStart && finalEnd) {
+        const host = req.headers.get('host') || 'localhost:3000';
+        const protocol = req.headers.get('x-forwarded-proto') || 'http';
+        const pollUrl = `${protocol}://${host}/poll/${pollId}`;
+
+        if (!poll.isOpenVoting && poll.allowedVoters.length) {
+          poll.allowedVoters.forEach((voter) => {
+            sendPollScheduleUpdatedEmail({
+              email: voter.email,
+              pollTitle: poll.title,
+              newStartTime: finalStart,
+              newEndTime: finalEnd,
+              pollUrl,
+            }).catch((e) => console.error('Failed to send schedule update email to voter:', voter.email, e));
+          });
+        } else if (poll.votes && poll.votes.length) {
+          const uniqueVoters = Array.from(new Set(poll.votes.map((v) => v.email).filter(Boolean)));
+          uniqueVoters.forEach((email) => {
+            sendPollScheduleUpdatedEmail({
+              email: email as string,
+              pollTitle: poll.title,
+              newStartTime: finalStart,
+              newEndTime: finalEnd,
+              pollUrl,
+            }).catch((e) => console.error('Failed to send schedule update email to voter:', email, e));
+          });
+        }
       }
     }
 

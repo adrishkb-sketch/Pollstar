@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { sendOTPEmail } from '@/lib/nodemailer';
+import { sendOTPEmail, sendLowPriorityAccessEmail } from '@/lib/nodemailer';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
@@ -126,6 +126,16 @@ export async function POST(
       // If low priority, bypass OTP entirely!
       const isLowPriority = poll.description && /\[priority:\s*LOW\]/i.test(poll.description);
       if (isLowPriority) {
+        const protocol = req.headers.get('x-forwarded-proto') || 'http';
+        const host = req.headers.get('host') || 'localhost:3000';
+        const pollUrl = `${protocol}://${host}/poll/${pollId}`;
+
+        sendLowPriorityAccessEmail({
+          email: allowedVoter.email,
+          pollTitle: poll.title,
+          pollUrl,
+        }).catch((e) => console.error('Failed to send low priority access notice:', e));
+
         const voterToken = jwt.sign(
           {
             voterId: allowedVoter.id,

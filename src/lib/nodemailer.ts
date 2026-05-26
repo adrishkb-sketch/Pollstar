@@ -252,3 +252,145 @@ export async function sendPollClosedEmail({
 
   return true;
 }
+
+/**
+ * Sends a low-priority voter gateway entry alert.
+ */
+export async function sendLowPriorityAccessEmail({
+  email,
+  pollTitle,
+  pollUrl,
+}: {
+  email: string;
+  pollTitle: string;
+  pollUrl: string;
+}): Promise<boolean> {
+  const subject = `🗳️ Direct Access Gateway: "${pollTitle}"`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.1em;">✓ Secure Gateway Access</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Electoral Profile Accessed</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        Your voter profile has successfully logged into the ballot of <strong style="color: #ffffff">"${pollTitle}"</strong>.
+      </p>
+      
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 24px;">
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">Since this session is configured as a direct gateway session, OTP verification was bypassed for your convenience.</p>
+        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">Access Ballot</a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
+        If you did not initiate this login session, please contact the administrator immediately.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending low-priority access notice:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Low Priority Access Alert                     │`);
+  console.log(`│ Poll:    ${pollTitle.substring(0, 30).padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+
+/**
+ * Sends a Poll Schedule Update notification email.
+ */
+export async function sendPollScheduleUpdatedEmail({
+  email,
+  pollTitle,
+  newStartTime,
+  newEndTime,
+  pollUrl,
+}: {
+  email: string;
+  pollTitle: string;
+  newStartTime: Date;
+  newEndTime: Date;
+  pollUrl: string;
+}): Promise<boolean> {
+  const subject = `📅 Electoral Schedule Updated: "${pollTitle}"`;
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+  };
+
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.1em;">📅 Schedule Adjusted</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Voting Window Rescheduled</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        The administrator has updated the voting window for the poll <strong style="color: #ffffff">"${pollTitle}"</strong>.
+      </p>
+
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+        <strong style="color: #f3f4f6; font-size: 14px; display: block; margin-bottom: 10px;">New Electoral Timing Details:</strong>
+        <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 6px;">Start Time: <strong style="color: #ffffff">${formatDateTime(newStartTime)}</strong></span>
+        <span style="color: #9ca3af; font-size: 13px; display: block;">End Deadline: <strong style="color: #ef4444">${formatDateTime(newEndTime)}</strong></span>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">Access Secure Ballot</a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
+        Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending schedule update notice:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Poll Schedule Adjusted                        │`);
+  console.log(`│ Start:   ${formatDateTime(newStartTime).padEnd(46)} │`);
+  console.log(`│ End:     ${formatDateTime(newEndTime).padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
