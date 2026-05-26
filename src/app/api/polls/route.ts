@@ -136,7 +136,7 @@ export async function POST(req: Request) {
           data: {
             pollId: poll.id,
             questionText: q.questionText,
-            type: q.type === 'RANKED' ? 'RANKED' : 'SINGLE',
+            type: (q.type === 'RANKED' || q.type === 'KNOCKOUT') ? q.type : 'SINGLE',
           },
         });
 
