@@ -148,14 +148,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-gray-500 text-sm z-10">
         <span>
-          © 2026 Pollstar. Built with Advanced Agentic Coding tools.
-          {/* 
-            👉 DEVELOPER INSTRUCTION: 
-            This is your custom playground space to test GitHub commits!
-            Try changing the text below or appending your name/alias.
-            For example, uncomment the span below or write your own custom copyright note.
-          */}
-          {/* <span className="text-emerald-400 font-bold ml-1.5">• Custom Edition by Adrish</span> */}
+          © 2026 Pollstar. Made with not so much love by Adrish ❤️
         </span>
         <div className="flex space-x-6 mt-4 sm:mt-0">
           <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
