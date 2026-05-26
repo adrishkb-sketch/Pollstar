@@ -25,6 +25,8 @@ export default function Dashboard() {
   const [editOptions, setEditOptions] = useState<any[]>([]);
   const [editIsResultPublic, setEditIsResultPublic] = useState(false);
   const [editHideResultsUntilEnd, setEditHideResultsUntilEnd] = useState(false);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
 
@@ -121,6 +123,15 @@ export default function Dashboard() {
     setEditPosterUrl(poll.posterUrl || '');
     setEditIsResultPublic(!!poll.isResultPublic);
     setEditHideResultsUntilEnd(!!poll.settings?.hideResultsUntilEnd);
+
+    const format = (dateInput: any) => {
+      if (!dateInput) return '';
+      const d = new Date(dateInput);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setEditStartTime(format(poll.startTime));
+    setEditEndTime(format(poll.endTime));
     
     const question = poll.questions?.[0] || { questionText: '', options: [] };
     setEditQuestionText(question.questionText || '');
@@ -161,6 +172,8 @@ export default function Dashboard() {
           options: editOptions,
           isResultPublic: editIsResultPublic,
           hideResultsUntilEnd: editHideResultsUntilEnd,
+          startTime: editStartTime,
+          endTime: editEndTime,
         })
       });
       
@@ -182,6 +195,8 @@ export default function Dashboard() {
                 description: editDescription,
                 posterUrl: editPosterUrl,
                 isResultPublic: editIsResultPublic,
+                startTime: new Date(editStartTime).toISOString(),
+                endTime: new Date(editEndTime).toISOString(),
                 settings: p.settings 
                   ? { ...p.settings, hideResultsUntilEnd: editHideResultsUntilEnd }
                   : { hideResultsUntilEnd: editHideResultsUntilEnd },
@@ -538,6 +553,30 @@ export default function Dashboard() {
                       Remove
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Schedule Timing Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Start Schedule</label>
+                  <input
+                    type="datetime-local"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/2 border border-white/10 text-white placeholder-gray-500 text-sm focus:border-indigo-500 focus:outline-none transition-all"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">End Schedule</label>
+                  <input
+                    type="datetime-local"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/2 border border-white/10 text-white placeholder-gray-500 text-sm focus:border-indigo-500 focus:outline-none transition-all"
+                    required
+                  />
                 </div>
               </div>
 

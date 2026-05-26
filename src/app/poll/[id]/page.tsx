@@ -23,6 +23,10 @@ export default function VoterPortal({ params }: PageProps) {
   const [poll, setPoll] = useState<any>(null);
   
   // Closed voter entrance gate states
+  const [showIntro, setShowIntro] = useState(true);
+  const [introStep, setIntroStep] = useState(1);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
   const [verifiedVoter, setVerifiedVoter] = useState(false);
   const [voterToken, setVoterToken] = useState('');
   const [voterEmail, setVoterEmail] = useState('');
@@ -199,6 +203,60 @@ export default function VoterPortal({ params }: PageProps) {
       return copy;
     });
   };
+
+  const getSessionDuration = () => {
+    if (!poll || !poll.questions || !poll.questions[0]) return 90;
+    const type = poll.questions[0].type;
+    if (type === 'KNOCKOUT') return 300;
+    if (type === 'RANKED') return 180;
+    return 90;
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    const isVotingActive = (!loading && poll) && (
+      (!poll.isOpenVoting && verifiedVoter && !votedSuccessfully) || 
+      (poll.isOpenVoting && !showIntro && !votedSuccessfully)
+    );
+
+    if (isVotingActive) {
+      const duration = getSessionDuration();
+      setTimeLeft(duration);
+      setTimerActive(true);
+    } else {
+      setTimerActive(false);
+      setTimeLeft(null);
+    }
+  }, [verifiedVoter, votedSuccessfully, poll, showIntro, loading]);
+
+  useEffect(() => {
+    if (!timerActive || timeLeft === null) return;
+
+    if (timeLeft <= 0) {
+      setVerifiedVoter(false);
+      setVoterToken('');
+      setLookupPassed(false);
+      setVoterIdentifier('');
+      setConfirmer1('');
+      setConfirmer2('');
+      setVoterEmail('');
+      setTimerActive(false);
+      setTimeLeft(null);
+      alert("⏱️ Session Expired! You did not submit your ballot in time. Please log in again to cast your vote.");
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timerActive, timeLeft]);
 
   // 1. Fetch Poll Metadata on Mount
   useEffect(() => {
@@ -605,8 +663,189 @@ export default function VoterPortal({ params }: PageProps) {
 
   const activeQuestion = poll.questions[0];
 
+  if (showIntro) {
+    return (
+      <div className="flex-1 max-w-2xl w-full mx-auto px-6 py-12 flex flex-col justify-center min-h-[80vh] space-y-8 relative animate-fade-in">
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex items-center justify-center space-x-2.5 mb-2">
+          <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
+            <VoteIcon className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-outfit text-xl font-bold tracking-tight text-white">
+            Poll<span className="text-indigo-400">star</span> Secure
+          </span>
+        </div>
+
+        {introStep === 1 ? (
+          <div className="glass-card rounded-3xl p-8 border border-indigo-500/30 bg-[#080d1a] shadow-2xl space-y-6 animate-fade-in-up relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            
+            {poll.posterUrl && (
+              <div className="w-full h-56 rounded-2xl border border-white/10 overflow-hidden bg-white/5 shadow-inner">
+                <img src={poll.posterUrl} alt="Poll Poster" className="w-full h-full object-cover transform hover:scale-105 transition-all duration-700" />
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
+                Step 1 of 2: Overview & Guidelines
+              </span>
+              <h1 className="font-outfit text-3xl font-extrabold text-white leading-tight">
+                {poll.title}
+              </h1>
+              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line bg-white/3 p-4 rounded-2xl border border-white/5">
+                {poll.description ? poll.description.replace(/\[domains:\s*([^\]]+)\]/i, '').replace(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i, '').trim() : 'No guidelines specified.'}
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setIntroStep(2)}
+                className="px-6 py-3 rounded-xl font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-all text-xs flex items-center space-x-2 shadow-lg shadow-indigo-500/20 active:scale-95"
+              >
+                <span>Rules & Details</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="glass-card rounded-3xl p-8 border border-indigo-500/30 bg-[#080d1a] shadow-2xl space-y-6 animate-fade-in-up relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="space-y-4">
+              <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
+                Step 2 of 2: Security & Protocols
+              </span>
+              <h2 className="font-outfit text-2xl font-bold text-white">Electoral Integrity Features</h2>
+              <p className="text-gray-400 text-xs">
+                To guarantee clean, transparent and fair outcomes, the administrator has locked this session under the following protocols:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex items-start space-x-3 hover:border-indigo-500/30 transition-all duration-300">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <VoteIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Ballot Privacy</h4>
+                    <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
+                      {poll.isAnonymous 
+                        ? 'Strictly Anonymous. Your selections are cryptographic and untraceable.' 
+                        : 'Known Ballot. Selections are audited to verify roster authenticity.'
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex items-start space-x-3 hover:border-indigo-500/30 transition-all duration-300">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Access Scope</h4>
+                    <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
+                      {poll.isOpenVoting 
+                        ? 'Open Ballot. Open for all eligible internet participants.' 
+                        : 'Restricted Roster. Only designated, registered voters can participate.'
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex items-start space-x-3 hover:border-indigo-500/30 transition-all duration-300">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Verification</h4>
+                    <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
+                      {poll.description && poll.description.includes('[priority: LOW]')
+                        ? 'Direct Bypass Profile. Secure lookup is active, but OTP email code is bypassed.'
+                        : 'Secure OTP Required. High Priority session with 6-digit email confirmation.'
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex items-start space-x-3 hover:border-indigo-500/30 transition-all duration-300">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <RefreshCw className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Session Limit</h4>
+                    <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
+                      Time-limited session active: <span className="text-red-400 font-extrabold">{formatTime(getSessionDuration())}</span>. Unfinished ballots automatically expire.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-white/5 gap-4">
+              <button
+                type="button"
+                onClick={() => setIntroStep(1)}
+                className="px-5 py-3 rounded-xl font-bold bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-all text-xs"
+              >
+                Back
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-xs flex items-center space-x-2 active:scale-95 animate-pulse-slow"
+              >
+                <span>Start Poll</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-center space-x-1.5 pt-2">
+          <button 
+            type="button"
+            onClick={() => setIntroStep(1)}
+            className={`w-2.5 h-2.5 rounded-full transition-all ${introStep === 1 ? 'bg-indigo-500 w-6' : 'bg-white/20'}`}
+          />
+          <button 
+            type="button"
+            onClick={() => setIntroStep(2)}
+            className={`w-2.5 h-2.5 rounded-full transition-all ${introStep === 2 ? 'bg-indigo-500 w-6' : 'bg-white/20'}`}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 max-w-4xl w-full mx-auto px-6 py-12 space-y-10 relative">
+    <div className="flex-1 w-full relative">
+      {timeLeft !== null && (
+        <div className="w-full bg-[#080d1a]/95 sticky top-0 z-30 border-b border-red-500/20 py-3 px-6 animate-pulse-slow backdrop-blur-md">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+              <span className="text-[10px] font-extrabold tracking-widest text-red-400 uppercase">Voting Session Time Limit</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <span className="font-mono text-xs font-extrabold text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg">
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+          </div>
+          <div className="max-w-4xl mx-auto mt-2.5 h-1 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-red-500 transition-all duration-1000"
+              style={{ width: `${(timeLeft / getSessionDuration()) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-4xl w-full mx-auto px-6 py-12 space-y-10 relative">
       
       {/* Dynamic Background */}
       <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -1223,6 +1462,7 @@ export default function VoterPortal({ params }: PageProps) {
           Live statistics and maps are set to private by the poll administrator.
         </div>
       )}
+    </div>
     </div>
   );
 }

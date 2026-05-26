@@ -206,7 +206,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { status, isResultPublic, title, description, posterUrl, questionText, options, hideResultsUntilEnd } = await req.json();
+    const { status, isResultPublic, title, description, posterUrl, questionText, options, hideResultsUntilEnd, startTime, endTime } = await req.json();
 
     const updateData: any = {};
     if (status) {
@@ -223,6 +223,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (posterUrl !== undefined) {
       updateData.posterUrl = posterUrl;
+    }
+    if (startTime) {
+      updateData.startTime = new Date(startTime);
+    }
+    if (endTime) {
+      updateData.endTime = new Date(endTime);
     }
 
     const updatedPoll = await prisma.$transaction(async (tx) => {
