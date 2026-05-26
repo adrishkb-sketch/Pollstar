@@ -290,9 +290,8 @@ export default function VoterPortal({ params }: PageProps) {
             ipAddress: v.ipAddress,
             isp: v.isp,
             flaggedSuspicious: v.flaggedSuspicious,
-            // In dynamic view, locations will load fallback coords or real ones
-            lat: 37.751, // default fallbacks matching lib/geo.ts
-            lon: -97.822,
+            lat: v.latitude !== null && v.latitude !== undefined ? Number(v.latitude) : 22.5726,
+            lon: v.longitude !== null && v.longitude !== undefined ? Number(v.longitude) : 88.3639,
           }));
           setLiveVoterLocations(locs);
         }
@@ -337,8 +336,8 @@ export default function VoterPortal({ params }: PageProps) {
               ipAddress: v.ipAddress,
               isp: v.isp,
               flaggedSuspicious: v.flaggedSuspicious,
-              lat: 37.751,
-              lon: -97.822,
+              lat: v.latitude !== null && v.latitude !== undefined ? Number(v.latitude) : 22.5726,
+              lon: v.longitude !== null && v.longitude !== undefined ? Number(v.longitude) : 88.3639,
             }));
             setLiveVoterLocations(locs);
           }
@@ -585,7 +584,9 @@ export default function VoterPortal({ params }: PageProps) {
     }
 
     try {
-      const detectedDevice = /Mobi|Android|iPhone|iPad/i.test(navigator?.userAgent || '') ? 'Mobile' : 'Desktop';
+      const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+      const isMobileTouch = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator && navigator.maxTouchPoints > 0) || window.innerWidth < 768);
+      const detectedDevice = (isMobileUA || isMobileTouch) ? 'Mobile' : 'Desktop';
       const res = await fetch(`/api/polls/${pollId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

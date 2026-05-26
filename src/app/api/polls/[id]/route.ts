@@ -117,11 +117,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
               ipAddress: v.ipAddress,
               isp: v.isp,
               flaggedSuspicious: v.flaggedSuspicious,
+              latitude: v.latitude,
+              longitude: v.longitude,
               createdAt: v.createdAt,
               answers: showIdentity ? (typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers) : undefined,
             };
           })
-        : undefined,
+        : (poll.isResultPublic
+            ? poll.votes.map((v) => ({
+                id: v.id,
+                ipAddress: 'Masked',
+                isp: v.isp || 'Unknown ISP',
+                flaggedSuspicious: v.flaggedSuspicious,
+                latitude: v.latitude,
+                longitude: v.longitude,
+                createdAt: v.createdAt,
+              }))
+            : undefined),
     };
 
     return NextResponse.json({ success: true, poll: cleanedPoll, isOwner: isCreatorOrAdmin });

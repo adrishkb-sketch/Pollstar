@@ -885,8 +885,8 @@ export default function PollInsights({ params }: PageProps) {
             locations={liveVotesList.map((v) => ({
               ipAddress: v.ipAddress,
               isp: v.isp,
-              lat: v.latitude || 37.751,
-              lon: v.longitude || -97.822,
+              lat: v.latitude || 22.5726,
+              lon: v.longitude || 88.3639,
               flaggedSuspicious: v.flaggedSuspicious,
             }))}
           />

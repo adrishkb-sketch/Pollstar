@@ -10,7 +10,7 @@ export interface GeoData {
 // A collection of real worldwide test IPs to rotate through in local development
 // so that charts, lists, and Leaflet maps are filled with gorgeous global markers.
 const TEST_IPS = [
-  { ip: '8.8.8.8', lat: 37.751, lon: -97.822, city: 'Mountain View', country: 'United States', isp: 'Google LLC' },
+  { ip: '8.8.8.8', lat: 22.5726, lon: 88.3639, city: 'Kolkata', country: 'India', isp: 'Alliance Broadband Services' },
   { ip: '103.211.228.1', lat: 19.076, lon: 72.877, city: 'Mumbai', country: 'India', isp: 'Reliance Jio Infocomm' },
   { ip: '185.220.101.4', lat: 52.52, lon: 13.405, city: 'Berlin', country: 'Germany', isp: 'M247 Ltd' },
   { ip: '210.140.10.10', lat: 35.676, lon: 139.65, city: 'Tokyo', country: 'Japan', isp: 'Softbank Corp' },
@@ -76,10 +76,10 @@ export async function lookupIP(ip: string): Promise<GeoData> {
   // Backup fallback in case API fails or rate-limits
   return {
     ip: sanitizedIp,
-    lat: 37.751,
-    lon: -97.822,
-    city: 'San Francisco',
-    country: 'United States',
-    isp: 'Cloudflare Inc.'
+    lat: 22.5726,
+    lon: 88.3639,
+    city: 'Kolkata',
+    country: 'India',
+    isp: 'Alliance Broadband Services'
   };
 }

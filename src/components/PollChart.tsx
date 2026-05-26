@@ -38,7 +38,8 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
     value: stats[key].count,
   })).sort((a, b) => b.value - a.value);
 
-  const totalVotes = votesList.length;
+  const statsTotal = Object.values(stats).reduce((sum, item) => sum + (item.count || 0), 0);
+  const totalVotes = votesList.length > 0 ? votesList.length : statsTotal;
 
   if (totalVotes === 0) {
     return (
