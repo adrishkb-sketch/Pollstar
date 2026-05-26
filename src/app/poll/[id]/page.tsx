@@ -569,18 +569,33 @@ export default function VoterPortal({ params }: PageProps) {
       return;
     }
 
-    // 4. Query High-Accuracy Browser Geolocation
+    // 4. Query High-Accuracy Browser Geolocation (Compulsory)
     let userCoords: { latitude: number; longitude: number } | null = null;
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       try {
-        userCoords = await new Promise((resolve) => {
+        userCoords = await new Promise((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(
             (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: 4000 }
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 10000 }
           );
         });
-      } catch (err) {}
+      } catch (err: any) {
+        console.error('Compulsory geolocation permission error:', err);
+        setError('Location Access Required: To guarantee vote uniqueness and prevent security manipulation, you must enable and grant location permissions in your browser to submit your ballot.');
+        setVoteLoading(false);
+        return;
+      }
+    } else {
+      setError('Location Access Required: Your browser does not support Geolocation, which is mandatory to cast a secure vote on this platform.');
+      setVoteLoading(false);
+      return;
+    }
+
+    if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
+      setError('Location Access Required: Could not resolve valid coordinates. Please ensure location access is enabled and try again.');
+      setVoteLoading(false);
+      return;
     }
 
     try {
