@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
-  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award
+  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -25,7 +25,7 @@ export default function CreatePoll() {
 
   // Step 2 & 3: Question & Type
   const [questionText, setQuestionText] = useState('');
-  const [questionType, setQuestionType] = useState<'SINGLE' | 'RANKED'>('SINGLE');
+  const [questionType, setQuestionType] = useState<'SINGLE' | 'RANKED' | 'KNOCKOUT'>('SINGLE');
   const [options, setOptions] = useState<string[]>(['Option 1', 'Option 2']);
 
   // Step 4: Closed vs Open Voting
@@ -568,7 +568,7 @@ export default function CreatePoll() {
                 <p className="text-gray-400 text-sm mt-1">Select the mathematical choice structure for your poll.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                 {/* Single Choice */}
                 <div
                   onClick={() => setQuestionType('SINGLE')}
@@ -615,6 +615,31 @@ export default function CreatePoll() {
                     <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Ranked Choice (Borda Count)</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
                       Voters rank options in order of priority. Scoring weights are applied mathematically (1st choice gets highest weight).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Knockout Tournament */}
+                <div
+                  onClick={() => setQuestionType('KNOCKOUT')}
+                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
+                    questionType === 'KNOCKOUT'
+                      ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
+                      : 'border-white/5 hover:border-white/10 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+                      <Trophy className="w-6 h-6" />
+                    </div>
+                    {questionType === 'KNOCKOUT' && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Knockout Tournament</h3>
+                    <p className="text-gray-400 text-xs leading-relaxed">
+                      Automated tournament brackets. Voters go head-to-head through randomized pairings individually (32 ➔ 16 ➔ 8 ➔ 4 ➔ 2 ➔ Champion).
                     </p>
                   </div>
                 </div>
