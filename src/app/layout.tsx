@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, Inter } from "next/font/google";
 import "./globals.css";
+import SiteWalkthrough from "@/components/SiteWalkthrough";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -62,6 +63,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased text-gray-100 min-h-screen flex flex-col bg-[#030712]">
         {children}
+        <SiteWalkthrough />
       </body>
     </html>
   );

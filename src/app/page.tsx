@@ -32,7 +32,7 @@ export default function Home() {
             Poll<span className="text-emerald-400">star</span>
           </span>
         </Link>
-        <div className="flex items-center space-x-4">
+        <div id="auth-buttons" className="flex items-center space-x-4">
           {loading ? (
             <div className="w-20 h-8 rounded-lg bg-white/5 animate-pulse" />
           ) : user ? (
@@ -64,7 +64,7 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <main className="flex-1 flex flex-col items-center justify-center text-center px-6 max-w-5xl mx-auto py-12 md:py-20 z-10">
+      <main id="hero-section" className="flex-1 flex flex-col items-center justify-center text-center px-6 max-w-5xl mx-auto py-12 md:py-20 z-10">
         <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold uppercase tracking-wider mb-8 animate-pulse-glow">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Real-time Decisive Polls</span>
@@ -112,7 +112,7 @@ export default function Home() {
         </div>
 
         {/* Feature Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
+        <div id="features-grid" className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
           <div className="glass-card rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in-up">
             <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 mb-6">
               <Shield className="w-8 h-8" />

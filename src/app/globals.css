@@ -125,6 +125,20 @@ body::after {
   backdrop-filter: blur(8px);
 }
 
+/* Disable backdrop blur on mobile devices to prevent GPU rasterization & static CRT glitch lines */
+@media (max-width: 768px) {
+  .glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(10, 15, 28, 0.98) !important; /* Premium dark glass fallback for perfect performance and zero static lines */
+  }
+  .glass-element {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+}
+
 /* Glass Inputs */
 .glass-input {
   background: rgba(255, 255, 255, 0.02);

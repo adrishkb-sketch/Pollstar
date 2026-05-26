@@ -535,7 +535,7 @@ export default function CreatePoll() {
         </div>
 
         {/* Dynamic Wizard Steps */}
-        <div className="flex-1 flex flex-col justify-center">
+        <div className="flex-1 flex flex-col justify-center" data-wizard-step={currentStep}>
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm mb-6 flex items-center space-x-2 animate-shake">
               <AlertCircle className="w-4.5 h-4.5 shrink-0" />

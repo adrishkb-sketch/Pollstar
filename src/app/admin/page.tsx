@@ -280,7 +280,7 @@ export default function AdminPortal() {
       )}
 
       {/* Tab Selectors */}
-      <div className="flex border-b border-white/5 space-x-6 pb-1">
+      <div id="admin-tabs" className="flex border-b border-white/5 space-x-6 pb-1">
         <button
           onClick={() => setActiveTab('creators')}
           className={`pb-3 text-sm font-bold transition-all relative uppercase tracking-wider ${
@@ -319,7 +319,7 @@ export default function AdminPortal() {
       {activeTab === 'creators' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Left Card: Users / Creators Approval */}
-          <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
+          <div id="creators-list" className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
             <div className="flex items-center space-x-2.5 border-b border-white/5 pb-4">
               <Users className="w-5 h-5 text-purple-400" />
               <h3 className="font-outfit text-lg font-bold text-white">Pending Creator Listings</h3>

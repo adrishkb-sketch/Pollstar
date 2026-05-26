@@ -313,7 +313,7 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div id="dashboard-stats" className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
             <div>
               <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Total Polls</span>
@@ -353,6 +353,7 @@ export default function Dashboard() {
           </div>
 
           <Link
+            id="create-poll-btn"
             href={user?.approved || user?.role === 'ADMIN' ? '/dashboard/create' : '#'}
             onClick={(e) => {
               if (!user?.approved && user?.role !== 'ADMIN') {
@@ -383,7 +384,7 @@ export default function Dashboard() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="polls-grid" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {polls.map((poll) => {
               const statusColors = {
                 DRAFT: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
