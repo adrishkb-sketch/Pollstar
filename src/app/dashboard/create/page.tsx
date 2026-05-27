@@ -81,6 +81,29 @@ export default function CreatePoll() {
   const [enableLiveTicker, setEnableLiveTicker] = useState(false);
   const [enableSmartDebrief, setEnableSmartDebrief] = useState(false);
   const [leaderboardVisibility, setLeaderboardVisibility] = useState('HIDDEN');
+  const [rankedFeatures, setRankedFeatures] = useState<Record<string, boolean>>({
+    enablePreferenceFlowMap: false,
+    enableHeadToHeadMatrix: false,
+    enableConsensusScore: false,
+    enablePolarizationDetector: false,
+    enableKingmakerAnalysis: false,
+    enableRankHeatmap: false,
+    enableRankConfidence: false,
+    enableScenarioSimulator: false,
+    enableTieBreakerEngine: false,
+    enableRankCompleteness: false,
+    enablePodiumResults: false,
+    enableCoalitionFinder: false,
+    enableMinorityProtection: false,
+    enableAuditReplay: false,
+  });
+  const [rankedTieBreakerRule, setRankedTieBreakerRule] = useState('FIRST_PLACE');
+  const [rankedCompletenessRule, setRankedCompletenessRule] = useState('PARTIAL');
+
+  const hasRankedQuestion = questions.some((q: any) => q.type === 'RANKED');
+  const toggleRankedFeature = (key: string) => {
+    setRankedFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
@@ -504,6 +527,9 @@ export default function CreatePoll() {
         enableFomoPopups: false,
         enableSmartDebrief,
         leaderboardVisibility,
+        ...Object.fromEntries(Object.entries(rankedFeatures).map(([key, enabled]) => [key, hasRankedQuestion ? enabled : false])),
+        rankedTieBreakerRule,
+        rankedCompletenessRule,
         postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
       },
       allowedVoters: isOpenVoting 
@@ -1696,6 +1722,75 @@ export default function CreatePoll() {
                     {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
                   </div>
                 </div>
+
+                {hasRankedQuestion && (
+                  <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 mt-4 animate-fade-in-up">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Ranked Poll Beast Features</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Choose the advanced ordered-poll modules to include in voting rules and result analytics.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        ['enablePreferenceFlowMap', 'Preference Flow Map'],
+                        ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix'],
+                        ['enableConsensusScore', 'Consensus Score'],
+                        ['enablePolarizationDetector', 'Polarization Detector'],
+                        ['enableKingmakerAnalysis', 'Kingmaker Analysis'],
+                        ['enableRankHeatmap', 'Rank Distribution Heatmap'],
+                        ['enableRankConfidence', 'Voter Confidence by Rank'],
+                        ['enableScenarioSimulator', 'Scenario Simulator'],
+                        ['enableTieBreakerEngine', 'Tie-Breaker Engine'],
+                        ['enableRankCompleteness', 'Rank Completeness Rules'],
+                        ['enablePodiumResults', 'Podium Result Mode'],
+                        ['enableCoalitionFinder', 'Preference Coalition Finder'],
+                        ['enableMinorityProtection', 'Minority Protection Score'],
+                        ['enableAuditReplay', 'Audit Replay'],
+                      ].map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => toggleRankedFeature(key)}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 ${
+                            rankedFeatures[key] ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
+                          }`}
+                        >
+                          <span className="text-xs font-bold text-white">{label}</span>
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                            rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                          }`}>
+                            {rankedFeatures[key] && <Check className="w-3 h-3" />}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {rankedFeatures.enableTieBreakerEngine && (
+                      <select
+                        value={rankedTieBreakerRule}
+                        onChange={(e) => setRankedTieBreakerRule(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
+                      >
+                        <option value="FIRST_PLACE" className="bg-slate-900 text-white">Tie-break by most first-place votes</option>
+                        <option value="AVERAGE_RANK" className="bg-slate-900 text-white">Tie-break by best average rank</option>
+                        <option value="HEAD_TO_HEAD" className="bg-slate-900 text-white">Tie-break by head-to-head preference</option>
+                      </select>
+                    )}
+
+                    {rankedFeatures.enableRankCompleteness && (
+                      <select
+                        value={rankedCompletenessRule}
+                        onChange={(e) => setRankedCompletenessRule(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
+                      >
+                        <option value="PARTIAL" className="bg-slate-900 text-white">Allow partial rankings</option>
+                        <option value="TOP_3" className="bg-slate-900 text-white">Require at least top 3</option>
+                        <option value="FULL" className="bg-slate-900 text-white">Require full ranking</option>
+                      </select>
+                    )}
+                  </div>
+                )}
 
                 {/* Leaderboard Visibility Option (Keep it separate from reports) */}
                 <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">

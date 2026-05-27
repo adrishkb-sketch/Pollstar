@@ -38,7 +38,7 @@ export async function POST(
     // 3. Core checks
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      include: { settings: true },
+      include: { settings: true, questions: { include: { options: true } } },
     });
 
     if (!poll) {
@@ -75,6 +75,26 @@ export async function POST(
 
     if (!answers || Object.keys(answers).length === 0) {
       return NextResponse.json({ error: 'No answers provided' }, { status: 400 });
+    }
+
+    if (poll.settings?.enableRankCompleteness && poll.settings.rankedCompletenessRule !== 'PARTIAL') {
+      for (const question of poll.questions.filter((q) => q.type === 'RANKED')) {
+        const ranking = answers[question.id];
+        if (!Array.isArray(ranking)) {
+          return NextResponse.json({ error: 'Ranked ballot is incomplete.' }, { status: 400 });
+        }
+
+        const requiredCount = poll.settings.rankedCompletenessRule === 'FULL'
+          ? question.options.length
+          : Math.min(3, question.options.length);
+
+        if (ranking.length < requiredCount) {
+          return NextResponse.json(
+            { error: `Ranked ballot requires at least ${requiredCount} ranked choice${requiredCount === 1 ? '' : 's'}.` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Resolve client IP and ISP metadata

@@ -155,6 +155,22 @@ model PollSettings {
   enableFomoPopups       Boolean @default(false)
   enableSmartDebrief     Boolean @default(false)
   leaderboardVisibility  String  @default("HIDDEN")
+  enablePreferenceFlowMap Boolean @default(false)
+  enableHeadToHeadMatrix  Boolean @default(false)
+  enableConsensusScore    Boolean @default(false)
+  enablePolarizationDetector Boolean @default(false)
+  enableKingmakerAnalysis Boolean @default(false)
+  enableRankHeatmap       Boolean @default(false)
+  enableRankConfidence    Boolean @default(false)
+  enableScenarioSimulator Boolean @default(false)
+  enableTieBreakerEngine  Boolean @default(false)
+  rankedTieBreakerRule    String  @default("FIRST_PLACE")
+  enableRankCompleteness  Boolean @default(false)
+  rankedCompletenessRule  String  @default("PARTIAL")
+  enablePodiumResults     Boolean @default(false)
+  enableCoalitionFinder   Boolean @default(false)
+  enableMinorityProtection Boolean @default(false)
+  enableAuditReplay       Boolean @default(false)
 }
 
 model AuditLog {

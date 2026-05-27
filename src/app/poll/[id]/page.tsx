@@ -345,7 +345,7 @@ export default function VoterPortal({ params }: PageProps) {
         if (res.ok && data.poll) {
           setLiveStats(data.poll.stats || {});
           setLiveTotalVotes(data.poll.totalVotes || 0);
-          setPoll((prev: any) => (prev ? { ...prev, status: data.poll.status } : data.poll));
+          setPoll((prev: any) => (prev ? { ...prev, status: data.poll.status, votes: data.poll.votes || prev.votes } : data.poll));
 
           if (data.poll.votes) {
             const locs = data.poll.votes.map((v: any) => ({
@@ -687,17 +687,24 @@ export default function VoterPortal({ params }: PageProps) {
     // 2. Question completeness check
     for (const q of poll.questions) {
       const ans = selectedAnswers[q.id];
+      const rankedRequiredCount = poll.settings?.enableRankCompleteness
+        ? (poll.settings?.rankedCompletenessRule === 'FULL'
+            ? q.options?.length
+            : poll.settings?.rankedCompletenessRule === 'TOP_3'
+              ? Math.min(3, q.options?.length || 0)
+              : 1)
+        : q.options?.length;
 
       if (
         !ans || 
-        (q.type === 'RANKED' && ans.length !== q.options.length) ||
+        (q.type === 'RANKED' && ans.length < rankedRequiredCount) ||
         (q.type === 'KNOCKOUT' && !ans.winner) ||
         (q.type === 'MULTIPLE_CHOICE' && ans.length === 0) ||
         (q.type === 'SHORT_TEXT' && ans.trim() === '') ||
         (q.type === 'LONG_TEXT' && ans.trim() === '') ||
         (q.type === 'RATING' && ans === 0)
       ) {
-        setError('Please complete all questions before submitting.');
+        setError(q.type === 'RANKED' ? `Please rank at least ${rankedRequiredCount} choice${rankedRequiredCount === 1 ? '' : 's'} before submitting.` : 'Please complete all questions before submitting.');
         setVoteLoading(false);
         return;
       }

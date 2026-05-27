@@ -32,6 +32,7 @@ const COLORS = [
 
 export default function PollChart({ questionId, questionText, type, stats, votesList = [], optionsList = [], settings = {} }: PollChartProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics'>('overview');
+  const [scenarioExcludedId, setScenarioExcludedId] = useState('');
 
   // ----------------------------------------------------
   // KNOCKOUT TOURNAMENT: Bracket Analysis & Points System
@@ -293,6 +294,97 @@ export default function PollChart({ questionId, questionText, type, stats, votes
   const runnerUp = overviewData[1];
   const leaderShare = statsTotal > 0 && leader ? Math.round((leader.value / statsTotal) * 100) : 0;
   const runnerUpShare = statsTotal > 0 && runnerUp ? Math.round((runnerUp.value / statsTotal) * 100) : 0;
+  const rankedBallots = type === 'RANKED'
+    ? votesList.map((v) => {
+        try {
+          const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+          return Array.isArray(parsed[questionId]) ? parsed[questionId] as string[] : [];
+        } catch {
+          return [];
+        }
+      }).filter((ranking) => ranking.length > 0)
+    : [];
+  const optionById = Object.fromEntries(optionsList.map((o) => [o.id, o.text]));
+  const rankedFirstPlaceCounts = optionsList.map((opt) => ({
+    id: opt.id,
+    name: opt.text,
+    count: rankedBallots.filter((ranking) => ranking[0] === opt.id).length,
+  }));
+  const rankedAverageRanks = optionsList.map((opt) => {
+    const positions = rankedBallots
+      .map((ranking) => ranking.indexOf(opt.id))
+      .filter((idx) => idx !== -1)
+      .map((idx) => idx + 1);
+    const average = positions.length ? positions.reduce((sum, rank) => sum + rank, 0) / positions.length : optionsList.length + 1;
+    return { id: opt.id, name: opt.text, average, count: positions.length };
+  });
+  const rankedBorda = optionsList.map((opt) => ({
+    id: opt.id,
+    name: opt.text,
+    score: rankedBallots.reduce((sum, ranking) => {
+      const idx = ranking.indexOf(opt.id);
+      return idx === -1 ? sum : sum + (optionsList.length - idx);
+    }, 0),
+  })).sort((a, b) => b.score - a.score);
+  const rankHeatmap = optionsList.map((opt) => ({
+    id: opt.id,
+    name: opt.text,
+    ranks: Array.from({ length: optionsList.length }, (_, rankIndex) => rankedBallots.filter((ranking) => ranking[rankIndex] === opt.id).length),
+  }));
+  const consensusScores = rankedAverageRanks.map((item) => {
+    const score = Math.max(0, Math.round(((optionsList.length + 1 - item.average) / optionsList.length) * 100));
+    return { ...item, score };
+  }).sort((a, b) => b.score - a.score);
+  const polarizationScores = optionsList.map((opt) => {
+    const first = rankedBallots.filter((ranking) => ranking[0] === opt.id).length;
+    const last = rankedBallots.filter((ranking) => ranking[ranking.length - 1] === opt.id).length;
+    return { id: opt.id, name: opt.text, first, last, score: first + last };
+  }).sort((a, b) => b.score - a.score);
+  const matrixForRanked = type === 'RANKED' ? getRankedMatrix() as Record<string, Record<string, number>> : {};
+  const tieBreakerWinner = (() => {
+    if (type !== 'RANKED' || rankedBorda.length === 0) return null;
+    if (settings?.rankedTieBreakerRule === 'AVERAGE_RANK') {
+      return [...rankedAverageRanks].sort((a, b) => a.average - b.average)[0];
+    }
+    if (settings?.rankedTieBreakerRule === 'HEAD_TO_HEAD' && rankedBorda[0] && rankedBorda[1]) {
+      const a = rankedBorda[0];
+      const b = rankedBorda[1];
+      return (matrixForRanked[a.id]?.[b.id] || 0) >= (matrixForRanked[b.id]?.[a.id] || 0) ? a : b;
+    }
+    return rankedFirstPlaceCounts.sort((a, b) => b.count - a.count)[0];
+  })();
+  const scenarioData = optionsList
+    .filter((opt) => opt.id !== scenarioExcludedId)
+    .map((opt) => ({
+      id: opt.id,
+      name: opt.text,
+      score: rankedBallots.reduce((sum, ranking) => {
+        const adjusted = ranking.filter((id) => id !== scenarioExcludedId);
+        const idx = adjusted.indexOf(opt.id);
+        return idx === -1 ? sum : sum + (optionsList.length - idx);
+      }, 0),
+    })).sort((a, b) => b.score - a.score);
+  const coalitionData = Object.entries(rankedBallots.reduce((acc: Record<string, number>, ranking) => {
+    const key = ranking.slice(0, 2).map((id) => optionById[id] || id).join(' > ') || 'Unranked';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {})).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  const minorityProtection = consensusScores[0]
+    ? Math.max(0, 100 - Math.abs((polarizationScores.find((p) => p.id === consensusScores[0].id)?.last || 0) * 100 / Math.max(1, rankedBallots.length)))
+    : 0;
+  const kingmakerRound = getIRVRounds().find((round) => round.stats.length > 2);
+  const kingmakerCandidate = kingmakerRound?.stats[kingmakerRound.stats.length - 1];
+  const kingmakerTransfers = kingmakerCandidate
+    ? optionsList.map((opt) => ({
+        id: opt.id,
+        name: opt.text,
+        count: rankedBallots.filter((ranking) => {
+          const eliminatedIndex = ranking.indexOf(kingmakerCandidate.id);
+          const targetIndex = ranking.indexOf(opt.id);
+          return eliminatedIndex !== -1 && targetIndex > eliminatedIndex;
+        }).length,
+      })).filter((item) => item.id !== kingmakerCandidate.id).sort((a, b) => b.count - a.count).slice(0, 3)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -603,11 +695,12 @@ export default function PollChart({ questionId, questionText, type, stats, votes
           {type === 'RANKED' && (
             <div className="space-y-8 animate-fade-in">
               {/* Dynamic Instant Runoff Rounds Visualizer */}
+              {(settings?.enablePreferenceFlowMap || settings?.enableAuditReplay) && (
               <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
                 <div>
                   <h4 className="text-white text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5">
                     <Award className="w-4 h-4 text-purple-400" />
-                    <span>Instant Runoff Voting (IRV) Elimination Rounds</span>
+                    <span>{settings?.enableAuditReplay ? 'Audit Replay' : 'Preference Flow Map'}</span>
                   </h4>
                   <p className="text-gray-500 text-[10px] mt-0.5">
                     Calculated by iteratively eliminating the lowest candidate and re-routing their ballots to voters' subsequent choices until a 50% majority winner is resolved.
@@ -639,8 +732,10 @@ export default function PollChart({ questionId, questionText, type, stats, votes
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Pairwise Matrix Faceoffs */}
+              {settings?.enableHeadToHeadMatrix && (
               <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
                 <div>
                   <h4 className="text-white text-xs font-bold uppercase tracking-wider">Pairwise Head-to-Head Preference Matrix</h4>
@@ -679,6 +774,148 @@ export default function PollChart({ questionId, questionText, type, stats, votes
                   </table>
                 </div>
               </div>
+              )}
+
+              {settings?.enableRankHeatmap && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Rank Distribution Heatmap</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-gray-300">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="py-2 text-left">Option</th>
+                          {optionsList.map((_, idx) => <th key={idx} className="py-2 text-center">Rank {idx + 1}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {rankHeatmap.map((row) => (
+                          <tr key={row.id}>
+                            <td className="py-3 font-bold text-white">{row.name}</td>
+                            {row.ranks.map((count, idx) => (
+                              <td key={idx} className="py-3 text-center">
+                                <span className="px-2 py-1 rounded-lg bg-purple-500/10 text-purple-300 font-bold">{count}</span>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {(settings?.enableConsensusScore || settings?.enablePolarizationDetector || settings?.enableMinorityProtection) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {settings?.enableConsensusScore && (
+                    <div className="glass-card border border-white/5 p-5 rounded-2xl">
+                      <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Consensus Score</span>
+                      <h4 className="text-white text-lg font-black mt-2">{consensusScores[0]?.name || 'None'}</h4>
+                      <p className="text-gray-400 text-xs mt-1">Broad acceptability score: {consensusScores[0]?.score || 0}/100</p>
+                    </div>
+                  )}
+                  {settings?.enablePolarizationDetector && (
+                    <div className="glass-card border border-white/5 p-5 rounded-2xl">
+                      <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Polarization Detector</span>
+                      <h4 className="text-white text-lg font-black mt-2">{polarizationScores[0]?.name || 'None'}</h4>
+                      <p className="text-gray-400 text-xs mt-1">{polarizationScores[0]?.first || 0} first-place and {polarizationScores[0]?.last || 0} last-place ranks.</p>
+                    </div>
+                  )}
+                  {settings?.enableMinorityProtection && (
+                    <div className="glass-card border border-white/5 p-5 rounded-2xl">
+                      <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest">Minority Protection</span>
+                      <h4 className="text-white text-lg font-black mt-2">{Math.round(minorityProtection)}/100</h4>
+                      <p className="text-gray-400 text-xs mt-1">Higher means the consensus leader is less frequently ranked last.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {settings?.enableKingmakerAnalysis && kingmakerCandidate && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Kingmaker Analysis</h4>
+                  <p className="text-gray-500 text-xs">{kingmakerCandidate.text} is the first likely elimination point. Their voters next prefer:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {kingmakerTransfers.map((item) => (
+                      <div key={item.id} className="p-3 rounded-xl bg-white/2 border border-white/5 text-xs">
+                        <span className="text-white font-bold block">{item.name}</span>
+                        <span className="text-purple-300 font-mono">{item.count} transfer paths</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {settings?.enableRankConfidence && hasConvictionData && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-3">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Voter Confidence by Ranked Choice</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.values(convictionScores).filter((score: any) => score.count > 0).map((score: any) => (
+                      <div key={score.label} className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-xs">
+                        <span className="text-white font-bold block">{score.label}</span>
+                        <span className="text-amber-300 font-mono">{score.avg}% average confidence</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {settings?.enableScenarioSimulator && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h4 className="text-white text-xs font-bold uppercase tracking-wider">Scenario Simulator</h4>
+                      <p className="text-gray-500 text-[10px]">Remove one option and recalculate ranked points.</p>
+                    </div>
+                    <select value={scenarioExcludedId} onChange={(e) => setScenarioExcludedId(e.target.value)} className="bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white">
+                      <option value="">No removal</option>
+                      {optionsList.map((opt) => <option key={opt.id} value={opt.id}>{opt.text}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    {scenarioData.slice(0, 5).map((item, idx) => (
+                      <div key={item.id} className="flex justify-between p-3 rounded-xl bg-white/2 border border-white/5 text-xs">
+                        <span className="text-white font-bold">#{idx + 1} {item.name}</span>
+                        <span className="text-indigo-300 font-mono">{item.score} points</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {settings?.enableTieBreakerEngine && tieBreakerWinner && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl">
+                  <span className="text-amber-400 text-[10px] font-black uppercase tracking-widest">Tie-Breaker Engine</span>
+                  <h4 className="text-white text-lg font-black mt-2">{tieBreakerWinner.name}</h4>
+                  <p className="text-gray-400 text-xs mt-1">Rule: {(settings?.rankedTieBreakerRule || 'FIRST_PLACE').replaceAll('_', ' ').toLowerCase()}</p>
+                </div>
+              )}
+
+              {settings?.enablePodiumResults && rankedBorda.length > 0 && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider mb-4">Podium Result Mode</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {rankedBorda.slice(0, 3).map((item, idx) => (
+                      <div key={item.id} className={`p-5 rounded-2xl border text-center ${idx === 0 ? 'border-amber-500/30 bg-amber-500/10' : idx === 1 ? 'border-slate-300/20 bg-white/5' : 'border-orange-500/20 bg-orange-500/5'}`}>
+                        <span className="text-2xl font-black text-white block">#{idx + 1}</span>
+                        <span className="text-sm font-bold text-white block mt-2">{item.name}</span>
+                        <span className="text-xs text-gray-400">{item.score} points</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {settings?.enableCoalitionFinder && (
+                <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-3">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Preference Coalition Finder</h4>
+                  {coalitionData.map((group) => (
+                    <div key={group.name} className="flex justify-between p-3 rounded-xl bg-white/2 border border-white/5 text-xs">
+                      <span className="text-gray-300 font-bold">{group.name}</span>
+                      <span className="text-emerald-300 font-mono">{group.count} ballots</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

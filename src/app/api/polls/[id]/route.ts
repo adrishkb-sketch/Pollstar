@@ -153,6 +153,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 latitude: v.latitude,
                 longitude: v.longitude,
                 createdAt: v.createdAt,
+                answers: typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers,
               }))
             : undefined),
     };
@@ -245,7 +246,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       publicShowStats, publicShowCharts, publicShowMaps,
       enableConfidenceSlider, postSurveyAction,
       enableDragAndDropPodium, enableHotStreaks, enableLiveTicker,
-      enableFomoPopups, enableSmartDebrief, leaderboardVisibility
+      enableFomoPopups, enableSmartDebrief, leaderboardVisibility,
+      enablePreferenceFlowMap, enableHeadToHeadMatrix, enableConsensusScore,
+      enablePolarizationDetector, enableKingmakerAnalysis, enableRankHeatmap,
+      enableRankConfidence, enableScenarioSimulator, enableTieBreakerEngine,
+      rankedTieBreakerRule, enableRankCompleteness, rankedCompletenessRule,
+      enablePodiumResults, enableCoalitionFinder, enableMinorityProtection,
+      enableAuditReplay
     } = await req.json();
 
     const updateData: any = {};
@@ -307,6 +314,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (enableFomoPopups !== undefined) settingsPayload.enableFomoPopups = !!enableFomoPopups;
       if (enableSmartDebrief !== undefined) settingsPayload.enableSmartDebrief = !!enableSmartDebrief;
       if (leaderboardVisibility !== undefined) settingsPayload.leaderboardVisibility = leaderboardVisibility;
+      if (enablePreferenceFlowMap !== undefined) settingsPayload.enablePreferenceFlowMap = !!enablePreferenceFlowMap;
+      if (enableHeadToHeadMatrix !== undefined) settingsPayload.enableHeadToHeadMatrix = !!enableHeadToHeadMatrix;
+      if (enableConsensusScore !== undefined) settingsPayload.enableConsensusScore = !!enableConsensusScore;
+      if (enablePolarizationDetector !== undefined) settingsPayload.enablePolarizationDetector = !!enablePolarizationDetector;
+      if (enableKingmakerAnalysis !== undefined) settingsPayload.enableKingmakerAnalysis = !!enableKingmakerAnalysis;
+      if (enableRankHeatmap !== undefined) settingsPayload.enableRankHeatmap = !!enableRankHeatmap;
+      if (enableRankConfidence !== undefined) settingsPayload.enableRankConfidence = !!enableRankConfidence;
+      if (enableScenarioSimulator !== undefined) settingsPayload.enableScenarioSimulator = !!enableScenarioSimulator;
+      if (enableTieBreakerEngine !== undefined) settingsPayload.enableTieBreakerEngine = !!enableTieBreakerEngine;
+      if (rankedTieBreakerRule !== undefined) settingsPayload.rankedTieBreakerRule = rankedTieBreakerRule;
+      if (enableRankCompleteness !== undefined) settingsPayload.enableRankCompleteness = !!enableRankCompleteness;
+      if (rankedCompletenessRule !== undefined) settingsPayload.rankedCompletenessRule = rankedCompletenessRule;
+      if (enablePodiumResults !== undefined) settingsPayload.enablePodiumResults = !!enablePodiumResults;
+      if (enableCoalitionFinder !== undefined) settingsPayload.enableCoalitionFinder = !!enableCoalitionFinder;
+      if (enableMinorityProtection !== undefined) settingsPayload.enableMinorityProtection = !!enableMinorityProtection;
+      if (enableAuditReplay !== undefined) settingsPayload.enableAuditReplay = !!enableAuditReplay;
 
       if (Object.keys(settingsPayload).length > 0) {
         await tx.pollSettings.upsert({
@@ -325,6 +348,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             enableFomoPopups: enableFomoPopups !== undefined ? !!enableFomoPopups : false,
             enableSmartDebrief: enableSmartDebrief !== undefined ? !!enableSmartDebrief : false,
             leaderboardVisibility: leaderboardVisibility || "HIDDEN",
+            enablePreferenceFlowMap: enablePreferenceFlowMap !== undefined ? !!enablePreferenceFlowMap : false,
+            enableHeadToHeadMatrix: enableHeadToHeadMatrix !== undefined ? !!enableHeadToHeadMatrix : false,
+            enableConsensusScore: enableConsensusScore !== undefined ? !!enableConsensusScore : false,
+            enablePolarizationDetector: enablePolarizationDetector !== undefined ? !!enablePolarizationDetector : false,
+            enableKingmakerAnalysis: enableKingmakerAnalysis !== undefined ? !!enableKingmakerAnalysis : false,
+            enableRankHeatmap: enableRankHeatmap !== undefined ? !!enableRankHeatmap : false,
+            enableRankConfidence: enableRankConfidence !== undefined ? !!enableRankConfidence : false,
+            enableScenarioSimulator: enableScenarioSimulator !== undefined ? !!enableScenarioSimulator : false,
+            enableTieBreakerEngine: enableTieBreakerEngine !== undefined ? !!enableTieBreakerEngine : false,
+            rankedTieBreakerRule: rankedTieBreakerRule || "FIRST_PLACE",
+            enableRankCompleteness: enableRankCompleteness !== undefined ? !!enableRankCompleteness : false,
+            rankedCompletenessRule: rankedCompletenessRule || "PARTIAL",
+            enablePodiumResults: enablePodiumResults !== undefined ? !!enablePodiumResults : false,
+            enableCoalitionFinder: enableCoalitionFinder !== undefined ? !!enableCoalitionFinder : false,
+            enableMinorityProtection: enableMinorityProtection !== undefined ? !!enableMinorityProtection : false,
+            enableAuditReplay: enableAuditReplay !== undefined ? !!enableAuditReplay : false,
           },
           update: settingsPayload,
         });
