@@ -68,6 +68,7 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
+        voterId: allowedVoter.id,
         confirmer1Value: allowedVoter.confirmer1,
         confirmer2Value: allowedVoter.confirmer2 || '',
         emailValue: allowedVoter.email,
@@ -81,7 +82,7 @@ export async function POST(
 
     // Step 1: Check identifier/confirmers and request OTP
     if (step === 'REQUEST_OTP') {
-      const { identifier, confirmer1, confirmer2, email } = body;
+      const { identifier, confirmer1, confirmer2, email, voterId } = body;
 
       if (!identifier || !confirmer1 || !email) {
         return NextResponse.json(
@@ -94,6 +95,7 @@ export async function POST(
       const allowedVoter = await prisma.allowedVoter.findFirst({
         where: {
           pollId,
+          ...(voterId ? { id: voterId } : {}),
           identifier: { equals: identifier.trim(), mode: 'insensitive' },
           confirmer1: { equals: confirmer1.trim(), mode: 'insensitive' },
           email: { equals: email.trim(), mode: 'insensitive' },
@@ -125,11 +127,10 @@ export async function POST(
         }
       }
 
-            // Check if Creator granted a temporary 30-second OTP bypass (only for closed, high‑priority polls)
+      // Check if Creator granted a temporary 30-second OTP bypass
       if (
         allowedVoter.bypassOtpUntil &&
-        allowedVoter.bypassOtpUntil > new Date() &&
-        poll.description?.match(/\[priority:\s*HIGH\]/i)
+        allowedVoter.bypassOtpUntil > new Date()
       ) {
         const voterToken = jwt.sign(
           {
@@ -143,9 +144,9 @@ export async function POST(
         );
         return NextResponse.json({
           success: true,
-          isLowPriority: true, // reuse to skip frontend OTP UI
+          isBypassGranted: true,
           message:
-            'Identity confirmed! Access granted (OTP Bypassed by Poll Creator for high‑priority closed poll).',
+            'OTP Bypass allowed for you by poll creator. Redirecting to ballot...',
           voterToken,
           hasVotedAlready: allowedVoter.voted,
         });
@@ -268,9 +269,16 @@ export async function POST(
 
     // Step 3: Check if bypass was granted (used for polling during SOS request)
     if (step === 'CHECK_BYPASS') {
-      const { email } = body;
+      const { email, voterId } = body;
+      if (!voterId && !email) {
+        return NextResponse.json({ error: 'Voter reference is required' }, { status: 400 });
+      }
+
       const allowedVoter = await prisma.allowedVoter.findFirst({
-        where: { pollId, email: { equals: email.trim(), mode: 'insensitive' } },
+        where: {
+          pollId,
+          ...(voterId ? { id: voterId } : { email: { equals: email.trim(), mode: 'insensitive' } }),
+        },
       });
 
       if (!allowedVoter) {

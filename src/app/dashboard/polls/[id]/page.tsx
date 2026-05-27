@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -30,6 +30,7 @@ export default function PollInsights({ params }: PageProps) {
   const [liveStats, setLiveStats] = useState<Record<string, any>>({});
   const [liveTotalVotes, setLiveTotalVotes] = useState(0);
   const [liveVotesList, setLiveVotesList] = useState<any[]>([]);
+  const [velocityNow, setVelocityNow] = useState(0);
 
   // Action status loading
   const [actionLoading, setActionLoading] = useState(false);
@@ -55,6 +56,7 @@ export default function PollInsights({ params }: PageProps) {
         setLiveStats(data.poll.stats || {});
         setLiveTotalVotes(data.poll.totalVotes || 0);
         setLiveVotesList(data.poll.votes || []);
+        setVelocityNow(Date.now());
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -77,6 +79,7 @@ export default function PollInsights({ params }: PageProps) {
           setLiveStats(data.poll.stats || {});
           setLiveTotalVotes(data.poll.totalVotes || 0);
           setLiveVotesList(data.poll.votes || []);
+          setVelocityNow(Date.now());
         }
       } catch (err) {
         console.error('Creator Insights sync error:', err);
@@ -206,36 +209,54 @@ export default function PollInsights({ params }: PageProps) {
     window.print();
   };
 
-  // 5. Grant 30-second OTP Bypass to a specific voter
+  // 5. Grant 30-second OTP Bypass to a specific voter (timestamp-based stable timer)
   const [bypassCountdowns, setBypassCountdowns] = useState<Record<string, number>>({});
+  const bypassDeadlinesRef = useRef<Record<string, number>>({});
 
-  const handleGrantBypass = async (voterId: string) => {
+  // Stable countdown tick from the server-provided expiry timestamp.
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      const deadlines = bypassDeadlinesRef.current;
+      const keys = Object.keys(deadlines);
+
+      const next: Record<string, number> = {};
+      const nextDeadlines: Record<string, number> = {};
+      for (const vid of keys) {
+        const remaining = Math.ceil((deadlines[vid] - now) / 1000);
+        if (remaining > 0) {
+          next[vid] = remaining;
+          nextDeadlines[vid] = deadlines[vid];
+        }
+      }
+      bypassDeadlinesRef.current = nextDeadlines;
+      setBypassCountdowns(next);
+    };
+    tick();
+    const intervalId = setInterval(tick, 1000);
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  const handleGrantBypass = useCallback(async (voterId: string) => {
     try {
       const res = await fetch(`/api/polls/${pollId}/grant-bypass`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voterId }),
       });
-      if (!res.ok) throw new Error('Failed to grant bypass');
-      
-      // Start a local 30-second countdown for this voter
-      setBypassCountdowns((prev) => ({ ...prev, [voterId]: 30 }));
-      const intervalId = setInterval(() => {
-        setBypassCountdowns((prev) => {
-          const current = prev[voterId] ?? 0;
-          if (current <= 1) {
-            clearInterval(intervalId);
-            const copy = { ...prev };
-            delete copy[voterId];
-            return copy;
-          }
-          return { ...prev, [voterId]: current - 1 };
-        });
-      }, 1000);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to grant bypass');
+
+      const deadline = data.bypassOtpUntil ? new Date(data.bypassOtpUntil).getTime() : Date.now() + 30000;
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      bypassDeadlinesRef.current = { ...bypassDeadlinesRef.current, [voterId]: deadline };
+      setBypassCountdowns((prev) => ({ ...prev, [voterId]: remaining }));
     } catch (e: any) {
       alert(e.message);
     }
-  };
+  }, [pollId]);
 
   if (loading) {
     return (
@@ -271,7 +292,7 @@ export default function PollInsights({ params }: PageProps) {
   // Hourly Velocity
   const getVotingVelocity = () => {
     const hourlyGroups: Record<string, number> = {};
-    const now = Date.now();
+    const now = velocityNow || new Date(poll.endTime || poll.startTime).getTime();
     
     // Initialize 6 hourly buckets in IST
     const buckets: { start: number; end: number; label: string }[] = [];

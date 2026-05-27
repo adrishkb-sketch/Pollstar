@@ -30,6 +30,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [verifiedVoter, setVerifiedVoter] = useState(false);
   const [voterToken, setVoterToken] = useState('');
   const [voterEmail, setVoterEmail] = useState('');
+  const [voterId, setVoterId] = useState('');
   const [voterIdentifier, setVoterIdentifier] = useState('');
   const [confirmer1, setConfirmer1] = useState('');
   const [confirmer2, setConfirmer2] = useState('');
@@ -70,7 +71,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [votedSuccessfully, setVotedSuccessfully] = useState(false);
   const [flaggedSuspicious, setFlaggedSuspicious] = useState(false);
   const [voteLoading, setVoteLoading] = useState(false);
-  const [fomoToast, setFomoToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
+  const [bypassPopup, setBypassPopup] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
 
   // Confidence slider state: { [questionId]: number (1-100) }
   const [confidenceValues, setConfidenceValues] = useState<Record<string, number>>({});
@@ -194,8 +195,7 @@ export default function VoterPortal({ params }: PageProps) {
       });
     }
 
-    updatedRounds.push(nextRoundMatches);
-    setKnockoutRounds(updatedRounds);
+    setKnockoutRounds([...updatedRounds, nextRoundMatches]);
     setCurrentRoundIndex(currentRoundIndex + 1);
   };
 
@@ -334,54 +334,7 @@ export default function VoterPortal({ params }: PageProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, [otpCooldown]);
-  // FOMO & Social Proof activity toasts effect
-  useEffect(() => {
-    if (!poll?.settings?.enableFomoPopups || votedSuccessfully) return;
-
-    const locations = [
-      'Delhi', 'Mumbai', 'Bangalore', 'Kolkata', 'Chennai', 
-      'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow'
-    ];
-    const actions = [
-      'just submitted their secure ballot!',
-      'is currently selecting their preference...',
-      'just authenticated via OTP.',
-      'is analyzing the candidate details...',
-      'just entered the voting booth.'
-    ];
-
-    const generateFomo = () => {
-      const isCountMessage = Math.random() > 0.6;
-      let msg = '';
-      if (isCountMessage) {
-        const count = Math.floor(Math.random() * 8) + 2;
-        msg = `🔥 ${count} people are currently voting in this poll right now!`;
-      } else {
-        const loc = locations[Math.floor(Math.random() * locations.length)];
-        const act = actions[Math.floor(Math.random() * actions.length)];
-        msg = `⚡ A voter from ${loc} ${act}`;
-      }
-
-      setFomoToast({ message: msg, visible: true });
-
-      // Hide after 4.5 seconds
-      setTimeout(() => {
-        setFomoToast(prev => ({ ...prev, visible: false }));
-      }, 4500);
-    };
-
-    // Run first fomo after 6 seconds
-    const initialTimer = setTimeout(generateFomo, 6000);
-
-    const interval = setInterval(() => {
-      generateFomo();
-    }, Math.floor(Math.random() * 8000) + 14000); // 14-22s interval
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(interval);
-    };
-  }, [poll, votedSuccessfully]);
+  // (FOMO popups removed)
   // 2. Real-Time Serverless Polling Connection
   useEffect(() => {
     if (!poll || !poll.isResultPublic) return;
@@ -442,6 +395,7 @@ export default function VoterPortal({ params }: PageProps) {
       setConfirmer1(data.confirmer1Value);
       setConfirmer2(data.confirmer2Value);
       setVoterEmail(data.emailValue);
+      setVoterId(data.voterId || '');
       
       // Update custom labels returned from backend if any
       if (data.labels) {
@@ -463,13 +417,44 @@ export default function VoterPortal({ params }: PageProps) {
     if (e) e.preventDefault();
     setError('');
 
-    if (otpCooldown > 0) {
-      setError(`OTP rate limited. Please wait ${otpCooldown}s before requesting a new code.`);
+    if (!voterIdentifier || !confirmer1 || !voterEmail) {
+      setError('Compulsory verification credentials are empty.');
       return;
     }
 
-    if (!voterIdentifier || !confirmer1 || !voterEmail) {
-      setError('Compulsory verification credentials are empty.');
+    if (otpCooldown > 0) {
+      setOtpSendLoading(true);
+      try {
+        const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: 'CHECK_BYPASS', email: voterEmail, voterId }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.granted && data.voterToken) {
+          setBypassPopup({ visible: true, message: '30 second bypass is enabled for you. Redirecting directly to ballot...' });
+          setTimeout(() => {
+            setVoterToken(data.voterToken);
+            setVerifiedVoter(true);
+            if (data.hasVotedAlready) {
+              setVotedSuccessfully(true);
+            }
+            setShowOtpPopup(false);
+            setBypassPopup({ visible: false, message: '' });
+            setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+            setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+            setCaptchaAnswer('');
+          }, 2500);
+          return;
+        }
+      } catch (err) {
+        console.error('Bypass check failed:', err);
+      } finally {
+        setOtpSendLoading(false);
+      }
+
+      setError(`OTP rate limited. Please wait ${otpCooldown}s before requesting a new code.`);
       return;
     }
 
@@ -480,6 +465,7 @@ export default function VoterPortal({ params }: PageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           step: 'REQUEST_OTP',
+          voterId,
           identifier: voterIdentifier,
           confirmer1,
           confirmer2,
@@ -492,6 +478,25 @@ export default function VoterPortal({ params }: PageProps) {
         throw new Error(data.error || 'Failed to confirm credentials');
       }
 
+      // Handle creator-granted OTP bypass (30s window)
+      if (data.isBypassGranted && data.voterToken) {
+        setBypassPopup({ visible: true, message: '30 second bypass is enabled for you. Redirecting directly to ballot...' });
+        setTimeout(() => {
+          setVoterToken(data.voterToken);
+          setVerifiedVoter(true);
+          if (data.hasVotedAlready) {
+            setVotedSuccessfully(true);
+          }
+          setShowOtpPopup(false);
+          setBypassPopup({ visible: false, message: '' });
+          setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+          setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+          setCaptchaAnswer('');
+        }, 2500);
+        return;
+      }
+
+      // Handle low-priority bypass (no OTP required)
       if (data.isLowPriority && data.voterToken) {
         setVoterToken(data.voterToken);
         setVerifiedVoter(true);
@@ -588,7 +593,7 @@ export default function VoterPortal({ params }: PageProps) {
           const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ step: 'CHECK_BYPASS', email: voterEmail }),
+            body: JSON.stringify({ step: 'CHECK_BYPASS', email: voterEmail, voterId }),
           });
           const data = await res.json();
           if (data.success && data.granted) {
@@ -1178,6 +1183,7 @@ export default function VoterPortal({ params }: PageProps) {
                     type="button"
                     onClick={() => {
                       setLookupPassed(false);
+                      setVoterId('');
                       setVoterIdentifier('');
                       setConfirmer1('');
                       setConfirmer2('');
@@ -1820,16 +1826,21 @@ export default function VoterPortal({ params }: PageProps) {
           Live statistics and maps are set to private by the poll administrator.
         </div>
       )}
-      {/* FOMO & Social Proof Activity Toast */}
-      {poll?.settings?.enableFomoPopups && fomoToast.visible && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/90 backdrop-blur-md border border-amber-500/20 text-white rounded-2xl px-4 py-3 shadow-[0_10px_30px_rgba(245,158,11,0.15)] flex items-center space-x-3 max-w-sm animate-fade-in-up duration-300">
-          <div className="shrink-0 p-2 bg-amber-500/10 rounded-xl text-amber-400">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-            </span>
+      {/* OTP Bypass Popup */}
+      {bypassPopup.visible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-card rounded-3xl p-8 border border-emerald-500/30 bg-emerald-500/5 shadow-2xl max-w-sm w-full mx-6 text-center space-y-4 animate-fade-in-up">
+            <div className="flex justify-center">
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl">
+                <CheckCircle className="w-8 h-8" />
+              </div>
+            </div>
+            <h3 className="font-outfit text-lg font-extrabold text-white">OTP Bypass Granted</h3>
+            <p className="text-gray-300 text-sm leading-relaxed">{bypassPopup.message}</p>
+            <div className="flex justify-center">
+              <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+            </div>
           </div>
-          <p className="text-xs font-bold font-outfit text-gray-200 leading-normal">{fomoToast.message}</p>
         </div>
       )}
     </div>
