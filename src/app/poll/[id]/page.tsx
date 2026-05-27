@@ -785,11 +785,25 @@ export default function VoterPortal({ params }: PageProps) {
     }
 
     try {
-      const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(navigator?.userAgent || '');
-      const isMobileTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
-      const isMobileScreen = typeof window !== 'undefined' && (window.screen.width <= 768 || window.innerWidth <= 768);
-      const isMobilePlatform = /android|iphone|ipad|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
-      const detectedDevice = (isMobileUA || (isMobileTouch && isMobileScreen) || isMobilePlatform) ? 'Mobile' : 'Desktop';
+      let detectedDevice = 'Desktop';
+      const rawUA = navigator?.userAgent || '';
+      const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
+      const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
+      const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
+      const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
+      const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
+      const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
+
+      if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
+        detectedDevice = 'Mobile';
+      } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
+        detectedDevice = 'Tablet';
+      } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
+         // Special handling for iPad Safari reporting as MacIntel
+        detectedDevice = 'Tablet';
+      } else {
+        detectedDevice = 'Desktop';
+      }
       const res = await fetch(`/api/polls/${pollId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

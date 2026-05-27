@@ -337,14 +337,17 @@ export default function PollInsights({ params }: PageProps) {
   // Device partitioning breakdown using database records
   const getDeviceBreakdown = () => {
     let mobile = 0;
+    let tablet = 0;
     let desktop = 0;
     liveVotesList.forEach((v) => {
       if (v.device === 'Mobile') mobile++;
+      else if (v.device === 'Tablet') tablet++;
       else desktop++;
     });
     const total = liveVotesList.length || 1;
     return {
       mobilePercent: Math.round((mobile / total) * 100),
+      tabletPercent: Math.round((tablet / total) * 100),
       desktopPercent: Math.round((desktop / total) * 100),
     };
   };
@@ -458,9 +461,9 @@ export default function PollInsights({ params }: PageProps) {
     const insights: string[] = [];
     if (liveVotesList.length < 3) return ['Gathering more data to establish statistical correlation patterns...'];
 
-    const deviceChoices: Record<string, Record<string, number>> = { Desktop: {}, Mobile: {} };
+    const deviceChoices: Record<string, Record<string, number>> = { Desktop: {}, Mobile: {}, Tablet: {} };
     liveVotesList.forEach(v => {
-      const dev = v.device === 'Mobile' ? 'Mobile' : 'Desktop';
+      const dev = v.device === 'Tablet' ? 'Tablet' : (v.device === 'Mobile' ? 'Mobile' : 'Desktop');
       try {
         const ansObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
         const selection = ansObj?.[activeQuestion.id];
@@ -488,6 +491,7 @@ export default function PollInsights({ params }: PageProps) {
 
     const dDom = getDominant(deviceChoices.Desktop);
     const mDom = getDominant(deviceChoices.Mobile);
+    const tDom = getDominant(deviceChoices.Tablet);
 
     if (dDom.best && mDom.best) {
       if (dDom.best === mDom.best) {
@@ -495,6 +499,9 @@ export default function PollInsights({ params }: PageProps) {
       } else {
         insights.push(`🎭 Device usage divergence: Desktop voters prefer "${dDom.best}" (${dDom.percent}%), while mobile users skew towards "${mDom.best}" (${mDom.percent}%).`);
       }
+    }
+    if (tDom.best && tDom.best !== dDom.best && tDom.best !== mDom.best) {
+        insights.push(`📱 Tablet Anomaly: Tablet users have a unique dominant preference for "${tDom.best}" (${tDom.percent}%).`);
     }
 
     const ispCounts: Record<string, number> = {};
@@ -1150,11 +1157,20 @@ export default function PollInsights({ params }: PageProps) {
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] font-bold">
-                <span className="text-gray-400">📱 Mobile Device</span>
+                <span className="text-gray-400">📱 Mobile Phone</span>
                 <span className="text-white">{devices.mobilePercent}%</span>
               </div>
               <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
                 <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${devices.mobilePercent}%` }} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-gray-400">📟 Tablet Device</span>
+                <span className="text-white">{devices.tabletPercent}%</span>
+              </div>
+              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-purple-500 h-full rounded-full" style={{ width: `${devices.tabletPercent}%` }} />
               </div>
             </div>
           </div>
@@ -1457,7 +1473,7 @@ export default function PollInsights({ params }: PageProps) {
                       )}
                       <td className="py-3 px-4 font-mono text-gray-400 print:text-gray-700">{v.ipAddress}</td>
                       <td className="py-3 px-4 text-gray-400 print:text-gray-700">{v.isp || 'Local ISP'}</td>
-                      <td className="py-3 px-4 text-gray-400 print:text-gray-700 font-semibold">{v.device === 'Mobile' ? '📱 Mobile' : '🖥️ Desktop'}</td>
+                      <td className="py-3 px-4 text-gray-400 print:text-gray-700 font-semibold">{v.device === 'Tablet' ? '📟 Tablet' : (v.device === 'Mobile' ? '📱 Mobile' : '🖥️ Desktop')}</td>
                       <td className="py-3 px-4 text-center">
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                           v.flaggedSuspicious 
