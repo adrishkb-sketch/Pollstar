@@ -354,8 +354,7 @@ export default function VoterPortal({ params }: PageProps) {
       setVoterEmail('');
       setTimerActive(false);
       setTimeLeft(null);
-      if (poll) setPoll({ ...poll, status: 'ENDED' });
-      alert("⏱️ Session Expired! You did not submit your ballot in time or the poll has officially ended.");
+      alert(`⏱️ Session Expired! You did not submit your ${poll?.pollType === 'SURVEY' ? 'responses' : 'ballot'} in time or the ${poll?.pollType === 'SURVEY' ? 'survey' : 'poll'} has officially ended.`);
       return;
     }
 
@@ -539,7 +538,7 @@ export default function VoterPortal({ params }: PageProps) {
         const data = await res.json();
 
         if (data.success && data.granted && data.voterToken) {
-          setBypassPopup({ visible: true, message: '30 second bypass is enabled for you. Redirecting directly to ballot...' });
+          setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot'}...` });
           setTimeout(() => {
             setVoterToken(data.voterToken);
             setVerifiedVoter(true);
@@ -586,7 +585,7 @@ export default function VoterPortal({ params }: PageProps) {
 
       // Handle creator-granted OTP bypass (30s window)
       if (data.isBypassGranted && data.voterToken) {
-        setBypassPopup({ visible: true, message: '30 second bypass is enabled for you. Redirecting directly to ballot...' });
+        setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot'}...` });
         setTimeout(() => {
           setVoterToken(data.voterToken);
           setVerifiedVoter(true);
@@ -928,12 +927,12 @@ export default function VoterPortal({ params }: PageProps) {
         });
       } catch (err: any) {
         console.error('Compulsory geolocation permission error:', err);
-        setError('Location Access Required: To guarantee vote uniqueness and prevent security manipulation, you must enable and grant location permissions in your browser to submit your ballot.');
+        setError(`Location Access Required: To guarantee ${poll?.pollType === 'SURVEY' ? 'response' : 'vote'} uniqueness and prevent security manipulation, you must enable and grant location permissions in your browser to submit your ${poll?.pollType === 'SURVEY' ? 'responses' : 'ballot'}.`);
         setVoteLoading(false);
         return;
       }
     } else {
-      setError('Location Access Required: Your browser does not support Geolocation, which is mandatory to cast a secure vote on this platform.');
+      setError(`Location Access Required: Your browser does not support Geolocation, which is mandatory to submit a secure ${poll?.pollType === 'SURVEY' ? 'response' : 'vote'} on this platform.`);
       setVoteLoading(false);
       return;
     }
@@ -1544,7 +1543,7 @@ export default function VoterPortal({ params }: PageProps) {
                 ) : otpCooldown > 0 ? (
                   <span>Resend OTP in {otpCooldown}s</span>
                 ) : (poll.description && /\[priority:\s*LOW\]/i.test(poll.description)) ? (
-                  <span>Confirm Profile & Access Ballot</span>
+                  <span>{poll.pollType === 'SURVEY' ? 'Confirm Profile & Access Survey' : 'Confirm Profile & Access Ballot'}</span>
                 ) : otpSentOnce ? (
                   <span>Resend OTP Code</span>
                 ) : (
@@ -1681,7 +1680,7 @@ export default function VoterPortal({ params }: PageProps) {
             {poll.isOpenVoting && poll.settings?.limitOneVotePerUser && (
               <div>
                 <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                  Confirm Your Email Address
+                  {poll.pollType === 'SURVEY' ? 'Confirm Your Email' : 'Confirm Your Email Address'}
                 </label>
                 <input
                   type="email"
@@ -1692,7 +1691,10 @@ export default function VoterPortal({ params }: PageProps) {
                   className="w-full glass-input text-sm"
                 />
                 <span className="text-[10px] text-gray-500 mt-2 block">
-                  Email verification is compulsory to enforce unique voting limits.
+                  {poll.pollType === 'SURVEY' 
+                    ? 'Email verification is required to enforce unique submission limits.' 
+                    : 'Email verification is compulsory to enforce unique voting limits.'
+                  }
                 </span>
               </div>
             )}

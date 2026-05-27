@@ -56,6 +56,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
+    // Auto-upgrade previously created surveys from POLL -> SURVEY
+    if (poll.pollType === 'POLL') {
+      const hasSurveyQuestions = poll.questions.some(q => 
+        q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT' || q.type === 'RATING'
+      );
+      const hasSurveySettings = poll.settings ? (
+        poll.settings.collectEmail === true ||
+        poll.settings.enableDropOffTracking === true ||
+        poll.settings.enableSemanticAnalysis === true ||
+        poll.settings.enableCrossTabulation === true ||
+        poll.settings.enableTimeAnalytics === true ||
+        poll.settings.postEmailMessage !== null
+      ) : false;
+      const hasMultiplePages = poll.questions.some(q => q.pageNumber > 1);
+
+      if (hasSurveyQuestions || hasSurveySettings || hasMultiplePages) {
+        await prisma.poll.update({
+          where: { id: pollId },
+          data: { pollType: 'SURVEY' }
+        });
+        poll.pollType = 'SURVEY';
+      }
+    }
+
     // Auto-expire: if the poll is ACTIVE but endTime has passed, transition to ENDED
     if (poll.status === 'ACTIVE' && poll.endTime && new Date() > new Date(poll.endTime)) {
       await prisma.poll.update({
@@ -130,6 +154,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       startTime: poll.startTime,
       endTime: poll.endTime,
       status: poll.status,
+      pollType: poll.pollType,
       questions: poll.questions,
       settings: poll.settings,
       stats,
