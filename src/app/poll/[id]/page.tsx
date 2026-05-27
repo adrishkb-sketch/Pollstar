@@ -70,6 +70,9 @@ export default function VoterPortal({ params }: PageProps) {
   const [flaggedSuspicious, setFlaggedSuspicious] = useState(false);
   const [voteLoading, setVoteLoading] = useState(false);
 
+  // Confidence slider state: { [questionId]: number (1-100) }
+  const [confidenceValues, setConfidenceValues] = useState<Record<string, number>>({});
+
   // Dynamic real-time charts states
   const [liveStats, setLiveStats] = useState<Record<string, any>>({});
   const [liveTotalVotes, setLiveTotalVotes] = useState(0);
@@ -237,7 +240,7 @@ export default function VoterPortal({ params }: PageProps) {
   useEffect(() => {
     if (!timerActive || timeLeft === null) return;
 
-    if (timeLeft <= 0) {
+    if (timeLeft <= 0 || (poll && poll.endTime && Date.now() > new Date(poll.endTime).getTime())) {
       setVerifiedVoter(false);
       setVoterToken('');
       setLookupPassed(false);
@@ -247,12 +250,17 @@ export default function VoterPortal({ params }: PageProps) {
       setVoterEmail('');
       setTimerActive(false);
       setTimeLeft(null);
-      alert("⏱️ Session Expired! You did not submit your ballot in time. Please log in again to cast your vote.");
+      if (poll) setPoll({ ...poll, status: 'ENDED' });
+      alert("⏱️ Session Expired! You did not submit your ballot in time or the poll has officially ended.");
       return;
     }
 
     const interval = setInterval(() => {
-      setTimeLeft((prev) => (prev !== null ? prev - 1 : null));
+      if (poll && poll.endTime && Date.now() > new Date(poll.endTime).getTime()) {
+        setTimeLeft(0);
+      } else {
+        setTimeLeft((prev) => (prev !== null ? prev - 1 : null));
+      }
     }, 1000);
 
     return () => clearInterval(interval);
@@ -543,23 +551,22 @@ export default function VoterPortal({ params }: PageProps) {
     }
 
     // 2. Question completeness check
-    const activeQuestion = poll.questions[0]; // singular questions block
-    const ans = selectedAnswers[activeQuestion.id];
+    for (const q of poll.questions) {
+      const ans = selectedAnswers[q.id];
 
-    if (
-      !ans || 
-      (activeQuestion.type === 'RANKED' && ans.length !== activeQuestion.options.length) ||
-      (activeQuestion.type === 'KNOCKOUT' && !ans.winner)
-    ) {
-      setError(
-        activeQuestion.type === 'RANKED'
-          ? 'You must rank all candidate options in order of priority.'
-          : activeQuestion.type === 'KNOCKOUT'
-          ? 'You must complete the tournament bracket until a champion is chosen.'
-          : 'Please select an option before submitting.'
-      );
-      setVoteLoading(false);
-      return;
+      if (
+        !ans || 
+        (q.type === 'RANKED' && ans.length !== q.options.length) ||
+        (q.type === 'KNOCKOUT' && !ans.winner) ||
+        (q.type === 'MULTIPLE_CHOICE' && ans.length === 0) ||
+        (q.type === 'SHORT_TEXT' && ans.trim() === '') ||
+        (q.type === 'LONG_TEXT' && ans.trim() === '') ||
+        (q.type === 'RATING' && ans === 0)
+      ) {
+        setError('Please complete all questions before submitting.');
+        setVoteLoading(false);
+        return;
+      }
     }
 
     // 3. Confirm checkbox
@@ -607,6 +614,7 @@ export default function VoterPortal({ params }: PageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           answers: selectedAnswers,
+          confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: userCoords?.latitude || null,
@@ -677,7 +685,6 @@ export default function VoterPortal({ params }: PageProps) {
     );
   }
 
-  const activeQuestion = poll.questions[0];
 
   if (showIntro) {
     return (
@@ -749,8 +756,8 @@ export default function VoterPortal({ params }: PageProps) {
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Ballot Privacy</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
                       {poll.isAnonymous 
-                        ? 'Strictly Anonymous. Your selections are cryptographic and untraceable.' 
-                        : 'Known Ballot. Selections are audited to verify roster authenticity.'
+                        ? 'Your vote won\'t be visible to anyone.' 
+                        : 'Your vote will be visible to everyone based on choices made by the creator.'
                       }
                     </p>
                   </div>
@@ -919,7 +926,7 @@ export default function VoterPortal({ params }: PageProps) {
               Strictly Anonymous Election
             </h4>
             <p className="text-white text-sm font-extrabold mt-1 leading-relaxed">
-              YOUR VOTE WON'T BE VISIBLE TO ANYONE, NOT EVEN THE CREATOR OF THE VOTE. WHOM YOU VOTED FOR IS TOTALLY ANONYMOUS.
+              Your vote won't be visible to anyone.
             </p>
           </div>
         </div>
@@ -1159,196 +1166,310 @@ export default function VoterPortal({ params }: PageProps) {
             )}
 
             {/* Questions block */}
-            <div className="space-y-6">
-              <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
-                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Question</span>
-                <h4 className="text-white text-base font-bold mt-1 leading-snug">{activeQuestion.questionText}</h4>
-              </div>
-
-              {/* SINGLE CHOICE LAYOUT */}
-              {activeQuestion.type === 'SINGLE' && (
-                <div className="grid grid-cols-1 gap-3">
-                  {activeQuestion.options.map((opt: any) => {
-                    const isSelected = selectedAnswers[activeQuestion.id] === opt.id;
-                    return (
-                      <div
-                        key={opt.id}
-                        onClick={() => setSelectedAnswers({ [activeQuestion.id]: opt.id })}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                          isSelected
-                            ? 'border-indigo-500 bg-indigo-500/10 text-white shadow-md'
-                            : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
-                        }`}
-                      >
-                        <span className="text-sm font-semibold">{opt.text}</span>
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                          isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-white/20'
-                        }`}>
-                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* RANKED CHOICE (Borda Count) CLICK-TO-RANK PRIORITY LAYOUT */}
-              {activeQuestion.type === 'RANKED' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
-                    <div className="space-y-0.5">
-                      <span className="text-gray-300 text-xs font-bold">Rank candidates in order of priority:</span>
-                      <p className="text-gray-500 text-[10px]">Click choices to assign weights (① = highest priority).</p>
+            <div className="space-y-10">
+              {poll.questions.map((q: any, qIdx: number) => {
+                const ans = selectedAnswers[q.id];
+                
+                return (
+                  <div key={q.id} className="space-y-6">
+                    <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
+                      <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">
+                        Question {poll.questions.length > 1 ? qIdx + 1 : ''}
+                      </span>
+                      <h4 className="text-white text-base font-bold mt-1 leading-snug">{q.questionText}</h4>
                     </div>
-                    {rankedSelections.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleResetRankings(activeQuestion.id)}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Reset</span>
-                      </button>
-                    )}
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-3">
-                    {activeQuestion.options.map((opt: any) => {
-                      const rankIndex = rankedSelections.indexOf(opt.id);
-                      const isRanked = rankIndex !== -1;
-                      return (
-                        <div
-                          key={opt.id}
-                          onClick={() => handleRankClick(opt.id, activeQuestion.id)}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                            isRanked
-                              ? 'border-purple-500 bg-purple-500/10 text-white shadow-md'
-                              : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
-                          }`}
-                        >
-                          <span className="text-sm font-semibold">{opt.text}</span>
-                          {isRanked ? (
-                            <div className="w-6 h-6 rounded-lg bg-purple-500 text-white text-xs font-extrabold flex items-center justify-center shadow-md">
-                              {rankIndex + 1}
+                    {/* SINGLE CHOICE LAYOUT */}
+                    {q.type === 'SINGLE' && (
+                      <div className="grid grid-cols-1 gap-3">
+                        {q.options.map((opt: any) => {
+                          const isSelected = ans === opt.id;
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => setSelectedAnswers({ ...selectedAnswers, [q.id]: opt.id })}
+                              className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                isSelected
+                                  ? 'border-indigo-500 bg-indigo-500/10 text-white shadow-md'
+                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                              }`}
+                            >
+                              <span className="text-sm font-semibold">{opt.text}</span>
+                              <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                                isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-white/20'
+                              }`}>
+                                {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                              </div>
                             </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-lg border border-white/20 text-gray-500 text-xs font-bold flex items-center justify-center">
-                              -
+                          );
+                        })}
+                      </div>
+
+                      {/* CONFIDENCE SLIDER — shown after selecting an option if enabled */}
+                      {q.type === 'SINGLE' && ans && poll.settings?.enableConfidenceSlider && (
+                        <div className="mt-4 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3 animate-fade-in-up">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-amber-400 text-xs font-bold uppercase tracking-wider block">How confident are you?</span>
+                              <p className="text-gray-500 text-[10px] mt-0.5">Drag the slider to show how sure you are about your choice.</p>
                             </div>
+                            <span className="text-2xl font-extrabold text-amber-400 tabular-nums">
+                              {confidenceValues[q.id] ?? 50}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={1}
+                            max={100}
+                            value={confidenceValues[q.id] ?? 50}
+                            onChange={(e) => setConfidenceValues({ ...confidenceValues, [q.id]: Number(e.target.value) })}
+                            className="w-full accent-amber-400 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-gray-600 font-bold">
+                            <span>1% — Just guessing</span>
+                            <span>100% — Absolutely certain</span>
+                          </div>
+                        </div>
+                      )}
+                    )}
+
+
+                    {/* MULTIPLE CHOICE LAYOUT */}
+                    {q.type === 'MULTIPLE_CHOICE' && (
+                      <div className="grid grid-cols-1 gap-3">
+                        {q.options.map((opt: any) => {
+                          const isSelected = ans && ans.includes(opt.id);
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => {
+                                const current = ans || [];
+                                const updated = isSelected ? current.filter((id: string) => id !== opt.id) : [...current, opt.id];
+                                setSelectedAnswers({ ...selectedAnswers, [q.id]: updated });
+                              }}
+                              className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                isSelected
+                                  ? 'border-indigo-500 bg-indigo-500/10 text-white shadow-md'
+                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                              }`}
+                            >
+                              <span className="text-sm font-semibold">{opt.text}</span>
+                              <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                                isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-white/20'
+                              }`}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* SHORT TEXT LAYOUT */}
+                    {q.type === 'SHORT_TEXT' && (
+                      <div>
+                        <input
+                          type="text"
+                          value={ans || ''}
+                          onChange={(e) => setSelectedAnswers({ ...selectedAnswers, [q.id]: e.target.value })}
+                          placeholder="Your answer..."
+                          className="w-full glass-input text-sm"
+                        />
+                      </div>
+                    )}
+
+                    {/* LONG TEXT LAYOUT */}
+                    {q.type === 'LONG_TEXT' && (
+                      <div>
+                        <textarea
+                          rows={4}
+                          value={ans || ''}
+                          onChange={(e) => setSelectedAnswers({ ...selectedAnswers, [q.id]: e.target.value })}
+                          placeholder="Your answer..."
+                          className="w-full glass-input text-sm resize-none"
+                        />
+                      </div>
+                    )}
+
+                    {/* RATING LAYOUT */}
+                    {q.type === 'RATING' && (
+                      <div className="flex gap-2 justify-center py-4 glass-card border border-white/5 rounded-2xl">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <div
+                            key={star}
+                            onClick={() => setSelectedAnswers({ ...selectedAnswers, [q.id]: star })}
+                            className={`cursor-pointer transition-all p-2 rounded-xl ${
+                              (ans || 0) >= star ? 'text-amber-400 bg-amber-400/10' : 'text-gray-600 hover:text-gray-400'
+                            }`}
+                          >
+                            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                            </svg>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* RANKED CHOICE (Borda Count) CLICK-TO-RANK PRIORITY LAYOUT */}
+                    {q.type === 'RANKED' && (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
+                          <div className="space-y-0.5">
+                            <span className="text-gray-300 text-xs font-bold">Rank candidates in order of priority:</span>
+                            <p className="text-gray-500 text-[10px]">Click choices to assign weights (① = highest priority).</p>
+                          </div>
+                          {rankedSelections.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetRankings(q.id)}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Reset</span>
+                            </button>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
-              {/* TOURNAMENT KNOCKOUT BRACKET LAYOUT */}
-              {activeQuestion.type === 'KNOCKOUT' && knockoutRounds.length > 0 && (
-                <div className="space-y-6 animate-fade-in">
-                  <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
-                    <div className="space-y-0.5">
-                      <span className="text-gray-300 text-xs font-bold uppercase tracking-wide">
-                        Tournament Round {currentRoundIndex + 1} of {totalKnockoutRounds}
-                      </span>
-                      <p className="text-gray-500 text-[10px]">
-                        Select your preferred option in each match to advance them up the bracket.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleResetKnockout(activeQuestion.id, activeQuestion.options)}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Restart Bracket</span>
-                    </button>
-                  </div>
-
-                  {/* Present all matchups for the active round */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {knockoutRounds[currentRoundIndex].map((match: any, matchIdx: number) => {
-                      const isByeMatch = match.c1.text === 'BYE' || match.c2.text === 'BYE';
-                      
-                      return (
-                        <div 
-                          key={matchIdx} 
-                          className="glass-card rounded-2xl p-4 border border-white/5 space-y-3 shadow-md hover:border-indigo-500/20 transition-all"
-                        >
-                          <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
-                            <span>Matchup #{matchIdx + 1}</span>
-                            {isByeMatch && <span className="text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Auto-Resolved</span>}
-                          </div>
-
-                          <div className="space-y-2">
-                            {/* Candidate Option 1 */}
-                            <div
-                              onClick={() => {
-                                if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
-                                  handleKnockoutSelect(matchIdx, match.c1.id, activeQuestion.id);
-                                }
-                              }}
-                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
-                                match.c1.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
-                              } ${
-                                match.winner === match.c1.id
-                                  ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
-                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
-                              }`}
-                            >
-                              <span className="text-xs">{match.c1.text}</span>
-                              {match.winner === match.c1.id && (
-                                <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
-                                  ✓
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Versus indicator */}
-                            <div className="text-center text-[9px] font-extrabold text-indigo-400 tracking-wider">VS</div>
-
-                            {/* Candidate Option 2 */}
-                            <div
-                              onClick={() => {
-                                if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
-                                  handleKnockoutSelect(matchIdx, match.c2.id, activeQuestion.id);
-                                }
-                              }}
-                              className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
-                                match.c2.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
-                              } ${
-                                match.winner === match.c2.id
-                                  ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
-                                  : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
-                              }`}
-                            >
-                              <span className="text-xs">{match.c2.text}</span>
-                              {match.winner === match.c2.id && (
-                                <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
-                                  ✓
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                        <div className="grid grid-cols-1 gap-3">
+                          {q.options.map((opt: any) => {
+                            const rankIndex = rankedSelections.indexOf(opt.id);
+                            const isRanked = rankIndex !== -1;
+                            return (
+                              <div
+                                key={opt.id}
+                                onClick={() => handleRankClick(opt.id, q.id)}
+                                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                  isRanked
+                                    ? 'border-purple-500 bg-purple-500/10 text-white shadow-md'
+                                    : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                                }`}
+                              >
+                                <span className="text-sm font-semibold">{opt.text}</span>
+                                {isRanked ? (
+                                  <div className="w-6 h-6 rounded-lg bg-purple-500 text-white text-xs font-extrabold flex items-center justify-center shadow-md">
+                                    {rankIndex + 1}
+                                  </div>
+                                ) : (
+                                  <div className="w-6 h-6 rounded-lg border border-white/20 text-gray-500 text-xs font-bold flex items-center justify-center">
+                                    -
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    )}
 
-                  {/* Showcase ultimate winner once decided! */}
-                  {selectedAnswers[activeQuestion.id] && (
-                    <div className="p-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 text-center space-y-3 animate-fade-in-up">
-                      <span className="text-indigo-400 text-xs font-bold uppercase tracking-wider block">Your Selected Champion</span>
-                      <h4 className="text-white text-xl font-black">
-                        🏆 {
-                          activeQuestion.options.find((o: any) => o.id === selectedAnswers[activeQuestion.id].winner)?.text || 'BYE'
-                        }
-                      </h4>
-                      <p className="text-gray-400 text-[10px]">Your final tournament bracket choice is locked. You can submit your ballot below.</p>
-                    </div>
-                  )}
-                </div>
-              )}
+                    {/* TOURNAMENT KNOCKOUT BRACKET LAYOUT */}
+                    {q.type === 'KNOCKOUT' && knockoutRounds.length > 0 && (
+                      <div className="space-y-6 animate-fade-in">
+                        <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
+                          <div className="space-y-0.5">
+                            <span className="text-gray-300 text-xs font-bold uppercase tracking-wide">
+                              Tournament Round {currentRoundIndex + 1} of {totalKnockoutRounds}
+                            </span>
+                            <p className="text-gray-500 text-[10px]">
+                              Select your preferred option in each match to advance them up the bracket.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleResetKnockout(q.id, q.options)}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Restart Bracket</span>
+                          </button>
+                        </div>
+
+                        {/* Present all matchups for the active round */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {knockoutRounds[currentRoundIndex].map((match: any, matchIdx: number) => {
+                            const isByeMatch = match.c1.text === 'BYE' || match.c2.text === 'BYE';
+                            
+                            return (
+                              <div 
+                                key={matchIdx} 
+                                className="glass-card rounded-2xl p-4 border border-white/5 space-y-3 shadow-md hover:border-indigo-500/20 transition-all"
+                              >
+                                <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
+                                  <span>Matchup #{matchIdx + 1}</span>
+                                  {isByeMatch && <span className="text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Auto-Resolved</span>}
+                                </div>
+
+                                <div className="space-y-2">
+                                  {/* Candidate Option 1 */}
+                                  <div
+                                    onClick={() => {
+                                      if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
+                                        handleKnockoutSelect(matchIdx, match.c1.id, q.id);
+                                      }
+                                    }}
+                                    className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                                      match.c1.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
+                                    } ${
+                                      match.winner === match.c1.id
+                                        ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
+                                        : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                                    }`}
+                                  >
+                                    <span className="text-xs">{match.c1.text}</span>
+                                    {match.winner === match.c1.id && (
+                                      <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
+                                        ✓
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Versus indicator */}
+                                  <div className="text-center text-[9px] font-extrabold text-indigo-400 tracking-wider">VS</div>
+
+                                  {/* Candidate Option 2 */}
+                                  <div
+                                    onClick={() => {
+                                      if (match.c1.text !== 'BYE' && match.c2.text !== 'BYE') {
+                                        handleKnockoutSelect(matchIdx, match.c2.id, q.id);
+                                      }
+                                    }}
+                                    className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                                      match.c2.text === 'BYE' ? 'opacity-30 cursor-not-allowed border-dashed border-white/5' : 'cursor-pointer'
+                                    } ${
+                                      match.winner === match.c2.id
+                                        ? 'border-indigo-500 bg-indigo-500/15 text-white font-bold'
+                                        : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
+                                    }`}
+                                  >
+                                    <span className="text-xs">{match.c2.text}</span>
+                                    {match.winner === match.c2.id && (
+                                      <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
+                                        ✓
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Showcase ultimate winner once decided! */}
+                        {ans && (
+                          <div className="p-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 text-center space-y-3 animate-fade-in-up">
+                            <span className="text-indigo-400 text-xs font-bold uppercase tracking-wider block">Your Selected Champion</span>
+                            <h4 className="text-white text-xl font-black">
+                              🏆 {
+                                q.options.find((o: any) => o.id === ans.winner)?.text || 'BYE'
+                              }
+                            </h4>
+                            <p className="text-gray-400 text-[10px]">Your final tournament bracket choice is locked. You can submit your ballot below.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Human Math CAPTCHA Protection */}
@@ -1423,7 +1544,7 @@ export default function VoterPortal({ params }: PageProps) {
           <div className="space-y-2">
             <h3 className="font-outfit text-2xl font-bold text-white">Vote Submitted Successfully!</h3>
             <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-              Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.
+              {poll.settings?.postSurveyAction || 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.'}
             </p>
             {flaggedSuspicious && (
               <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
@@ -1443,34 +1564,47 @@ export default function VoterPortal({ params }: PageProps) {
           </div>
 
           {/* Aggregate counts */}
-          <div className="glass-card rounded-2xl p-6 flex justify-between items-center">
-            <div>
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Total Votes Logged</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{liveTotalVotes}</span>
+          {poll.settings?.publicShowStats !== false && (
+            <div className="glass-card rounded-2xl p-6 flex justify-between items-center">
+              <div>
+                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Total Votes Logged</span>
+                <span className="font-outfit text-3xl font-extrabold text-white">{liveTotalVotes}</span>
+              </div>
+              <div className="p-3.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                <VoteIcon className="w-6 h-6" />
+              </div>
             </div>
-            <div className="p-3.5 bg-indigo-500/10 rounded-xl text-indigo-400">
-              <VoteIcon className="w-6 h-6" />
-            </div>
-          </div>
+          )}
 
           {/* Recharts graphs */}
-          <div className="glass-card rounded-3xl p-8 border border-white/5">
-            <PollChart
-              questionId={activeQuestion.id}
-              questionText={activeQuestion.questionText}
-              type={activeQuestion.type}
-              stats={liveStats[activeQuestion.id] || {}}
-              votesList={poll?.votes || []}
-              optionsList={activeQuestion.options || []}
-            />
-          </div>
+          {poll.settings?.publicShowCharts !== false && (
+            <div className="space-y-6">
+              {poll.questions.map((q: any) => {
+                if (['SHORT_TEXT', 'LONG_TEXT'].includes(q.type)) return null;
+                return (
+                  <div key={q.id} className="glass-card rounded-3xl p-8 border border-white/5">
+                    <PollChart
+                      questionId={q.id}
+                      questionText={q.questionText}
+                      type={q.type}
+                      stats={liveStats[q.id] || {}}
+                      votesList={poll?.votes || []}
+                      optionsList={q.options || []}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Leaflet map */}
-          <div className="space-y-3">
-            <h4 className="font-outfit text-sm font-bold text-gray-400 uppercase tracking-widest">Global Device Geolocations</h4>
-            <p className="text-gray-500 text-xs">A real-time distribution map plotting coordinates resolved from voter IP handshakes.</p>
-            <PollMap locations={liveVoterLocations} />
-          </div>
+          {poll.settings?.publicShowMaps !== false && (
+            <div className="space-y-3">
+              <h4 className="font-outfit text-sm font-bold text-gray-400 uppercase tracking-widest">Global Device Geolocations</h4>
+              <p className="text-gray-500 text-xs">A real-time distribution map plotting coordinates resolved from voter IP handshakes.</p>
+              <PollMap locations={liveVoterLocations} />
+            </div>
+          )}
         </div>
       )}
 

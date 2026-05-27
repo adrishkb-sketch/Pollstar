@@ -17,7 +17,7 @@ export async function POST(
   try {
     const { id: pollId } = await params;
     const body = await req.json();
-    const { answers, captchaResponse, voterToken, email: openEmail, latitude, longitude, device } = body;
+    const { answers, captchaResponse, voterToken, email: openEmail, latitude, longitude, device, confidenceValues } = body;
 
     // 1. Bulletproof Device detection using Client body, Next.js userAgent, and Vercel edge headers
     const ua = userAgent(req);
@@ -242,7 +242,7 @@ export async function POST(
           ipAddress: geoData.ip, // Save resolved unique IP (e.g. 8.8.8.8) to prevent ::1
           isp: ispName,
           device: resolvedDevice,
-          answers: JSON.stringify(answers),
+          answers: JSON.stringify({ ...answers, __confidence: confidenceValues || null }),
           flaggedSuspicious: false,
           latitude: parseCoord(latitude) ?? (vercelLat ? parseFloat(vercelLat) : (geoData.lat !== 0 ? geoData.lat : null)),
           longitude: parseCoord(longitude) ?? (vercelLon ? parseFloat(vercelLon) : (geoData.lon !== 0 ? geoData.lon : null)),

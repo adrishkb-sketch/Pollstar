@@ -32,11 +32,66 @@ const COLORS = [
 export default function PollChart({ questionText, type, stats, votesList = [], optionsList = [] }: PollChartProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics'>('overview');
 
+  // ----------------------------------------------------
+  // KNOCKOUT TOURNAMENT: Bracket Analysis & Points System
+  // ----------------------------------------------------
+  const getKnockoutAnalytics = () => {
+    let totalWins: Record<string, number> = {};
+    let survivalCounts: Record<string, number[]> = {};
+    let points: Record<string, number> = {}; // Tournament Points
+
+    optionsList.forEach(opt => {
+      totalWins[opt.id] = 0;
+      points[opt.id] = 0;
+      survivalCounts[opt.id] = [0, 0, 0, 0, 0]; // R1, R2, Semis, Finals, Champion
+    });
+
+    votesList.forEach(v => {
+      try {
+        const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const knockoutData = parsed[questionId];
+        if (!knockoutData || !knockoutData.rounds) return;
+
+        // Ultimate Champion
+        if (knockoutData.winner && totalWins[knockoutData.winner] !== undefined) {
+          survivalCounts[knockoutData.winner][4] = (survivalCounts[knockoutData.winner][4] || 0) + 1;
+          points[knockoutData.winner] += 50; // Bonus for winning the whole tournament
+        }
+
+        knockoutData.rounds.forEach((roundMatches: any[], roundIndex: number) => {
+          roundMatches.forEach((match: any) => {
+            if (match.winner && totalWins[match.winner] !== undefined) {
+              totalWins[match.winner] = (totalWins[match.winner] || 0) + 1;
+              points[match.winner] += (roundIndex + 1) * 10; // Increasing points for advancing rounds
+            }
+
+            // Participants in this round match
+            if (match.c1 && survivalCounts[match.c1.id]) {
+              survivalCounts[match.c1.id][roundIndex] = (survivalCounts[match.c1.id][roundIndex] || 0) + 1;
+            }
+            if (match.c2 && survivalCounts[match.c2.id]) {
+              survivalCounts[match.c2.id][roundIndex] = (survivalCounts[match.c2.id][roundIndex] || 0) + 1;
+            }
+          });
+        });
+      } catch {}
+    });
+
+    return { totalWins, survivalCounts, points };
+  };
+
+  const knockoutData = type === 'KNOCKOUT' ? getKnockoutAnalytics() : null;
+
   // Parse stats object into Recharts-friendly arrays
-  const overviewData = Object.keys(stats).map((key) => ({
-    name: stats[key].text,
-    value: stats[key].count,
-  })).sort((a, b) => b.value - a.value);
+  const overviewData = type === 'KNOCKOUT' && knockoutData
+    ? optionsList.map(o => ({
+        name: o.text,
+        value: knockoutData.points[o.id] || 0,
+      })).sort((a, b) => b.value - a.value)
+    : Object.keys(stats).map((key) => ({
+        name: stats[key].text,
+        value: stats[key].count,
+      })).sort((a, b) => b.value - a.value);
 
   const statsTotal = Object.values(stats).reduce((sum, item) => sum + (item.count || 0), 0);
   const totalVotes = votesList.length > 0 ? votesList.length : statsTotal;
@@ -86,9 +141,8 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
     // Extract preference arrays from votesList
     const ballots = votesList.map(v => {
       try {
-        const parsed = JSON.parse(v.answers);
-        const qKey = Object.keys(parsed)[0];
-        const ranking = parsed[qKey];
+        const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const ranking = parsed[questionId];
         return Array.isArray(ranking) ? ranking : [];
       } catch {
         return [];
@@ -153,9 +207,8 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
 
     votesList.forEach(v => {
       try {
-        const parsed = JSON.parse(v.answers);
-        const qKey = Object.keys(parsed)[0];
-        const ranking = parsed[qKey];
+        const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const ranking = parsed[questionId];
         if (!Array.isArray(ranking)) return;
 
         for (let i = 0; i < ranking.length; i++) {
@@ -174,51 +227,67 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
   };
 
   // ----------------------------------------------------
-  // KNOCKOUT TOURNAMENT: Bracket Analysis
+  // SINGLE CHOICE: Conviction Score per Option
   // ----------------------------------------------------
-  const getKnockoutAnalytics = () => {
-    let totalWins: Record<string, number> = {};
-    let survivalCounts: Record<string, number[]> = {};
-
-    optionsList.forEach(opt => {
-      totalWins[opt.id] = 0;
-      survivalCounts[opt.id] = [0, 0, 0, 0, 0]; // R1, R2, Semis, Finals, Champion
+  const getConvictionScores = () => {
+    if (type !== 'SINGLE') return {};
+    
+    const scores: Record<string, { total: number; count: number; avg: number; label: string }> = {};
+    optionsList.forEach(o => {
+      scores[o.id] = { total: 0, count: 0, avg: 0, label: o.text };
     });
 
     votesList.forEach(v => {
       try {
-        const parsed = JSON.parse(v.answers);
-        const qKey = Object.keys(parsed)[0];
-        const knockoutData = parsed[qKey];
-        if (!knockoutData || !knockoutData.rounds) return;
-
-        // Ultimate Champion
-        if (knockoutData.winner && totalWins[knockoutData.winner] !== undefined) {
-          survivalCounts[knockoutData.winner][4] = (survivalCounts[knockoutData.winner][4] || 0) + 1;
-        }
-
-        knockoutData.rounds.forEach((roundMatches: any[], roundIndex: number) => {
-          roundMatches.forEach((match: any) => {
-            if (match.winner && totalWins[match.winner] !== undefined) {
-              totalWins[match.winner] = (totalWins[match.winner] || 0) + 1;
-            }
-
-            // Participants in this round match
-            if (match.c1 && survivalCounts[match.c1.id]) {
-              survivalCounts[match.c1.id][roundIndex] = (survivalCounts[match.c1.id][roundIndex] || 0) + 1;
-            }
-            if (match.c2 && survivalCounts[match.c2.id]) {
-              survivalCounts[match.c2.id][roundIndex] = (survivalCounts[match.c2.id][roundIndex] || 0) + 1;
-            }
-          });
+        const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const confidence = parsed.__confidence;
+        if (!confidence) return;
+        // Each key in __confidence maps a questionId -> confidence %
+        Object.entries(confidence).forEach(([, conf]: [string, any]) => {
+          // Also need to know which option the voter chose
+          const optId = Object.entries(parsed).find(([k]) => k !== '__confidence')?.[1] as string;
+          if (optId && scores[optId] !== undefined) {
+            scores[optId].total += Number(conf);
+            scores[optId].count++;
+          }
         });
       } catch {}
     });
 
-    return { totalWins, survivalCounts };
+    // Match confidence to the voter's chosen option per question
+    votesList.forEach(v => {
+      try {
+        const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const confidence = parsed.__confidence;
+        if (!confidence) return;
+        
+        // For each question, find the chosen option
+        Object.entries(parsed).forEach(([qid, optId]: [string, any]) => {
+          if (qid === '__confidence' || !confidence[qid]) return;
+          if (scores[optId] !== undefined) {
+            scores[optId].total += Number(confidence[qid]);
+            scores[optId].count++;
+          }
+        });
+      } catch {}
+    });
+
+    // Calculate averages
+    Object.keys(scores).forEach(optId => {
+      const s = scores[optId];
+      s.avg = s.count > 0 ? Math.round(s.total / s.count) : 0;
+      
+      if (s.avg >= 80) s.label = `${optionsList.find(o => o.id === optId)?.text} 🔥`;
+      else if (s.avg >= 60) s.label = optionsList.find(o => o.id === optId)?.text;
+      else if (s.avg > 0) s.label = `${optionsList.find(o => o.id === optId)?.text} 🤔`;
+      else s.label = optionsList.find(o => o.id === optId)?.text || optId;
+    });
+
+    return scores;
   };
 
-  const knockoutData = type === 'KNOCKOUT' ? getKnockoutAnalytics() : null;
+  const convictionScores = getConvictionScores();
+  const hasConvictionData = Object.values(convictionScores).some((s: any) => s.count > 0);
 
   return (
     <div className="space-y-6">
@@ -317,9 +386,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={type === 'KNOCKOUT' && knockoutData
-                        ? optionsList.map(o => ({ name: o.text, value: knockoutData.survivalCounts[o.id]?.[4] || 0 }))
-                        : overviewData}
+                      data={overviewData}
                       cx="50%"
                       cy="50%"
                       innerRadius={65}
@@ -327,10 +394,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {(type === 'KNOCKOUT' && knockoutData
-                        ? optionsList.map(o => ({ name: o.text, value: knockoutData.survivalCounts[o.id]?.[4] || 0 }))
-                        : overviewData
-                      ).map((entry, index) => (
+                      {overviewData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -364,9 +428,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
               <div className="w-full h-full pt-6">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
-                    data={type === 'KNOCKOUT' && knockoutData
-                      ? optionsList.map(o => ({ name: o.text, value: knockoutData.totalWins[o.id] || 0 })).sort((a, b) => b.value - a.value)
-                      : overviewData} 
+                    data={overviewData} 
                     margin={{ top: 20, right: 10, left: -25, bottom: 0 }}
                   >
                     <XAxis 
@@ -391,10 +453,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                       cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      {(type === 'KNOCKOUT' && knockoutData
-                        ? optionsList.map(o => ({ name: o.text, value: knockoutData.totalWins[o.id] || 0 })).sort((a, b) => b.value - a.value)
-                        : overviewData
-                      ).map((entry, index) => (
+                      {overviewData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Bar>
@@ -455,7 +514,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                             <span className="text-gray-500 font-mono">#{idx + 1}</span>
                             <span>{cand.name}</span>
                           </span>
-                          <span>{cand.value} votes ({percentage}%)</span>
+                          <span>{cand.value} {type === 'KNOCKOUT' ? 'points' : 'votes'}</span>
                         </div>
                         <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
                           <div 
@@ -467,6 +526,40 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ────────────────────────────────────────────────────────
+              KNOCKOUT STANDINGS (Shared Component)
+             ──────────────────────────────────────────────────────── */}
+          {type === 'KNOCKOUT' && (
+            <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
+              <span className="text-white text-xs font-bold uppercase tracking-wider block flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-indigo-400" /> Standings Heat-Map
+              </span>
+              <div className="space-y-3">
+                {overviewData.map((cand, idx) => {
+                  const maxPoints = overviewData[0]?.value || 1;
+                  const percentage = maxPoints > 0 ? ((cand.value / maxPoints) * 100).toFixed(1) : '0';
+                  return (
+                    <div key={cand.name} className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold text-gray-300">
+                        <span className="flex items-center space-x-2">
+                          <span className="text-gray-500 font-mono">#{idx + 1}</span>
+                          <span>{cand.name}</span>
+                        </span>
+                        <span>{cand.value} tournament points</span>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500" 
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

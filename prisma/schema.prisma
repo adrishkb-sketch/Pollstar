@@ -19,10 +19,19 @@ enum PollStatus {
   ENDED
 }
 
+enum PollType {
+  POLL
+  SURVEY
+}
+
 enum QuestionType {
   SINGLE
   RANKED
   KNOCKOUT
+  MULTIPLE_CHOICE
+  SHORT_TEXT
+  LONG_TEXT
+  RATING
 }
 
 model User {
@@ -52,6 +61,7 @@ model Poll {
   title           String
   description     String
   posterUrl       String?
+  pollType        PollType       @default(POLL)
   isOpenVoting    Boolean        @default(true)
   isAnonymous     Boolean        @default(true)
   isResultPublic  Boolean        @default(false)
@@ -62,6 +72,7 @@ model Poll {
   allowedVoters   AllowedVoter[]
   settings        PollSettings?
   votes           Vote[]
+  messages        DirectMessage[]
   auditLogs       AuditLog[]
   createdAt       DateTime       @default(now())
 }
@@ -93,20 +104,32 @@ model Vote {
   device            String?  // Desktop or Mobile
   latitude          Float?
   longitude         Float?
-  answers           Json     // JSON string mapping question ID to options/rankings: { "q-id": ["opt-1", "opt-2"] }
+  answers           Json     // JSON string mapping question ID to options/rankings/text
   flaggedSuspicious Boolean  @default(false)
+  timeSpent         Int?     // Time spent on survey in seconds
   createdAt         DateTime @default(now())
 }
 
 model AllowedVoter {
-  id          String  @id @default(uuid())
-  pollId      String
-  poll        Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  identifier  String  // e.g. "2021BCS003"
-  confirmer1  String  // e.g. "John Doe"
-  confirmer2  String? // e.g. optional secondary confirmation text
-  email       String
-  voted       Boolean @default(false)
+  id             String    @id @default(uuid())
+  pollId         String
+  poll           Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  identifier     String    // e.g. "2021BCS003"
+  confirmer1     String    // e.g. "John Doe"
+  confirmer2     String?   // e.g. optional secondary confirmation text
+  email          String
+  voted          Boolean   @default(false)
+  bypassOtpUntil DateTime?
+}
+
+model DirectMessage {
+  id               String   @id @default(uuid())
+  pollId           String
+  poll             Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  senderIdentifier String   // Voter identifier or email
+  text             String
+  isFromCreator    Boolean  @default(false)
+  createdAt        DateTime @default(now())
 }
 
 model PollSettings {
@@ -117,6 +140,11 @@ model PollSettings {
   limitOneVotePerIP     Boolean @default(false)
   limitOneVotePerISP    Boolean @default(false)
   hideResultsUntilEnd   Boolean @default(false)
+  publicShowMaps        Boolean @default(true)
+  publicShowCharts      Boolean @default(true)
+  publicShowStats       Boolean @default(true)
+  enableConfidenceSlider Boolean @default(false)
+  postSurveyAction      String? // e.g. custom thank you message text
   identifierLabel       String  @default("Roll Number")
   confirmer1Label       String  @default("Student Name")
   confirmer2Label       String  @default("Parent Name")

@@ -136,7 +136,9 @@ export async function POST(req: Request) {
           data: {
             pollId: poll.id,
             questionText: q.questionText,
-            type: (q.type === 'RANKED' || q.type === 'KNOCKOUT') ? q.type : 'SINGLE',
+            type: ['RANKED', 'KNOCKOUT', 'MULTIPLE_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type)
+              ? q.type
+              : 'SINGLE',
           },
         });
 
@@ -159,6 +161,11 @@ export async function POST(req: Request) {
           limitOneVotePerIP: !!settings?.limitOneVotePerIP,
           limitOneVotePerISP: !!settings?.limitOneVotePerISP,
           hideResultsUntilEnd: !!settings?.hideResultsUntilEnd,
+          publicShowMaps: settings?.publicShowMaps !== false,
+          publicShowCharts: settings?.publicShowCharts !== false,
+          publicShowStats: settings?.publicShowStats !== false,
+          enableConfidenceSlider: !!settings?.enableConfidenceSlider,
+          postSurveyAction: settings?.postSurveyAction || null,
           identifierLabel: body.identifierLabel || 'Roll Number',
           confirmer1Label: body.confirmer1Label || 'Student Name',
           confirmer2Label: body.confirmer2Label || 'Parent Name',

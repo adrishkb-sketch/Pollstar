@@ -19,14 +19,16 @@ export default function CreatePoll() {
   // ────────────────────────────────────────────────────────
   
   // Step 1: Core details
+  const [pollType, setPollType] = useState<'POLL' | 'SURVEY'>('POLL');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [posterUrl, setPosterUrl] = useState(''); // holds base64 string
 
-  // Step 2 & 3: Question & Type
-  const [questionText, setQuestionText] = useState('');
-  const [questionType, setQuestionType] = useState<'SINGLE' | 'RANKED' | 'KNOCKOUT'>('SINGLE');
-  const [options, setOptions] = useState<string[]>(['Option 1', 'Option 2']);
+  // Step 2 & 3: Questions & Types
+  const [questions, setQuestions] = useState<any[]>([
+    { id: 1, questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'] }
+  ]);
+  const [activeQuestionId, setActiveQuestionId] = useState<number>(1);
 
   // Step 4: Closed vs Open Voting
   const [isOpenVoting, setIsOpenVoting] = useState(true);
@@ -68,6 +70,11 @@ export default function CreatePoll() {
   // Step 8: Results & Visibility Toggles
   const [hideResultsUntilEnd, setHideResultsUntilEnd] = useState(false);
   const [isResultPublic, setIsResultPublic] = useState(false);
+  const [publicShowMaps, setPublicShowMaps] = useState(true);
+  const [publicShowCharts, setPublicShowCharts] = useState(true);
+  const [publicShowStats, setPublicShowStats] = useState(true);
+  const [postSurveyAction, setPostSurveyAction] = useState('Thank you for completing this survey!');
+  const [enableConfidenceSlider, setEnableConfidenceSlider] = useState(false);
 
   // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
@@ -172,20 +179,34 @@ export default function CreatePoll() {
   };
 
   // Step 2 Options controllers
-  const handleAddOption = () => {
-    setOptions([...options, `Option ${options.length + 1}`]);
+  const handleAddOption = (qIndex: number) => {
+    const updated = [...questions];
+    updated[qIndex].options.push(`Option ${updated[qIndex].options.length + 1}`);
+    setQuestions(updated);
   };
 
-  const handleRemoveOption = (index: number) => {
-    if (options.length > 2) {
-      setOptions(options.filter((_, idx) => idx !== index));
+  const handleRemoveOption = (qIndex: number, optIndex: number) => {
+    const updated = [...questions];
+    if (updated[qIndex].options.length > 2) {
+      updated[qIndex].options = updated[qIndex].options.filter((_: any, idx: number) => idx !== optIndex);
+      setQuestions(updated);
     }
   };
 
-  const handleOptionChange = (value: string, index: number) => {
-    const updated = [...options];
-    updated[index] = value;
-    setOptions(updated);
+  const handleOptionChange = (value: string, qIndex: number, optIndex: number) => {
+    const updated = [...questions];
+    updated[qIndex].options[optIndex] = value;
+    setQuestions(updated);
+  };
+
+  const handleAddQuestion = () => {
+    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'] }]);
+  };
+
+  const handleRemoveQuestion = (qIndex: number) => {
+    if (questions.length > 1) {
+      setQuestions(questions.filter((_, idx) => idx !== qIndex));
+    }
   };
 
   // Step 4 Dynamic spreadsheet row controllers
@@ -403,11 +424,11 @@ export default function CreatePoll() {
       }
     }
     if (currentStep === 2) {
-      if (!questionText.trim()) {
-        setError('Please input the question text.');
+      if (questions.some((q) => !q.questionText.trim())) {
+        setError('Please input the question text for all questions.');
         return false;
       }
-      if (options.some((o) => !o.trim())) {
+      if (questions.some((q) => ['SINGLE', 'RANKED', 'KNOCKOUT', 'MULTIPLE_CHOICE'].includes(q.type) && q.options.some((o: string) => !o.trim()))) {
         setError('All option labels must contain text.');
         return false;
       }
@@ -448,26 +469,30 @@ export default function CreatePoll() {
 
     const payload = {
       title,
-      description: ballotPriority === 'LOW' && !isOpenVoting ? `${description} [priority: LOW]` : description,
+      description: ballotPriority === 'LOW' && !isOpenVoting && pollType !== 'SURVEY' ? `${description} [priority: LOW]` : description,
       posterUrl,
-      isOpenVoting,
-      isAnonymous,
+      pollType,
+      isOpenVoting: pollType === 'SURVEY' ? true : isOpenVoting,
+      isAnonymous: pollType === 'SURVEY' ? false : isAnonymous,
       isResultPublic,
       startTime: new Date(startTime).toISOString(),
       endTime: new Date(endTime).toISOString(),
       status,
-      questions: [
-        {
-          questionText,
-          type: questionType,
-          options,
-        },
-      ],
+      questions: questions.map(q => ({
+        questionText: q.questionText,
+        type: q.type,
+        options: ['SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type) ? [] : q.options,
+      })),
       settings: {
-        limitOneVotePerUser,
-        limitOneVotePerIP,
-        limitOneVotePerISP,
+        limitOneVotePerUser: pollType === 'SURVEY' ? false : limitOneVotePerUser,
+        limitOneVotePerIP: pollType === 'SURVEY' ? false : limitOneVotePerIP,
+        limitOneVotePerISP: pollType === 'SURVEY' ? false : limitOneVotePerISP,
         hideResultsUntilEnd,
+        publicShowMaps,
+        publicShowCharts,
+        publicShowStats,
+        enableConfidenceSlider: questions.some(q => q.type === 'SINGLE') ? enableConfidenceSlider : false,
+        postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
       },
       allowedVoters: isOpenVoting 
         ? [] 
@@ -563,21 +588,44 @@ export default function CreatePoll() {
           {currentStep === 1 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Poll Basics</h2>
-                <p className="text-gray-400 text-sm mt-1">Provide a title and a description to engage your voters.</p>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Basics</h2>
+                <p className="text-gray-400 text-sm mt-1">Provide a title and a description to engage your audience.</p>
+              </div>
+
+              <div className="flex gap-4 border-b border-white/5 pb-6">
+                <button
+                  type="button"
+                  onClick={() => setPollType('POLL')}
+                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
+                    pollType === 'POLL' ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
+                  }`}
+                >
+                  <span>Create Standard Poll</span>
+                  <span className="text-[10px] font-normal text-gray-500 mt-1">One question, advanced security</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPollType('SURVEY')}
+                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
+                    pollType === 'SURVEY' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
+                  }`}
+                >
+                  <div>Create Survey <span className="bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded ml-2 uppercase animate-pulse">New</span></div>
+                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open public voting</span>
+                </button>
               </div>
 
               <div className="space-y-6">
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                    Poll Title
+                    Title
                   </label>
                   <input
                     type="text"
                     required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Student Council Presidential Election 2026"
+                    placeholder={pollType === 'POLL' ? "e.g. Student Council Presidential Election 2026" : "e.g. Customer Satisfaction Survey"}
                     className="w-full glass-input placeholder-gray-600 text-sm"
                   />
                 </div>
@@ -632,73 +680,129 @@ export default function CreatePoll() {
           {/* STEP 2: Questions & Options */}
           {currentStep === 2 && (
             <div className="space-y-6 animate-fade-in-up">
-              <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Question & Choices</h2>
-                <p className="text-gray-400 text-sm mt-1">Define the question being asked and list the choices.</p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Questions</h2>
+                  <p className="text-gray-400 text-sm mt-1">Define the questions being asked.</p>
+                </div>
+                {pollType === 'SURVEY' && (
+                  <button
+                    type="button"
+                    onClick={handleAddQuestion}
+                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Question</span>
+                  </button>
+                )}
               </div>
 
               <div className="space-y-6">
-                <div>
-                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                    Poll Question
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={questionText}
-                    onChange={(e) => setQuestionText(e.target.value)}
-                    placeholder="e.g. Who should be elected Student Council President?"
-                    className="w-full glass-input placeholder-gray-600 text-sm"
-                  />
-                </div>
+                {questions.map((q, qIndex) => (
+                  <div key={q.id} className="p-5 rounded-2xl border border-white/10 bg-white/5 space-y-4 relative group">
+                    {pollType === 'SURVEY' && questions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuestion(qIndex)}
+                        className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Question {qIndex + 1}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={q.questionText}
+                        onChange={(e) => {
+                          const updated = [...questions];
+                          updated[qIndex].questionText = e.target.value;
+                          setQuestions(updated);
+                        }}
+                        placeholder="Type your question here..."
+                        className="w-full glass-input placeholder-gray-600 text-sm pr-12"
+                      />
+                    </div>
 
-                <div className="space-y-3">
-                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
-                    Options / Candidates
-                  </label>
-                  
-                  <div className="space-y-3">
-                    {options.map((opt, idx) => (
-                      <div key={idx} className="flex items-center space-x-2.5">
-                        <input
-                          type="text"
-                          required
-                          value={opt}
-                          onChange={(e) => handleOptionChange(e.target.value, idx)}
-                          placeholder={`Option ${idx + 1}`}
-                          className="flex-1 glass-input placeholder-gray-600 text-sm"
-                        />
+                    {pollType === 'SURVEY' && (
+                      <div>
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                          Question Type
+                        </label>
+                        <select
+                          value={q.type}
+                          onChange={(e) => {
+                            const updated = [...questions];
+                            updated[qIndex].type = e.target.value;
+                            setQuestions(updated);
+                          }}
+                          className="w-full glass-input placeholder-gray-600 text-sm"
+                        >
+                          <option value="SINGLE">Single Choice</option>
+                          <option value="MULTIPLE_CHOICE">Multiple Choice</option>
+                          <option value="SHORT_TEXT">Short Text</option>
+                          <option value="LONG_TEXT">Long Text / Paragraph</option>
+                          <option value="RATING">Rating (1-5 Stars)</option>
+                          <option value="RANKED">Ranked Choice (Borda)</option>
+                          <option value="KNOCKOUT">Knockout Tournament</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT'].includes(q.type) && (
+                      <div className="space-y-3 pt-2">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                          Options / Choices
+                        </label>
+                        <div className="space-y-2">
+                          {q.options.map((opt: string, optIdx: number) => (
+                            <div key={optIdx} className="flex items-center space-x-2.5">
+                              <input
+                                type="text"
+                                required
+                                value={opt}
+                                onChange={(e) => handleOptionChange(e.target.value, qIndex, optIdx)}
+                                placeholder={`Option ${optIdx + 1}`}
+                                className="flex-1 glass-input placeholder-gray-600 text-sm py-2"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOption(qIndex, optIdx)}
+                                disabled={q.options.length <= 2}
+                                className={`p-2.5 rounded-xl border border-white/5 transition-all ${
+                                  q.options.length > 2
+                                    ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
+                                    : 'text-gray-600 cursor-not-allowed'
+                                }`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => handleRemoveOption(idx)}
-                          disabled={options.length <= 2}
-                          className={`p-3 rounded-xl border border-white/5 transition-all ${
-                            options.length > 2
-                              ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
-                              : 'text-gray-600 cursor-not-allowed'
-                          }`}
+                          onClick={() => handleAddOption(qIndex)}
+                          className="mt-2 px-4 py-2 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 hover:text-indigo-300 text-[10px] font-bold transition-all flex items-center space-x-1.5"
                         >
-                          <Trash2 className="w-4.5 h-4.5" />
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Another Option</span>
                         </button>
                       </div>
-                    ))}
+                    )}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={handleAddOption}
-                    className="mt-2 px-4 py-2.5 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition-all flex items-center space-x-1.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Another Option</span>
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* STEP 3: Choice Logic */}
-          {currentStep === 3 && (
+          {/* STEP 3: Choice Logic (Polls only) */}
+          {currentStep === 3 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Voting Type</h2>
@@ -708,9 +812,13 @@ export default function CreatePoll() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                 {/* Single Choice */}
                 <div
-                  onClick={() => setQuestionType('SINGLE')}
+                  onClick={() => {
+                    const updated = [...questions];
+                    updated[0].type = 'SINGLE';
+                    setQuestions(updated);
+                  }}
                   className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
-                    questionType === 'SINGLE'
+                    questions[0].type === 'SINGLE'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
@@ -719,7 +827,7 @@ export default function CreatePoll() {
                     <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
                       <Check className="w-6 h-6" />
                     </div>
-                    {questionType === 'SINGLE' && (
+                    {questions[0].type === 'SINGLE' && (
                       <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
                     )}
                   </div>
@@ -733,9 +841,13 @@ export default function CreatePoll() {
 
                 {/* Ranked Choice Borda Count */}
                 <div
-                  onClick={() => setQuestionType('RANKED')}
+                  onClick={() => {
+                    const updated = [...questions];
+                    updated[0].type = 'RANKED';
+                    setQuestions(updated);
+                  }}
                   className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
-                    questionType === 'RANKED'
+                    questions[0].type === 'RANKED'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
@@ -744,23 +856,27 @@ export default function CreatePoll() {
                     <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
                       <Award className="w-6 h-6" />
                     </div>
-                    {questionType === 'RANKED' && (
+                    {questions[0].type === 'RANKED' && (
                       <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />
                     )}
                   </div>
                   <div>
                     <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Ranked Choice (Borda Count)</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Voters rank options in order of priority. Scoring weights are applied mathematically (1st choice gets highest weight).
+                      Voters rank options in order of priority. Scoring weights are applied mathematically.
                     </p>
                   </div>
                 </div>
 
                 {/* Knockout Tournament */}
                 <div
-                  onClick={() => setQuestionType('KNOCKOUT')}
+                  onClick={() => {
+                    const updated = [...questions];
+                    updated[0].type = 'KNOCKOUT';
+                    setQuestions(updated);
+                  }}
                   className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
-                    questionType === 'KNOCKOUT'
+                    questions[0].type === 'KNOCKOUT'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
@@ -769,14 +885,14 @@ export default function CreatePoll() {
                     <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
                       <Trophy className="w-6 h-6" />
                     </div>
-                    {questionType === 'KNOCKOUT' && (
+                    {questions[0].type === 'KNOCKOUT' && (
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                     )}
                   </div>
                   <div>
                     <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Knockout Tournament</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Automated tournament brackets. Voters go head-to-head through randomized pairings individually (32 ➔ 16 ➔ 8 ➔ 4 ➔ 2 ➔ Champion).
+                      Automated tournament brackets. Voters go head-to-head through randomized pairings.
                     </p>
                   </div>
                 </div>
@@ -784,8 +900,32 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 4: Access Settings & Dynamic Spreadsheet */}
-          {currentStep === 4 && (
+          {/* Survey Type Step 3 Replacement: Post-Survey Action */}
+          {currentStep === 3 && pollType === 'SURVEY' && (
+            <div className="space-y-6 animate-fade-in-up">
+              <div>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Survey Completion</h2>
+                <p className="text-gray-400 text-sm mt-1">Configure what happens after a user submits the survey.</p>
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                    Post-Survey Thank You Message
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={postSurveyAction}
+                    onChange={(e) => setPostSurveyAction(e.target.value)}
+                    placeholder="e.g. Thank you for your valuable feedback! Your response has been recorded."
+                    className="w-full glass-input placeholder-gray-600 text-sm resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Access Settings & Dynamic Spreadsheet (Skipped for Survey) */}
+          {currentStep === 4 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Audience Controls</h2>
@@ -1079,8 +1219,8 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 5: Security Restrictions */}
-          {currentStep === 5 && (
+          {/* STEP 5: Security Restrictions (Skipped for Survey) */}
+          {currentStep === 5 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Fraud Prevention</h2>
@@ -1203,8 +1343,8 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 6: Anonymity Settings */}
-          {currentStep === 6 && (
+          {/* STEP 6: Anonymity Settings (Skipped for Survey) */}
+          {currentStep === 6 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Anonymity Mode</h2>
@@ -1369,6 +1509,77 @@ export default function CreatePoll() {
                     {isResultPublic && <Check className="w-3.5 h-3.5" />}
                   </div>
                 </div>
+
+                {/* Granular Analytics Controls */}
+                {isResultPublic && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 animate-fade-in-up">
+                    <div
+                      onClick={() => setPublicShowCharts(!publicShowCharts)}
+                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                        publicShowCharts ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowCharts ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                        {publicShowCharts && <Check className="w-3 h-3" />}
+                      </div>
+                      <span className="text-xs font-bold text-white">Show Charts</span>
+                      <span className="text-[10px] text-gray-500 mt-1">Bar/Pie charts of votes</span>
+                    </div>
+
+                    <div
+                      onClick={() => setPublicShowMaps(!publicShowMaps)}
+                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                        publicShowMaps ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowMaps ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                        {publicShowMaps && <Check className="w-3 h-3" />}
+                      </div>
+                      <span className="text-xs font-bold text-white">Show Maps</span>
+                      <span className="text-[10px] text-gray-500 mt-1">Live geolocation tracking</span>
+                    </div>
+
+                    <div
+                      onClick={() => setPublicShowStats(!publicShowStats)}
+                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                        publicShowStats ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowStats ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                        {publicShowStats && <Check className="w-3 h-3" />}
+                      </div>
+                      <span className="text-xs font-bold text-white">Show Stats</span>
+                      <span className="text-[10px] text-gray-500 mt-1">Total vote counts</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Confidence Slider Toggle — only for Single Choice polls */}
+                {questions.some((q: any) => q.type === 'SINGLE') && (
+                  <div
+                    onClick={() => setEnableConfidenceSlider(!enableConfidenceSlider)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up ${
+                      enableConfidenceSlider ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                        <Award className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Enable Voter Confidence Slider</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Voters get a 1–100% confidence slider alongside their choice. The analytics will show a <strong className="text-amber-400">Conviction Score</strong> — how strongly your electorate believes in their pick.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableConfidenceSlider ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableConfidenceSlider && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

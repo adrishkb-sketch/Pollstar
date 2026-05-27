@@ -7,7 +7,8 @@ import {
   Vote, ArrowLeft, Loader2, AlertCircle, Calendar, 
   Trash2, ShieldCheck, Download, Check, FileDown, 
   Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
-  Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay
+  Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay,
+  Unlock, Timer
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -114,6 +115,27 @@ export default function PollInsights({ params }: PageProps) {
     }
   };
 
+  const handleToggleGranularVisibility = async (field: string, val: boolean) => {
+    try {
+      const res = await fetch(`/api/polls/${pollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: val }),
+      });
+      if (!res.ok) throw new Error(`${field} update failed`);
+      
+      setPoll((prev: any) => ({
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          [field]: val
+        }
+      }));
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   const handleDeletePoll = async () => {
     if (!confirm('Are you absolutely sure you want to delete this poll and all its recorded votes? This action is permanent.')) {
       return;
@@ -133,6 +155,37 @@ export default function PollInsights({ params }: PageProps) {
   // 4. Trigger print styling (window.print() with Print stylesheet overrides)
   const handleExportPDF = () => {
     window.print();
+  };
+
+  // 5. Grant 30-second OTP Bypass to a specific voter
+  const [bypassCountdowns, setBypassCountdowns] = useState<Record<string, number>>({});
+
+  const handleGrantBypass = async (voterId: string) => {
+    try {
+      const res = await fetch(`/api/polls/${pollId}/grant-bypass`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voterId }),
+      });
+      if (!res.ok) throw new Error('Failed to grant bypass');
+      
+      // Start a local 30-second countdown for this voter
+      setBypassCountdowns((prev) => ({ ...prev, [voterId]: 30 }));
+      const intervalId = setInterval(() => {
+        setBypassCountdowns((prev) => {
+          const current = prev[voterId] ?? 0;
+          if (current <= 1) {
+            clearInterval(intervalId);
+            const copy = { ...prev };
+            delete copy[voterId];
+            return copy;
+          }
+          return { ...prev, [voterId]: current - 1 };
+        });
+      }, 1000);
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   if (loading) {
@@ -633,6 +686,62 @@ export default function PollInsights({ params }: PageProps) {
               {poll.isAnonymous ? 'Strictly Anonymous' : 'Open Registration'}
             </span>
           </div>
+
+          {/* Granular Analytics Toggles */}
+          {poll.isResultPublic && (
+            <div className="col-span-1 sm:col-span-2 border-t border-white/5 pt-6 mt-2 grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-outfit font-bold text-white text-sm">Show Total Stats</h4>
+                  <p className="text-gray-500 text-[10px] mt-0.5">Let voters view aggregate statistics.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('publicShowStats', poll.settings?.publicShowStats === false ? true : false)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    poll.settings?.publicShowStats !== false 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.publicShowStats !== false ? '✓ Visible' : 'Hidden'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-outfit font-bold text-white text-sm">Show Analytics Charts</h4>
+                  <p className="text-gray-500 text-[10px] mt-0.5">Let voters view pie and bar charts.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('publicShowCharts', poll.settings?.publicShowCharts === false ? true : false)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    poll.settings?.publicShowCharts !== false 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.publicShowCharts !== false ? '✓ Visible' : 'Hidden'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-outfit font-bold text-white text-sm">Show Geolocations Map</h4>
+                  <p className="text-gray-500 text-[10px] mt-0.5">Let voters view global voter maps.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('publicShowMaps', poll.settings?.publicShowMaps === false ? true : false)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    poll.settings?.publicShowMaps !== false 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.publicShowMaps !== false ? '✓ Visible' : 'Hidden'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -893,6 +1002,70 @@ export default function PollInsights({ params }: PageProps) {
           />
         )}
       </div>
+
+      {/* Voter Management Panel (OTP Bypass) — Closed polls only */}
+      {isOwner && !poll.isOpenVoting && poll.allowedVoters && poll.allowedVoters.length > 0 && (
+        <div className="space-y-3 print:hidden">
+          <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2">
+            <Unlock className="w-5 h-5 text-amber-400" />
+            <span>Registered Voter Management</span>
+          </h3>
+          <p className="text-gray-500 text-xs">
+            If a high-priority voter cannot access their email to receive the OTP, click <strong className="text-amber-400">Grant 30s Bypass</strong> next to their name. They will have exactly 30 seconds to enter their credentials and be let in without needing an OTP code.
+          </p>
+          <div className="glass-card rounded-2xl border border-white/5 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
+                  <th className="py-3 px-4">#</th>
+                  <th className="py-3 px-4">Identifier</th>
+                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Voted</th>
+                  <th className="py-3 px-4 text-center">OTP Bypass</th>
+                </tr>
+              </thead>
+              <tbody>
+                {poll.allowedVoters.map((voter: any, idx: number) => {
+                  const countdown = bypassCountdowns[voter.id];
+                  return (
+                    <tr key={voter.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
+                      <td className="py-3 px-4 text-gray-500 font-mono">{idx + 1}</td>
+                      <td className="py-3 px-4 font-semibold text-white">{voter.identifier}</td>
+                      <td className="py-3 px-4 text-gray-400">{voter.email}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          voter.voted
+                            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                            : 'bg-white/5 border border-white/10 text-gray-500'
+                        }`}>
+                          {voter.voted ? '✓ Voted' : 'Pending'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {countdown ? (
+                          <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold text-xs">
+                            <Timer className="w-3 h-3 animate-pulse" />
+                            <span>{countdown}s remaining</span>
+                          </div>
+                        ) : voter.voted ? (
+                          <span className="text-gray-600 text-[10px] font-semibold">Already voted</span>
+                        ) : (
+                          <button
+                            onClick={() => handleGrantBypass(voter.id)}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-all"
+                          >
+                            Grant 30s Bypass
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Voter registration logs */}
       <div className="space-y-3">

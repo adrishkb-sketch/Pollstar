@@ -230,7 +230,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { status, isResultPublic, title, description, posterUrl, questionText, options, hideResultsUntilEnd, startTime, endTime } = await req.json();
+    const { 
+      status, isResultPublic, title, description, posterUrl, 
+      questionText, options, hideResultsUntilEnd, startTime, endTime,
+      publicShowStats, publicShowCharts, publicShowMaps
+    } = await req.json();
 
     const updateData: any = {};
     if (status) {
@@ -278,15 +282,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
 
       // Update PollSettings
-      if (hideResultsUntilEnd !== undefined) {
+      if (hideResultsUntilEnd !== undefined || publicShowStats !== undefined || publicShowCharts !== undefined || publicShowMaps !== undefined) {
         await tx.pollSettings.upsert({
           where: { pollId: pollId },
           create: {
             pollId: pollId,
-            hideResultsUntilEnd: !!hideResultsUntilEnd,
+            hideResultsUntilEnd: hideResultsUntilEnd !== undefined ? !!hideResultsUntilEnd : false,
+            publicShowStats: publicShowStats !== undefined ? !!publicShowStats : true,
+            publicShowCharts: publicShowCharts !== undefined ? !!publicShowCharts : true,
+            publicShowMaps: publicShowMaps !== undefined ? !!publicShowMaps : true,
           },
           update: {
-            hideResultsUntilEnd: !!hideResultsUntilEnd,
+            ...(hideResultsUntilEnd !== undefined && { hideResultsUntilEnd: !!hideResultsUntilEnd }),
+            ...(publicShowStats !== undefined && { publicShowStats: !!publicShowStats }),
+            ...(publicShowCharts !== undefined && { publicShowCharts: !!publicShowCharts }),
+            ...(publicShowMaps !== undefined && { publicShowMaps: !!publicShowMaps }),
           },
         });
       }

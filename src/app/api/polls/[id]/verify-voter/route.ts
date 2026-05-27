@@ -125,6 +125,34 @@ export async function POST(
         }
       }
 
+            // Check if Creator granted a temporary 30-second OTP bypass (only for closed, high‑priority polls)
+      if (
+        allowedVoter.bypassOtpUntil &&
+        allowedVoter.bypassOtpUntil > new Date() &&
+        poll.status === 'ENDED' &&
+        poll.description?.match(/\[priority:\s*HIGH\]/i)
+      ) {
+        const voterToken = jwt.sign(
+          {
+            voterId: allowedVoter.id,
+            identifier: allowedVoter.identifier,
+            email: allowedVoter.email,
+            pollId,
+          },
+          JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        return NextResponse.json({
+          success: true,
+          isLowPriority: true, // reuse to skip frontend OTP UI
+          message:
+            'Identity confirmed! Access granted (OTP Bypassed by Poll Creator for high‑priority closed poll).',
+          voterToken,
+          hasVotedAlready: allowedVoter.voted,
+        });
+      }
+
+
       // If low priority, bypass OTP entirely!
       const isLowPriority = poll.description && /\[priority:\s*LOW\]/i.test(poll.description);
       if (isLowPriority) {
