@@ -129,7 +129,6 @@ export async function POST(
       if (
         allowedVoter.bypassOtpUntil &&
         allowedVoter.bypassOtpUntil > new Date() &&
-        poll.status === 'ENDED' &&
         poll.description?.match(/\[priority:\s*HIGH\]/i)
       ) {
         const voterToken = jwt.sign(
@@ -265,6 +264,48 @@ export async function POST(
         voterToken,
         hasVotedAlready: allowedVoter.voted,
       });
+    }
+
+    // Step 3: Check if bypass was granted (used for polling during SOS request)
+    if (step === 'CHECK_BYPASS') {
+      const { email } = body;
+      const allowedVoter = await prisma.allowedVoter.findFirst({
+        where: { pollId, email: { equals: email.trim(), mode: 'insensitive' } },
+      });
+
+      if (!allowedVoter) {
+        return NextResponse.json({ error: 'Voter not found' }, { status: 404 });
+      }
+
+      if (
+        allowedVoter.bypassOtpUntil &&
+        allowedVoter.bypassOtpUntil > new Date()
+      ) {
+        if (allowedVoter.bypassRequested) {
+          await prisma.allowedVoter.update({
+            where: { id: allowedVoter.id },
+            data: { bypassRequested: false }
+          });
+        }
+        const voterToken = jwt.sign(
+          {
+            voterId: allowedVoter.id,
+            identifier: allowedVoter.identifier,
+            email: allowedVoter.email,
+            pollId,
+          },
+          JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        return NextResponse.json({
+          success: true,
+          granted: true,
+          voterToken,
+          hasVotedAlready: allowedVoter.voted,
+        });
+      }
+
+      return NextResponse.json({ success: true, granted: false });
     }
 
     return NextResponse.json({ error: 'Invalid verification step' }, { status: 400 });

@@ -120,6 +120,7 @@ model AllowedVoter {
   email          String
   voted          Boolean   @default(false)
   bypassOtpUntil DateTime?
+  bypassRequested Boolean  @default(false)
 }
 
 model DirectMessage {
@@ -148,6 +149,12 @@ model PollSettings {
   identifierLabel       String  @default("Roll Number")
   confirmer1Label       String  @default("Student Name")
   confirmer2Label       String  @default("Parent Name")
+  enableDragAndDropPodium Boolean @default(false)
+  enableHotStreaks       Boolean @default(false)
+  enableLiveTicker       Boolean @default(false)
+  enableFomoPopups       Boolean @default(false)
+  enableSmartDebrief     Boolean @default(false)
+  leaderboardVisibility  String  @default("HIDDEN")
 }
 
 model AuditLog {

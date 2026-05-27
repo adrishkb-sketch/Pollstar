@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await prisma.allowedVoter.update({
       where: { id: voter.id },
-      data: { bypassOtpUntil },
+      data: { bypassOtpUntil, bypassRequested: false },
     });
 
     return NextResponse.json({ success: true, message: '30s bypass granted', bypassOtpUntil });

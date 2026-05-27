@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
-  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy
+  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy,
+  Zap, Brain, Timer, TrendingUp
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -75,6 +76,12 @@ export default function CreatePoll() {
   const [publicShowStats, setPublicShowStats] = useState(true);
   const [postSurveyAction, setPostSurveyAction] = useState('Thank you for completing this survey!');
   const [enableConfidenceSlider, setEnableConfidenceSlider] = useState(false);
+  const [enableDragAndDropPodium, setEnableDragAndDropPodium] = useState(false);
+  const [enableHotStreaks, setEnableHotStreaks] = useState(false);
+  const [enableLiveTicker, setEnableLiveTicker] = useState(false);
+  const [enableFomoPopups, setEnableFomoPopups] = useState(false);
+  const [enableSmartDebrief, setEnableSmartDebrief] = useState(false);
+  const [leaderboardVisibility, setLeaderboardVisibility] = useState('HIDDEN');
 
   // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
@@ -492,6 +499,12 @@ export default function CreatePoll() {
         publicShowCharts,
         publicShowStats,
         enableConfidenceSlider: questions.some(q => q.type === 'SINGLE') ? enableConfidenceSlider : false,
+        enableDragAndDropPodium,
+        enableHotStreaks,
+        enableLiveTicker,
+        enableFomoPopups,
+        enableSmartDebrief,
+        leaderboardVisibility,
         postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
       },
       allowedVoters: isOpenVoting 
@@ -1580,6 +1593,159 @@ export default function CreatePoll() {
                     </div>
                   </div>
                 )}
+
+                {/* Drag and Drop Podium Toggle - Ranked choice only */}
+                {questions.some((q: any) => q.type === 'RANKED') && (
+                  <div
+                    onClick={() => setEnableDragAndDropPodium(!enableDragAndDropPodium)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                      enableDragAndDropPodium ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Enable Interactive Drag-and-Drop Podiums</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Voters can drag and drop candidates onto 1st, 2nd, and 3rd place pedestals physically for Ranked choice polls.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableDragAndDropPodium ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableDragAndDropPodium && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hot Streak Momentum Toggle */}
+                {questions.some((q: any) => ['SINGLE', 'RANKED'].includes(q.type)) && (
+                  <div
+                    onClick={() => setEnableHotStreaks(!enableHotStreaks)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                      enableHotStreaks ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Enable Hot Streak Momentum</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Highlights choices that are receiving a surge of votes in real-time with visual indicators (glowing states & fire effects 🔥).
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableHotStreaks ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableHotStreaks && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Ticker Toggle */}
+                <div
+                  onClick={() => setEnableLiveTicker(!enableLiveTicker)}
+                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                    enableLiveTicker ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Enable Live Dashboard Ticker</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Display a Wall-Street style ticker on your Creator Dashboard with green/red flashes as candidates gain or lose margin in real-time.
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                    enableLiveTicker ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                  }`}>
+                    {enableLiveTicker && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                </div>
+
+                {/* FOMO Social Proof Toggle */}
+                <div
+                  onClick={() => setEnableFomoPopups(!enableFomoPopups)}
+                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                    enableFomoPopups ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                      <Timer className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Enable Live Activity Toasts (FOMO)</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Encourage voting speed and excitement on the voter panel with live activity notifications (e.g. *"5 people are currently voting"*).
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                    enableFomoPopups ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                  }`}>
+                    {enableFomoPopups && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                </div>
+
+                {/* Smart Debrief Toggle */}
+                <div
+                  onClick={() => setEnableSmartDebrief(!enableSmartDebrief)}
+                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                    enableSmartDebrief ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                      <Brain className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Enable Smart Debrief Commentary</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Generates a comprehensive statistical and analytical commentary of the election results on the public result screen.
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                    enableSmartDebrief ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                  }`}>
+                    {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                </div>
+
+                {/* Leaderboard Visibility Option (Keep it separate from reports) */}
+                <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Leaderboard Visibility</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Define when the live voter leaderboard (who voted first, frequency etc.) should be visible. (Kept independent from statistical reports).
+                      </p>
+                    </div>
+                  </div>
+                  <select
+                    value={leaderboardVisibility}
+                    onChange={(e) => setLeaderboardVisibility(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
+                  >
+                    <option value="HIDDEN" className="bg-slate-900 text-white">Hidden (Never Visible)</option>
+                    <option value="SHOWN_AFTER_VOTE" className="bg-slate-900 text-white">Shown After Vote (Ballot Completion Screen)</option>
+                    <option value="LIVE" className="bg-slate-900 text-white">Live (Always Visible to Electorate)</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}

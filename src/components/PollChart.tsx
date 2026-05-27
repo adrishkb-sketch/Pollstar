@@ -17,6 +17,7 @@ interface PollChartProps {
   stats: Record<string, { text: string; count: number }>;
   votesList?: any[];
   optionsList?: any[];
+  settings?: any;
 }
 
 const COLORS = [
@@ -29,7 +30,7 @@ const COLORS = [
   '#ef4444', // red-500
 ];
 
-export default function PollChart({ questionText, type, stats, votesList = [], optionsList = [] }: PollChartProps) {
+export default function PollChart({ questionId, questionText, type, stats, votesList = [], optionsList = [], settings = {} }: PollChartProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics'>('overview');
 
   // ----------------------------------------------------
@@ -514,7 +515,7 @@ export default function PollChart({ questionText, type, stats, votesList = [], o
                             <span className="text-gray-500 font-mono">#{idx + 1}</span>
                             <span>{cand.name}</span>
                           </span>
-                          <span>{cand.value} {type === 'KNOCKOUT' ? 'points' : 'votes'}</span>
+                          <span>{cand.value} votes</span>
                         </div>
                         <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
                           <div 

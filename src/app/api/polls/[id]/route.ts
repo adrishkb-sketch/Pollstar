@@ -233,7 +233,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { 
       status, isResultPublic, title, description, posterUrl, 
       questionText, options, hideResultsUntilEnd, startTime, endTime,
-      publicShowStats, publicShowCharts, publicShowMaps
+      publicShowStats, publicShowCharts, publicShowMaps,
+      enableConfidenceSlider, postSurveyAction,
+      enableDragAndDropPodium, enableHotStreaks, enableLiveTicker,
+      enableFomoPopups, enableSmartDebrief, leaderboardVisibility
     } = await req.json();
 
     const updateData: any = {};
@@ -282,7 +285,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
 
       // Update PollSettings
-      if (hideResultsUntilEnd !== undefined || publicShowStats !== undefined || publicShowCharts !== undefined || publicShowMaps !== undefined) {
+      const settingsPayload: any = {};
+      if (hideResultsUntilEnd !== undefined) settingsPayload.hideResultsUntilEnd = !!hideResultsUntilEnd;
+      if (publicShowStats !== undefined) settingsPayload.publicShowStats = !!publicShowStats;
+      if (publicShowCharts !== undefined) settingsPayload.publicShowCharts = !!publicShowCharts;
+      if (publicShowMaps !== undefined) settingsPayload.publicShowMaps = !!publicShowMaps;
+      if (enableConfidenceSlider !== undefined) settingsPayload.enableConfidenceSlider = !!enableConfidenceSlider;
+      if (postSurveyAction !== undefined) settingsPayload.postSurveyAction = postSurveyAction;
+      if (enableDragAndDropPodium !== undefined) settingsPayload.enableDragAndDropPodium = !!enableDragAndDropPodium;
+      if (enableHotStreaks !== undefined) settingsPayload.enableHotStreaks = !!enableHotStreaks;
+      if (enableLiveTicker !== undefined) settingsPayload.enableLiveTicker = !!enableLiveTicker;
+      if (enableFomoPopups !== undefined) settingsPayload.enableFomoPopups = !!enableFomoPopups;
+      if (enableSmartDebrief !== undefined) settingsPayload.enableSmartDebrief = !!enableSmartDebrief;
+      if (leaderboardVisibility !== undefined) settingsPayload.leaderboardVisibility = leaderboardVisibility;
+
+      if (Object.keys(settingsPayload).length > 0) {
         await tx.pollSettings.upsert({
           where: { pollId: pollId },
           create: {
@@ -291,13 +308,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             publicShowStats: publicShowStats !== undefined ? !!publicShowStats : true,
             publicShowCharts: publicShowCharts !== undefined ? !!publicShowCharts : true,
             publicShowMaps: publicShowMaps !== undefined ? !!publicShowMaps : true,
+            enableConfidenceSlider: enableConfidenceSlider !== undefined ? !!enableConfidenceSlider : false,
+            postSurveyAction: postSurveyAction || null,
+            enableDragAndDropPodium: enableDragAndDropPodium !== undefined ? !!enableDragAndDropPodium : false,
+            enableHotStreaks: enableHotStreaks !== undefined ? !!enableHotStreaks : false,
+            enableLiveTicker: enableLiveTicker !== undefined ? !!enableLiveTicker : false,
+            enableFomoPopups: enableFomoPopups !== undefined ? !!enableFomoPopups : false,
+            enableSmartDebrief: enableSmartDebrief !== undefined ? !!enableSmartDebrief : false,
+            leaderboardVisibility: leaderboardVisibility || "HIDDEN",
           },
-          update: {
-            ...(hideResultsUntilEnd !== undefined && { hideResultsUntilEnd: !!hideResultsUntilEnd }),
-            ...(publicShowStats !== undefined && { publicShowStats: !!publicShowStats }),
-            ...(publicShowCharts !== undefined && { publicShowCharts: !!publicShowCharts }),
-            ...(publicShowMaps !== undefined && { publicShowMaps: !!publicShowMaps }),
-          },
+          update: settingsPayload,
         });
       }
 

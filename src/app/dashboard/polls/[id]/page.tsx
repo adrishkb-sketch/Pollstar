@@ -34,6 +34,11 @@ export default function PollInsights({ params }: PageProps) {
   // Action status loading
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Live Ticker states
+  const [prevPercentages, setPrevPercentages] = useState<Record<string, number>>({});
+  const [tickerChanges, setTickerChanges] = useState<Record<string, { direction: 'UP' | 'DOWN', diff: string }>>({});
+  const [tickerFlashState, setTickerFlashState] = useState<Record<string, 'UP' | 'DOWN' | null>>({});
+
   // 1. Fetch Poll Details on Mount
   useEffect(() => {
     const fetchPoll = async () => {
@@ -81,6 +86,50 @@ export default function PollInsights({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [poll, pollId]);
 
+  // Live Ticker percentage calculation & change detection hook
+  useEffect(() => {
+    if (!poll || !liveStats || !poll.questions?.[0]) return;
+    const activeQ = poll.questions[0];
+    const qStats = liveStats[activeQ.id] || {};
+    const total = Object.values(qStats).reduce((acc: number, cur: any) => acc + (cur.count || 0), 0) as number;
+    
+    if (total === 0) return;
+
+    const newPercentages: Record<string, number> = {};
+    const changes: Record<string, { direction: 'UP' | 'DOWN', diff: string }> = {};
+    const flashes: Record<string, 'UP' | 'DOWN' | null> = {};
+    let hasChanged = false;
+
+    activeQ.options.forEach((opt: any) => {
+      const optStats = qStats[opt.id] || { count: 0 };
+      const currentPct = (optStats.count / total) * 100;
+      newPercentages[opt.id] = currentPct;
+
+      const prevPct = prevPercentages[opt.id];
+      if (prevPct !== undefined && Math.abs(currentPct - prevPct) > 0.01) {
+        hasChanged = true;
+        const direction = currentPct > prevPct ? 'UP' : 'DOWN';
+        const diff = Math.abs(currentPct - prevPct).toFixed(1);
+        changes[opt.id] = { direction, diff };
+        flashes[opt.id] = direction;
+      }
+    });
+
+    if (hasChanged) {
+      setTickerChanges(prev => ({ ...prev, ...changes }));
+      setTickerFlashState(prev => ({ ...prev, ...flashes }));
+      setPrevPercentages(newPercentages);
+
+      // Reset flash state after 1.5 seconds
+      const timer = setTimeout(() => {
+        setTickerFlashState({});
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else if (Object.keys(prevPercentages).length === 0) {
+      setPrevPercentages(newPercentages);
+    }
+  }, [liveStats, poll, prevPercentages]);
+
   // 3. Status transitions & Visibility Controls
   const handleUpdateStatus = async (newStatus: 'ACTIVE' | 'ENDED') => {
     setActionLoading(true);
@@ -115,7 +164,7 @@ export default function PollInsights({ params }: PageProps) {
     }
   };
 
-  const handleToggleGranularVisibility = async (field: string, val: boolean) => {
+  const handleToggleGranularVisibility = async (field: string, val: any) => {
     try {
       const res = await fetch(`/api/polls/${pollId}`, {
         method: 'PATCH',
@@ -619,6 +668,46 @@ export default function PollInsights({ params }: PageProps) {
         )}
       </div>
 
+      {/* Wall Street Live Ticker */}
+      {poll.settings?.enableLiveTicker && activeQuestion && (
+        <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-4 flex items-center overflow-hidden relative select-none animate-fade-in print:hidden mb-6">
+          <div className="flex items-center space-x-2 border-r border-white/10 pr-4 shrink-0 bg-slate-950/80 backdrop-blur z-10">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest">LIVE TICKER</span>
+          </div>
+          <div className="flex items-center space-x-6 pl-6 overflow-x-auto no-scrollbar py-1">
+            {activeQuestion.options.map((opt: any) => {
+              const optStats = (liveStats[activeQuestion.id] || {})[opt.id] || { count: 0 };
+              const total = Object.values(liveStats[activeQuestion.id] || {}).reduce((acc: number, cur: any) => acc + (cur.count || 0), 0) as number;
+              const percentage = total > 0 ? (optStats.count / total) * 100 : 0;
+              const flash = tickerFlashState[opt.id];
+              const change = tickerChanges[opt.id];
+
+              let bgClass = "bg-white/2 border-white/5";
+              if (flash === 'UP') bgClass = "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-bold scale-105 shadow-[0_0_10px_rgba(16,185,129,0.2)]";
+              if (flash === 'DOWN') bgClass = "bg-red-500/20 border-red-500/40 text-red-400 font-bold scale-105 shadow-[0_0_10px_rgba(239,68,68,0.2)]";
+
+              return (
+                <div 
+                  key={opt.id} 
+                  className={`inline-flex items-center space-x-2 border rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-300 ${bgClass}`}
+                >
+                  <span className="text-gray-300 font-medium truncate max-w-[120px]">{opt.text}</span>
+                  <span className="text-white font-mono">{percentage.toFixed(1)}%</span>
+                  {change && (
+                    <span className={`inline-flex items-center text-[10px] font-extrabold transition-all duration-300 ${
+                      change.direction === 'UP' ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      {change.direction === 'UP' ? '▲' : '▼'} {change.diff}%
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Settings Panel & Aggregates */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="glass-card rounded-2xl p-6 flex items-center justify-between print:border-gray-200 print:bg-white print:text-black">
@@ -742,6 +831,126 @@ export default function PollInsights({ params }: PageProps) {
               </div>
             </div>
           )}
+
+          {/* Beast Mode Options */}
+          <div className="border-t border-white/5 pt-6 mt-6 col-span-1 sm:col-span-2">
+            <h4 className="font-outfit font-extrabold text-amber-400 text-sm mb-4 uppercase tracking-wider flex items-center space-x-2">
+              <Zap className="w-4 h-4 animate-pulse text-amber-400" />
+              <span>Beast Mode Configurations</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {/* Drag and Drop Podium Toggle (Ranked choice only) */}
+              {poll.questions && poll.questions.some((q: any) => q.type === 'RANKED') && (
+                <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                  <div>
+                    <h5 className="font-outfit font-bold text-white text-xs">Drag & Drop Podium</h5>
+                    <p className="text-[10px] text-gray-500">Enable physical 3D podiums.</p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleGranularVisibility('enableDragAndDropPodium', !poll.settings?.enableDragAndDropPodium)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                      poll.settings?.enableDragAndDropPodium
+                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                        : 'bg-white/5 border-white/10 text-gray-400'
+                    }`}
+                  >
+                    {poll.settings?.enableDragAndDropPodium ? 'Active' : 'Disabled'}
+                  </button>
+                </div>
+              )}
+
+              {/* Hot Streak Momentum */}
+              {poll.questions && poll.questions.some((q: any) => ['SINGLE', 'RANKED'].includes(q.type)) && (
+                <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                  <div>
+                    <h5 className="font-outfit font-bold text-white text-xs">Hot Streak Momentum</h5>
+                    <p className="text-[10px] text-gray-500">Show option fire indicators 🔥.</p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleGranularVisibility('enableHotStreaks', !poll.settings?.enableHotStreaks)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                      poll.settings?.enableHotStreaks
+                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                        : 'bg-white/5 border-white/10 text-gray-400'
+                    }`}
+                  >
+                    {poll.settings?.enableHotStreaks ? 'Active' : 'Disabled'}
+                  </button>
+                </div>
+              )}
+
+              {/* Live Ticker */}
+              <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                <div>
+                  <h5 className="font-outfit font-bold text-white text-xs">Live Dashboard Ticker</h5>
+                  <p className="text-[10px] text-gray-500">Show percentage shifts.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('enableLiveTicker', !poll.settings?.enableLiveTicker)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                    poll.settings?.enableLiveTicker
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.enableLiveTicker ? 'Active' : 'Disabled'}
+                </button>
+              </div>
+
+              {/* FOMO Popups */}
+              <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                <div>
+                  <h5 className="font-outfit font-bold text-white text-xs">FOMO Activity Toasts</h5>
+                  <p className="text-[10px] text-gray-500">Encourage voter activity.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('enableFomoPopups', !poll.settings?.enableFomoPopups)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                    poll.settings?.enableFomoPopups
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.enableFomoPopups ? 'Active' : 'Disabled'}
+                </button>
+              </div>
+
+              {/* Smart Debrief */}
+              <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                <div>
+                  <h5 className="font-outfit font-bold text-white text-xs">Smart Debrief</h5>
+                  <p className="text-[10px] text-gray-500">Analytical text results.</p>
+                </div>
+                <button
+                  onClick={() => handleToggleGranularVisibility('enableSmartDebrief', !poll.settings?.enableSmartDebrief)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                    poll.settings?.enableSmartDebrief
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                      : 'bg-white/5 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {poll.settings?.enableSmartDebrief ? 'Active' : 'Disabled'}
+                </button>
+              </div>
+
+              {/* Leaderboard Visibility (dropdown) */}
+              <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2 col-span-1 sm:col-span-2 md:col-span-1">
+                <div>
+                  <h5 className="font-outfit font-bold text-white text-xs">Leaderboard Visibility</h5>
+                  <p className="text-[10px] text-gray-500">Define viewer permission.</p>
+                </div>
+                <select
+                  value={poll.settings?.leaderboardVisibility || 'HIDDEN'}
+                  onChange={(e) => handleToggleGranularVisibility('leaderboardVisibility', e.target.value)}
+                  className="bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-bold text-white outline-none focus:border-amber-500 transition-colors"
+                >
+                  <option value="HIDDEN">Hidden</option>
+                  <option value="SHOWN_AFTER_VOTE">After Vote</option>
+                  <option value="LIVE">Live</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1002,6 +1211,36 @@ export default function PollInsights({ params }: PageProps) {
           />
         )}
       </div>
+
+      {/* SOS Bypass Requests Panel */}
+      {isOwner && !poll.isOpenVoting && poll.allowedVoters && poll.allowedVoters.some((v: any) => v.bypassRequested) && (
+        <div className="space-y-3 print:hidden">
+          <h3 className="font-outfit text-xl font-bold text-amber-500 flex items-center space-x-2 animate-pulse">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span>SOS Bypass Requests</span>
+          </h3>
+          <p className="text-gray-400 text-xs">
+            The following voters have reported being unable to access their emails. Granting a bypass gives them a 30-second window to enter the poll without an OTP.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {poll.allowedVoters.filter((v: any) => v.bypassRequested).map((voter: any) => (
+              <div key={voter.id} className="glass-card rounded-2xl p-4 border border-red-500/30 bg-red-500/5 flex justify-between items-center animate-fade-in shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                <div>
+                  <div className="text-white font-bold text-sm">{voter.identifier}</div>
+                  <div className="text-gray-400 text-xs">{voter.email}</div>
+                </div>
+                <button
+                  onClick={() => handleGrantBypass(voter.id)}
+                  disabled={bypassCountdowns[voter.id] > 0}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-black hover:bg-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.4)] disabled:opacity-50"
+                >
+                  {bypassCountdowns[voter.id] > 0 ? 'Granted' : 'Grant 30s Bypass'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Voter Management Panel (OTP Bypass) — Closed polls only */}
       {isOwner && !poll.isOpenVoting && poll.allowedVoters && poll.allowedVoters.length > 0 && (

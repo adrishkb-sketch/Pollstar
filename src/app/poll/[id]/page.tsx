@@ -49,6 +49,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [otpSendLoading, setOtpSendLoading] = useState(false);
   const [otpSentOnce, setOtpSentOnce] = useState(false);
+  const [bypassStatus, setBypassStatus] = useState<'IDLE' | 'REQUESTING' | 'WAITING' | 'GRANTED'>('IDLE');
 
   // Open voter email limit state
   const [openEmail, setOpenEmail] = useState('');
@@ -69,6 +70,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [votedSuccessfully, setVotedSuccessfully] = useState(false);
   const [flaggedSuspicious, setFlaggedSuspicious] = useState(false);
   const [voteLoading, setVoteLoading] = useState(false);
+  const [fomoToast, setFomoToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
   // Confidence slider state: { [questionId]: number (1-100) }
   const [confidenceValues, setConfidenceValues] = useState<Record<string, number>>({});
@@ -325,7 +327,54 @@ export default function VoterPortal({ params }: PageProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, [otpCooldown]);
+  // FOMO & Social Proof activity toasts effect
+  useEffect(() => {
+    if (!poll?.settings?.enableFomoPopups || votedSuccessfully) return;
 
+    const locations = [
+      'Delhi', 'Mumbai', 'Bangalore', 'Kolkata', 'Chennai', 
+      'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow'
+    ];
+    const actions = [
+      'just submitted their secure ballot!',
+      'is currently selecting their preference...',
+      'just authenticated via OTP.',
+      'is analyzing the candidate details...',
+      'just entered the voting booth.'
+    ];
+
+    const generateFomo = () => {
+      const isCountMessage = Math.random() > 0.6;
+      let msg = '';
+      if (isCountMessage) {
+        const count = Math.floor(Math.random() * 8) + 2;
+        msg = `🔥 ${count} people are currently voting in this poll right now!`;
+      } else {
+        const loc = locations[Math.floor(Math.random() * locations.length)];
+        const act = actions[Math.floor(Math.random() * actions.length)];
+        msg = `⚡ A voter from ${loc} ${act}`;
+      }
+
+      setFomoToast({ message: msg, visible: true });
+
+      // Hide after 4.5 seconds
+      setTimeout(() => {
+        setFomoToast(prev => ({ ...prev, visible: false }));
+      }, 4500);
+    };
+
+    // Run first fomo after 6 seconds
+    const initialTimer = setTimeout(generateFomo, 6000);
+
+    const interval = setInterval(() => {
+      generateFomo();
+    }, Math.floor(Math.random() * 8000) + 14000); // 14-22s interval
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [poll, votedSuccessfully]);
   // 2. Real-Time Serverless Polling Connection
   useEffect(() => {
     if (!poll || !poll.isResultPublic) return;
@@ -502,6 +551,60 @@ export default function VoterPortal({ params }: PageProps) {
       setOtpLoading(false);
     }
   };
+
+  // SOS Request Bypass Logic
+  const handleRequestBypass = async () => {
+    setBypassStatus('REQUESTING');
+    try {
+      const res = await fetch(`/api/polls/${pollId}/request-bypass`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: voterEmail }),
+      });
+      if (res.ok) {
+        setBypassStatus('WAITING');
+      } else {
+        setBypassStatus('IDLE');
+        setOtpError('Failed to request bypass. Please try again.');
+      }
+    } catch (e) {
+      setBypassStatus('IDLE');
+      setOtpError('Failed to request bypass.');
+    }
+  };
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (bypassStatus === 'WAITING') {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ step: 'CHECK_BYPASS', email: voterEmail }),
+          });
+          const data = await res.json();
+          if (data.success && data.granted) {
+            setVerifiedVoter(true);
+            setVoterToken(data.voterToken);
+            if (data.hasVotedAlready || (window as any)._hasVotedAlready) {
+              setVotedSuccessfully(true);
+            }
+            setShowOtpPopup(false);
+            setBypassStatus('GRANTED');
+            
+            // Load standard captcha refresh
+            setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+            setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+            setCaptchaAnswer('');
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [bypassStatus, pollId, voterEmail]);
 
   // ────────────────────────────────────────────────────────
   // CLICK-TO-RANK PRIORITY SELECTOR
@@ -1100,6 +1203,28 @@ export default function VoterPortal({ params }: PageProps) {
                 )}
               </div>
 
+              {/* SOS Bypass Request Section */}
+              <div className="text-center pb-2">
+                {bypassStatus === 'IDLE' && (
+                  <button
+                    type="button"
+                    onClick={handleRequestBypass}
+                    className="text-xs text-red-400 hover:text-red-300 font-bold transition-all"
+                  >
+                    Can't access email? Request OTP Bypass
+                  </button>
+                )}
+                {bypassStatus === 'REQUESTING' && (
+                  <span className="text-xs text-amber-400 font-bold animate-pulse">Sending request...</span>
+                )}
+                {bypassStatus === 'WAITING' && (
+                  <div className="flex flex-col items-center justify-center space-y-1">
+                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                    <span className="text-xs text-amber-400 font-bold">Request sent! Waiting for creator approval...</span>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -1181,7 +1306,8 @@ export default function VoterPortal({ params }: PageProps) {
 
                     {/* SINGLE CHOICE LAYOUT */}
                     {q.type === 'SINGLE' && (
-                      <div className="grid grid-cols-1 gap-3">
+                      <>
+                        <div className="grid grid-cols-1 gap-3">
                         {q.options.map((opt: any) => {
                           const isSelected = ans === opt.id;
                           return (
@@ -1231,6 +1357,7 @@ export default function VoterPortal({ params }: PageProps) {
                           </div>
                         </div>
                       )}
+                      </>
                     )}
 
 
@@ -1612,6 +1739,18 @@ export default function VoterPortal({ params }: PageProps) {
       {votedSuccessfully && !poll.isResultPublic && (
         <div className="p-5 rounded-2xl bg-white/2 border border-white/5 text-center text-gray-500 text-xs">
           Live statistics and maps are set to private by the poll administrator.
+        </div>
+      )}
+      {/* FOMO & Social Proof Activity Toast */}
+      {poll?.settings?.enableFomoPopups && fomoToast.visible && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/90 backdrop-blur-md border border-amber-500/20 text-white rounded-2xl px-4 py-3 shadow-[0_10px_30px_rgba(245,158,11,0.15)] flex items-center space-x-3 max-w-sm animate-fade-in-up duration-300">
+          <div className="shrink-0 p-2 bg-amber-500/10 rounded-xl text-amber-400">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+            </span>
+          </div>
+          <p className="text-xs font-bold font-outfit text-gray-200 leading-normal">{fomoToast.message}</p>
         </div>
       )}
     </div>

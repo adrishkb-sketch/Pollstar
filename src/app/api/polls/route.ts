@@ -169,6 +169,12 @@ export async function POST(req: Request) {
           identifierLabel: body.identifierLabel || 'Roll Number',
           confirmer1Label: body.confirmer1Label || 'Student Name',
           confirmer2Label: body.confirmer2Label || 'Parent Name',
+          enableDragAndDropPodium: !!settings?.enableDragAndDropPodium,
+          enableHotStreaks: !!settings?.enableHotStreaks,
+          enableLiveTicker: !!settings?.enableLiveTicker,
+          enableFomoPopups: !!settings?.enableFomoPopups,
+          enableSmartDebrief: !!settings?.enableSmartDebrief,
+          leaderboardVisibility: settings?.leaderboardVisibility || "HIDDEN",
         },
       });
 
