@@ -4,45 +4,65 @@ import { Shield, BarChart3, Globe, Sparkles, ArrowRight, Zap, TrendingUp, Trophy
 export default function Features() {
   const features = [
     {
-      icon: <Shield className="w-8 h-8 text-emerald-400" />, // military grade shield
-      title: 'Military‑Grade Fraud Shield',
-      description: 'One‑time SMTP OTP verification, device fingerprinting, IP blocking and ISP detection ensure closed‑voter integrity.',
+      icon: <Shield className="w-8 h-8 text-emerald-400" />,
+      title: 'Secure Voter Protection',
+      description: 'Voters verify their identity with a secure code. We block duplicate votes from the same device or network to prevent cheating.',
     },
     {
-      icon: <BarChart3 className="w-8 h-8 text-purple-400" />, // live charts
-      title: 'Live Socket.io Charts',
-      description: 'Instant real‑time vote flow visualised with Recharts – pie charts, trend lines and Borda‑point distributions.',
+      icon: <BarChart3 className="w-8 h-8 text-purple-400" />,
+      title: 'Live Results Feed',
+      description: 'Watch votes flow in instantly. See results update in real-time with clean, interactive charts and priority lists.',
     },
     {
-      icon: <Globe className="w-8 h-8 text-cyan-400" />, // dynamic map
-      title: 'Dynamic Geolocation Map',
-      description: 'Leaflet map plots voter coordinates live, highlighting suspicious devices and ISP clusters.',
+      icon: <Globe className="w-8 h-8 text-cyan-400" />,
+      title: 'Live Geolocation Map',
+      description: 'See where your votes are coming from on a live map, and quickly spot any suspicious duplicate voting locations.',
     },
     {
-      icon: <Zap className="w-8 h-8 text-amber-400" />, // live ticker
-      title: 'Live Ticker (Dashboard)',
-      description: 'Wall‑Street style ticker flashes green/red percentage gains as votes surge, visible when enabled.',
+      icon: <Zap className="w-8 h-8 text-amber-400" />,
+      title: 'Live Vote Ticker',
+      description: 'Shows a scrolling ticker at the top of your screen that flashes green or red as options gain or lose votes.',
     },
     {
-      icon: <TrendingUp className="w-8 h-8 text-orange-400" />, // hot streaks
-      title: 'Hot‑Streak Momentum Indicators',
-      description: 'Options that receive a rapid vote surge glow with a flame icon and neon orange pulse.',
+      icon: <TrendingUp className="w-8 h-8 text-orange-400" />,
+      title: 'Viral Vote Indicators',
+      description: 'Any option that suddenly gets a rush of votes glows with a hot fire badge to build excitement.',
     },
     {
-      icon: <Trophy className="w-8 h-8 text-amber-400" />, // drag‑and‑drop podium
-      title: 'Interactive Drag‑and‑Drop Podium (Ranked)',
-      description: 'Beautiful spring‑animated 1st‑2nd‑3rd podium for ranked‑choice polls when enabled.',
+      icon: <Trophy className="w-8 h-8 text-amber-400" />,
+      title: 'Rank choices on a Podium',
+      description: 'Voters can physically drag their favorite choices onto a 1st, 2nd, and 3rd place podium.',
     },
     {
-      icon: <ArrowRightCircle className="w-8 h-8 text-emerald-400" />, // smart debrief
-      title: 'Smart Debrief (Post‑Poll)',
-      description: 'Analytical commentary displayed on the completion screen – no mention of AI.',
+      icon: <ArrowRightCircle className="w-8 h-8 text-emerald-400" />,
+      title: 'Smart Result Summary',
+      description: 'After the poll ends, get a simple, easy-to-read text summary explaining who won, by how much, and what stood out.',
     },
     {
-      icon: <Sparkles className="w-8 h-8 text-emerald-300" />, // leaderboard visibility
-      title: 'Leaderboard Visibility',
-      description: 'Creator can choose Hidden, Shown After Vote, or Live (always visible) – kept separate from reports.',
+      icon: <Sparkles className="w-8 h-8 text-emerald-300" />,
+      title: 'Voter Leaderboard',
+      description: 'Choose whether voters can see a live leaderboard showing who voted first and how active they were.',
     },
+    {
+      icon: <Zap className="w-8 h-8 text-indigo-400" />,
+      title: 'Quadratic Voting',
+      description: 'Voters split a budget of points among choices. Buying more votes for the same option costs exponentially more points.',
+    },
+    {
+      icon: <Trophy className="w-8 h-8 text-purple-400" />,
+      title: 'Playoff Bracket Guessing',
+      description: 'Voters can guess the entire knockout tournament bracket before matches start to earn prediction points.',
+    },
+    {
+      icon: <Globe className="w-8 h-8 text-pink-400" />,
+      title: 'Opinion Chatbox',
+      description: 'Voters can discuss options in a live chat sidebar where comments get automatically flagged with sentiment emojis.',
+    },
+    {
+      icon: <Shield className="w-8 h-8 text-cyan-400" />,
+      title: 'Double Elimination',
+      description: 'Knockout tournament options must lose twice before being eliminated, giving underdogs a second chance.',
+    }
   ];
 
   return (

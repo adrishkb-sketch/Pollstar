@@ -97,6 +97,27 @@ export async function POST(
       }
     }
 
+    // Validate Quadratic Voting
+    for (const question of poll.questions.filter((q) => q.type === 'SINGLE')) {
+      if (poll.settings?.enableQuadraticVoting) {
+        const qvAlloc = answers[question.id];
+        if (typeof qvAlloc !== 'object' || qvAlloc === null) {
+          return NextResponse.json({ error: 'Quadratic voting allocation must be a valid distribution object.' }, { status: 400 });
+        }
+        let sumSquaredPoints = 0;
+        for (const option of question.options) {
+          const votes = qvAlloc[option.id] || 0;
+          if (!Number.isInteger(votes) || votes < 0) {
+            return NextResponse.json({ error: 'Vote allocation counts must be non-negative integers.' }, { status: 400 });
+          }
+          sumSquaredPoints += votes * votes;
+        }
+        if (sumSquaredPoints > 100) {
+          return NextResponse.json({ error: `Quadratic voting allocation of ${sumSquaredPoints} points exceeds the 100 points budget.` }, { status: 400 });
+        }
+      }
+    }
+
     // Resolve client IP and ISP metadata
     const ipAddress = getClientIP(req);
     const geoData = await lookupIP(ipAddress);
@@ -345,9 +366,17 @@ export async function POST(
                     stats[qId][optId].count += numOpts - idx;
                   }
                 });
-              } else if (question.type === 'SINGLE' && typeof val === 'string') {
-                if (stats[qId] && stats[qId][val]) {
-                  stats[qId][val].count += 1;
+              } else if (question.type === 'SINGLE') {
+                if (typeof val === 'string') {
+                  if (stats[qId] && stats[qId][val]) {
+                    stats[qId][val].count += 1;
+                  }
+                } else if (typeof val === 'object' && val !== null) {
+                  Object.entries(val).forEach(([optId, votesCount]) => {
+                    if (stats[qId] && stats[qId][optId]) {
+                      stats[qId][optId].count += Number(votesCount) || 0;
+                    }
+                  });
                 }
               } else if (question.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
                 if (stats[qId] && stats[qId][val.winner]) {

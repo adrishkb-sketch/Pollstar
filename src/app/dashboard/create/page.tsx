@@ -101,8 +101,35 @@ export default function CreatePoll() {
   const [rankedCompletenessRule, setRankedCompletenessRule] = useState('PARTIAL');
 
   const hasRankedQuestion = questions.some((q: any) => q.type === 'RANKED');
+  const hasSingleQuestion = questions.some((q: any) => q.type === 'SINGLE');
+  const hasKnockoutQuestion = questions.some((q: any) => q.type === 'KNOCKOUT');
+
   const toggleRankedFeature = (key: string) => {
     setRankedFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Single Choice advanced features
+  const [singleFeatures, setSingleFeatures] = useState<Record<string, boolean>>({
+    enableQuadraticVoting: false,
+    enableAiProjection: false,
+    enableCohortCrossTab: false,
+    enableSentimentChat: false,
+    enableSwingMap: false,
+  });
+  const toggleSingleFeature = (key: string) => {
+    setSingleFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Knockout advanced features
+  const [knockoutFeatures, setKnockoutFeatures] = useState<Record<string, boolean>>({
+    enableBracketPredictions: false,
+    enableDoubleElimination: false,
+    enableUnderdogTracker: false,
+    enableOptionStatsCards: false,
+    enableSuddenDeath: false,
+  });
+  const toggleKnockoutFeature = (key: string) => {
+    setKnockoutFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   // Initialize date defaults in Indian Standard Time (IST)
@@ -528,6 +555,8 @@ export default function CreatePoll() {
         enableSmartDebrief,
         leaderboardVisibility,
         ...Object.fromEntries(Object.entries(rankedFeatures).map(([key, enabled]) => [key, hasRankedQuestion ? enabled : false])),
+        ...Object.fromEntries(Object.entries(singleFeatures).map(([key, enabled]) => [key, hasSingleQuestion ? enabled : false])),
+        ...Object.fromEntries(Object.entries(knockoutFeatures).map(([key, enabled]) => [key, hasKnockoutQuestion ? enabled : false])),
         rankedTieBreakerRule,
         rankedCompletenessRule,
         postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
@@ -565,7 +594,7 @@ export default function CreatePoll() {
   };
 
   const stepsList = [
-    'Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Finalize'
+    'Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'
   ];
 
   return (
@@ -598,7 +627,7 @@ export default function CreatePoll() {
         {/* Top Progress bar */}
         <div className="space-y-4">
           <div className="flex justify-between items-center text-xs text-gray-500 uppercase tracking-widest font-bold">
-            <span>Step {currentStep} of 8</span>
+            <span>Step {currentStep} of 9</span>
             <span className="text-indigo-400">{stepsList[currentStep - 1]}</span>
           </div>
           <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden flex">
@@ -870,9 +899,9 @@ export default function CreatePoll() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Single Choice Selection</h3>
+                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Single Choice</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Voters select exactly one choice from the options list. Standard first-past-the-post rules.
+                      Voters pick exactly one option. Whoever gets the most votes wins. Simple and fast.
                     </p>
                   </div>
                 </div>
@@ -899,9 +928,9 @@ export default function CreatePoll() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Ranked Choice (Borda Count)</h3>
+                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Ranked Choice (Points-Based)</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Voters rank options in order of priority. Scoring weights are applied mathematically.
+                      Voters rank all options from favourite to least favourite. 1st place gets the most points, last gets the fewest. The option with the most total points wins.
                     </p>
                   </div>
                 </div>
@@ -930,7 +959,7 @@ export default function CreatePoll() {
                   <div>
                     <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Knockout Tournament</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Automated tournament brackets. Voters go head-to-head through randomized pairings.
+                      Options face off one-on-one in tournament brackets, like a sports competition. Voters pick the winner of each matchup. Last one standing wins!
                     </p>
                   </div>
                 </div>
@@ -1261,8 +1290,8 @@ export default function CreatePoll() {
           {currentStep === 5 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Fraud Prevention</h2>
-                <p className="text-gray-400 text-sm mt-1">Protect the integrity of the vote with advanced device restrictions.</p>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Stop Cheating</h2>
+                <p className="text-gray-400 text-sm mt-1">Add protections to keep votes fair and stop anyone from voting more than once.</p>
               </div>
 
               <div className="space-y-4 pt-4">
@@ -1281,9 +1310,9 @@ export default function CreatePoll() {
                             : 'border-white/5 bg-white/2 text-gray-400 hover:border-white/10'
                         }`}
                       >
-                        <span className="block font-bold text-sm">🔴 High Priority</span>
+                        <span className="block font-bold text-sm">🔴 High Security</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Requires secure 6-digit email OTP verification both for voting and logging in to check live results.
+                          Voters must enter a 6-digit email code before they can vote or see live results.
                         </span>
                       </div>
                       <div
@@ -1294,9 +1323,9 @@ export default function CreatePoll() {
                             : 'border-white/5 bg-white/2 text-gray-400 hover:border-white/10'
                         }`}
                       >
-                        <span className="block font-bold text-sm">🟢 Low Priority</span>
+                        <span className="block font-bold text-sm">🟢 Easy Access</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          OTP verification is disabled. Voters can directly cast their vote and access/view results instantly without wait.
+                          No email code needed. Voters go straight to the ballot and can see results instantly.
                         </span>
                       </div>
                     </div>
@@ -1315,9 +1344,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Limit One Vote Per User (Email)</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per Person (by Email)</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Compulsory email checking prevents voters from submitting multiple times with different email aliases.
+                        Each person can only vote once using their email. If they try again with a different email alias, it won't count.
                       </p>
                     </div>
                   </div>
@@ -1340,9 +1369,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Limit One Vote Per Device (IP)</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per Device</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Tracks and warns if the same computer or mobile device attempts to cast multiple votes, flagging duplicates as suspicious.
+                        Spots if the same phone or computer tries to vote more than once and flags those votes as suspicious.
                       </p>
                     </div>
                   </div>
@@ -1365,9 +1394,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Limit One Vote Per Network (ISP)</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per WiFi Network</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Prevents ballot stuffing by tracking internet service providers. Restricts multiple votes from identical local WiFi nodes.
+                        Stops multiple votes from the same internet connection or WiFi hotspot.
                       </p>
                     </div>
                   </div>
@@ -1385,8 +1414,8 @@ export default function CreatePoll() {
           {currentStep === 6 && pollType === 'POLL' && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Anonymity Mode</h2>
-                <p className="text-gray-400 text-sm mt-1">Configure whether voter identities are visible on dashboards.</p>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Voter Privacy</h2>
+                <p className="text-gray-400 text-sm mt-1">Decide if you want to know who voted for what, or keep everything fully anonymous.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
@@ -1406,9 +1435,9 @@ export default function CreatePoll() {
                     {isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />}
                   </div>
                   <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Strictly Anonymous Voting</h3>
+                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Fully Anonymous</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Voter choices are unlinked from their emails and credentials on creator reports. Total privacy guaranteed.
+                      Voter choices are never linked to names or emails in your reports. Completely private. No one can see who voted what.
                     </p>
                   </div>
                 </div>
@@ -1429,9 +1458,9 @@ export default function CreatePoll() {
                     {!isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />}
                   </div>
                   <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Known Voting Session</h3>
+                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Tracked Voting</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Voter details (Roll number, email) are actively logged alongside their cast choices, fully visible on reports.
+                      Voter names and emails are recorded next to their choices in your reports. You can see exactly who voted for what.
                     </p>
                   </div>
                 </div>
@@ -1443,8 +1472,8 @@ export default function CreatePoll() {
           {currentStep === 7 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Election Timeline</h2>
-                <p className="text-gray-400 text-sm mt-1">Specify precisely when this poll is open for casting votes.</p>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Set the Schedule</h2>
+                <p className="text-gray-400 text-sm mt-1">Choose exactly when your poll opens and when it closes.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
@@ -1481,8 +1510,8 @@ export default function CreatePoll() {
           {currentStep === 8 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Final Details</h2>
-                <p className="text-gray-400 text-sm mt-1">Confirm results visibility settings before publishing.</p>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Results &amp; Visibility</h2>
+                <p className="text-gray-400 text-sm mt-1">Choose what voters see and when they can see it.</p>
               </div>
 
               <div className="space-y-4 pt-4">
@@ -1504,9 +1533,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Hide Live Results From Voters</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Keep Results Hidden Until Poll Ends</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Results are kept hidden from voters until the poll schedule ends, ensuring absolute fairness.
+                        Voters can't see any results while voting is happening. Results only appear after the poll officially closes.
                       </p>
                     </div>
                   </div>
@@ -1535,9 +1564,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Make Detailed Analytics Public</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Let Anyone See the Full Results</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Once checked, voters can see real-time charts, map geolocation clusters, and full report cards.
+                        When turned on, anyone with the link can see vote charts, maps, and totals — no login needed.
                       </p>
                     </div>
                   </div>
@@ -1605,9 +1634,9 @@ export default function CreatePoll() {
                         <Award className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Enable Voter Confidence Slider</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Ask Voters How Confident They Are</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          Voters get a 1–100% confidence slider alongside their choice. The analytics will show a <strong className="text-amber-400">Conviction Score</strong> — how strongly your electorate believes in their pick.
+                          After picking a choice, voters move a slider from 1–100 to show how sure they are. You'll see a <strong className="text-amber-400">Conviction Score</strong> in your results showing the overall certainty level.
                         </p>
                       </div>
                     </div>
@@ -1632,9 +1661,9 @@ export default function CreatePoll() {
                         <Trophy className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Enable Interactive Drag-and-Drop Podiums</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Let Voters Drag Options to a Podium</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          Voters can drag and drop candidates onto 1st, 2nd, and 3rd place pedestals physically for Ranked choice polls.
+                          Instead of picking numbers, voters physically drag their top picks onto a Gold, Silver, and Bronze podium for a hands-on ranking experience.
                         </p>
                       </div>
                     </div>
@@ -1659,9 +1688,9 @@ export default function CreatePoll() {
                         <Zap className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Enable Hot Streak Momentum</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Show Which Option Is Going Viral 🔥</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          Highlights choices that are receiving a surge of votes in real-time with visual indicators (glowing states & fire effects 🔥).
+                          A glowing fire badge appears on whichever option is suddenly getting a rush of new votes. Perfect for keeping energy high at live events!
                         </p>
                       </div>
                     </div>
@@ -1685,9 +1714,9 @@ export default function CreatePoll() {
                       <TrendingUp className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Enable Live Dashboard Ticker</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Add a Live Score Ticker to Dashboard</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Display a Wall-Street style ticker on your Creator Dashboard with green/red flashes as candidates gain or lose margin in real-time.
+                        Adds a scrolling live feed to your dashboard — like a stock market ticker. Green means an option is gaining votes, red means it's dropping.
                       </p>
                     </div>
                   </div>
@@ -1710,9 +1739,9 @@ export default function CreatePoll() {
                       <Brain className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Enable Smart Debrief Commentary</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Auto-Generate a Result Summary</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Generates a comprehensive statistical and analytical commentary of the election results on the public result screen.
+                        Automatically writes a short, plain-English breakdown of your results after the poll ends — who won, by how much, and what stood out.
                       </p>
                     </div>
                   </div>
@@ -1723,45 +1752,125 @@ export default function CreatePoll() {
                   </div>
                 </div>
 
-                {hasRankedQuestion && (
-                  <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 mt-4 animate-fade-in-up">
+                {/* Leaderboard Visibility Option (Keep it separate from reports) */}
+                <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Ranked Poll Beast Features</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Leaderboard Visibility</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Choose the advanced ordered-poll modules to include in voting rules and result analytics.
+                        Define when the live voter leaderboard (who voted first, frequency etc.) should be visible. (Kept independent from statistical reports).
+                      </p>
+                    </div>
+                  </div>
+                  <select
+                    value={leaderboardVisibility}
+                    onChange={(e) => setLeaderboardVisibility(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
+                  >
+                    <option value="HIDDEN" className="bg-slate-900 text-white">Hidden (Never Visible)</option>
+                    <option value="SHOWN_AFTER_VOTE" className="bg-slate-900 text-white">Shown After Vote (Ballot Completion Screen)</option>
+                    <option value="LIVE" className="bg-slate-900 text-white">Live (Always Visible to Electorate)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 9: Advanced Features */}
+          {currentStep === 9 && (
+            <div className="space-y-6 animate-fade-in-up">
+              <div>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Advanced Features</h2>
+                <p className="text-gray-400 text-sm mt-1">Turn on special analytics and tools for your poll type.</p>
+              </div>
+
+              <div className="space-y-6 pt-4">
+                {/* Single Choice features */}
+                {hasSingleQuestion && (
+                  <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-4 animate-fade-in-up">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Single Choice Extras</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Add advanced options to your single choice questions.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        ['enablePreferenceFlowMap', 'Preference Flow Map'],
-                        ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix'],
-                        ['enableConsensusScore', 'Consensus Score'],
-                        ['enablePolarizationDetector', 'Polarization Detector'],
-                        ['enableKingmakerAnalysis', 'Kingmaker Analysis'],
-                        ['enableRankHeatmap', 'Rank Distribution Heatmap'],
-                        ['enableRankConfidence', 'Voter Confidence by Rank'],
-                        ['enableScenarioSimulator', 'Scenario Simulator'],
-                        ['enableTieBreakerEngine', 'Tie-Breaker Engine'],
-                        ['enableRankCompleteness', 'Rank Completeness Rules'],
-                        ['enablePodiumResults', 'Podium Result Mode'],
-                        ['enableCoalitionFinder', 'Preference Coalition Finder'],
-                        ['enableMinorityProtection', 'Minority Protection Score'],
-                        ['enableAuditReplay', 'Audit Replay'],
-                      ].map(([key, label]) => (
+                        ['enableQuadraticVoting', 'Quadratic Voting (Point-based)', 'Voters get points to split among choices. Buying more votes for one option costs exponentially more.'],
+                        ['enableAiProjection', 'AI Vote Projection', 'Predicts the final vote outcome early on by analyzing voting speed and patterns.'],
+                        ['enableCohortCrossTab', 'Voter Group Comparison', 'Filters and shows results by different groups like age, location, or department.'],
+                        ['enableSentimentChat', 'Opinion Chatbox', 'Adds a live chat sidebar where voter comments are automatically marked with feeling/sentiment tags.'],
+                        ['enableSwingMap', 'Voter Shift Map', 'Shows how voter preferences shift from one choice to another over time.']
+                      ].map(([key, label, desc]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => toggleSingleFeature(key)}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                            singleFeatures[key] ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full gap-3">
+                            <span className="text-xs font-bold text-white">{label}</span>
+                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              singleFeatures[key] ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                            }`}>
+                              {singleFeatures[key] && <Check className="w-3 h-3" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ranked Choice features */}
+                {hasRankedQuestion && (
+                  <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">Ranked Choice Extras</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Add advanced voting modules and deep analytics to your ranked questions.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        ['enablePreferenceFlowMap', 'Preference Flow Map', 'Shows where votes go when lower-ranked options get eliminated.'],
+                        ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix', 'A table showing how every choice fares head-to-head against every other.'],
+                        ['enableConsensusScore', 'Consensus Score', 'Finds the choice that most voters find acceptable, even if it is not their first choice.'],
+                        ['enablePolarizationDetector', 'Polarization Detector', 'Flags options that voters either love (1st place) or hate (last place).'],
+                        ['enableKingmakerAnalysis', 'Kingmaker Analysis', 'Identifies which eliminated option had the most power to decide the winner.'],
+                        ['enableRankHeatmap', 'Rank Distribution Heatmap', 'A map showing exactly how many 1st, 2nd, and 3rd place votes each choice got.'],
+                        ['enableRankConfidence', 'Voter Confidence by Rank', 'Measures how sure voters were about their choices at each rank level.'],
+                        ['enableScenarioSimulator', 'Scenario Simulator', 'Lets you temporarily remove a choice to see how it changes the winner.'],
+                        ['enableTieBreakerEngine', 'Tie-Breaker Engine', 'Uses custom rules to resolve close ties.'],
+                        ['enableRankCompleteness', 'Rank Completeness Rules', 'Sets whether voters must rank all choices or just their top ones.'],
+                        ['enablePodiumResults', 'Podium Result Mode', 'Displays the top three choices on a gold, silver, and bronze podium.'],
+                        ['enableCoalitionFinder', 'Preference Coalition Finder', 'Finds groups of voters who made similar top ranking patterns.'],
+                        ['enableMinorityProtection', 'Minority Protection Score', 'Checks if choices favored by smaller groups were completely ignored.'],
+                        ['enableAuditReplay', 'Audit Replay', 'Lets you review and replay the elimination rounds step-by-step.']
+                      ].map(([key, label, desc]) => (
                         <button
                           key={key}
                           type="button"
                           onClick={() => toggleRankedFeature(key)}
-                          className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 ${
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
                             rankedFeatures[key] ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
                           }`}
                         >
-                          <span className="text-xs font-bold text-white">{label}</span>
-                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                            rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                          }`}>
-                            {rankedFeatures[key] && <Check className="w-3 h-3" />}
-                          </span>
+                          <div className="flex items-center justify-between w-full gap-3">
+                            <span className="text-xs font-bold text-white">{label}</span>
+                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                            }`}>
+                              {rankedFeatures[key] && <Check className="w-3 h-3" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
                         </button>
                       ))}
                     </div>
@@ -1792,29 +1901,52 @@ export default function CreatePoll() {
                   </div>
                 )}
 
-                {/* Leaderboard Visibility Option (Keep it separate from reports) */}
-                <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
-                      <Users className="w-5 h-5" />
-                    </div>
+                {/* Knockout features */}
+                {hasKnockoutQuestion && (
+                  <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Leaderboard Visibility</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Knockout Extras</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Define when the live voter leaderboard (who voted first, frequency etc.) should be visible. (Kept independent from statistical reports).
+                        Add bracket guessing and other game-like features to your knockout tournament questions.
                       </p>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        ['enableBracketPredictions', 'Playoff Bracket Guessing', 'Voters can guess the tournament bracket winner before matches start, earning prediction points.'],
+                        ['enableDoubleElimination', 'Double Elimination', 'Options must lose twice before being knocked out, giving underdogs a second chance.'],
+                        ['enableUnderdogTracker', 'Underdog Tracker', 'Highlights matches where the lower-seeded option beats the favorite.'],
+                        ['enableOptionStatsCards', 'Option Factsheets', 'Displays key stats, player cards, or descriptions for each option directly on the ballot.'],
+                        ['enableSuddenDeath', 'Sudden Death Overtime', 'Instantly breaks tie matches using a quick voter shootout or coin toss.']
+                      ].map(([key, label, desc]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => toggleKnockoutFeature(key)}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                            knockoutFeatures[key] ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full gap-3">
+                            <span className="text-xs font-bold text-white">{label}</span>
+                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              knockoutFeatures[key] ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                            }`}>
+                              {knockoutFeatures[key] && <Check className="w-3 h-3" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <select
-                    value={leaderboardVisibility}
-                    onChange={(e) => setLeaderboardVisibility(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
-                  >
-                    <option value="HIDDEN" className="bg-slate-900 text-white">Hidden (Never Visible)</option>
-                    <option value="SHOWN_AFTER_VOTE" className="bg-slate-900 text-white">Shown After Vote (Ballot Completion Screen)</option>
-                    <option value="LIVE" className="bg-slate-900 text-white">Live (Always Visible to Electorate)</option>
-                  </select>
-                </div>
+                )}
+
+                {/* If none of the advanced features are applicable */}
+                {!hasSingleQuestion && !hasRankedQuestion && !hasKnockoutQuestion && (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    No advanced features are available for the selected question types.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1837,7 +1969,7 @@ export default function CreatePoll() {
           </button>
 
           <div className="flex items-center space-x-3">
-            {currentStep < 8 ? (
+            {currentStep < 9 ? (
               <button
                 type="button"
                 onClick={nextStep}

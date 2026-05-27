@@ -76,9 +76,7 @@ export default function Home() {
         </h1>
 
         <p className="text-gray-400 text-base sm:text-xl max-w-3xl mb-12 leading-relaxed">
-          Create highly secure, real-time, and mobile-friendly polls. Experience premium 
-          glassmorphic analytical dashboards, Borda-count ranked choices, closed-voter SMTP verifications, 
-          and dynamic map geolocation logs.
+          Create highly secure, real-time, and mobile-friendly polls. See live result charts, track voter groups, count ranked choices, and view voter maps instantly.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20 w-full sm:w-auto">
@@ -118,9 +116,9 @@ export default function Home() {
             <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 mb-6">
               <Shield className="w-8 h-8" />
             </div>
-            <h3 className="font-outfit text-xl font-bold text-white mb-3">Military-Grade Fraud Shield</h3>
+            <h3 className="font-outfit text-xl font-bold text-white mb-3">Secure Voter Protection</h3>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Verify closed voters using one-time verification passwords (SMTP OTPs), block device duplicates (IPs), and prevent regional network manipulation (ISPs).
+              Verify voters with secure one-time codes, block duplicate votes from the same device, and prevent location spoofing.
             </p>
           </div>
 
@@ -128,9 +126,9 @@ export default function Home() {
             <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20 text-purple-400 mb-6">
               <BarChart3 className="w-8 h-8" />
             </div>
-            <h3 className="font-outfit text-xl font-bold text-white mb-3">Live Socket.io Charts</h3>
+            <h3 className="font-outfit text-xl font-bold text-white mb-3">Live Results Feed</h3>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Watch votes flow instantly. Renders beautiful responsive Recharts pie charts, trend graphs, and Borda point distribution stats.
+              Watch votes roll in live. See results update instantly in clean, easy-to-read charts and tables.
             </p>
           </div>
 
@@ -138,9 +136,9 @@ export default function Home() {
             <div className="p-4 bg-cyan-500/10 rounded-2xl border border-cyan-500/20 text-cyan-400 mb-6">
               <Globe className="w-8 h-8" />
             </div>
-            <h3 className="font-outfit text-xl font-bold text-white mb-3">Dynamic Geolocation Map</h3>
+            <h3 className="font-outfit text-xl font-bold text-white mb-3">Live Geolocation Map</h3>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Geo-plot voter coordinates onto an interactive Leaflet map. Flag suspicious devices and ISP distributions visually in real-time.
+              See where votes are coming from on a live map, and instantly flag suspicious double-voting patterns.
             </p>
           </div>
         </div>

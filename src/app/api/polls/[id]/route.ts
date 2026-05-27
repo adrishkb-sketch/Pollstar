@@ -94,9 +94,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                   stats[qId][optId].count += numOptions - index;
                 }
               });
-            } else if (question.type === 'SINGLE' && typeof ans === 'string') {
-              if (stats[qId] && stats[qId][ans]) {
-                stats[qId][ans].count += 1;
+            } else if (question.type === 'SINGLE') {
+              if (typeof ans === 'string') {
+                if (stats[qId] && stats[qId][ans]) {
+                  stats[qId][ans].count += 1;
+                }
+              } else if (typeof ans === 'object' && ans !== null) {
+                Object.entries(ans).forEach(([optId, votesCount]) => {
+                  if (stats[qId] && stats[qId][optId]) {
+                    stats[qId][optId].count += Number(votesCount) || 0;
+                  }
+                });
               }
             } else if (question.type === 'KNOCKOUT' && ans && typeof ans.winner === 'string') {
               if (stats[qId] && stats[qId][ans.winner]) {
@@ -252,7 +260,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       enableRankConfidence, enableScenarioSimulator, enableTieBreakerEngine,
       rankedTieBreakerRule, enableRankCompleteness, rankedCompletenessRule,
       enablePodiumResults, enableCoalitionFinder, enableMinorityProtection,
-      enableAuditReplay
+      enableAuditReplay,
+      // Single Choice features
+      enableQuadraticVoting, enableAiProjection, enableCohortCrossTab,
+      enableSentimentChat, enableSwingMap,
+      // Knockout features
+      enableBracketPredictions, enableDoubleElimination, enableUnderdogTracker,
+      enableOptionStatsCards, enableSuddenDeath,
     } = await req.json();
 
     const updateData: any = {};
@@ -330,6 +344,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (enableCoalitionFinder !== undefined) settingsPayload.enableCoalitionFinder = !!enableCoalitionFinder;
       if (enableMinorityProtection !== undefined) settingsPayload.enableMinorityProtection = !!enableMinorityProtection;
       if (enableAuditReplay !== undefined) settingsPayload.enableAuditReplay = !!enableAuditReplay;
+      // Single Choice features
+      if (enableQuadraticVoting !== undefined) settingsPayload.enableQuadraticVoting = !!enableQuadraticVoting;
+      if (enableAiProjection !== undefined) settingsPayload.enableAiProjection = !!enableAiProjection;
+      if (enableCohortCrossTab !== undefined) settingsPayload.enableCohortCrossTab = !!enableCohortCrossTab;
+      if (enableSentimentChat !== undefined) settingsPayload.enableSentimentChat = !!enableSentimentChat;
+      if (enableSwingMap !== undefined) settingsPayload.enableSwingMap = !!enableSwingMap;
+      // Knockout features
+      if (enableBracketPredictions !== undefined) settingsPayload.enableBracketPredictions = !!enableBracketPredictions;
+      if (enableDoubleElimination !== undefined) settingsPayload.enableDoubleElimination = !!enableDoubleElimination;
+      if (enableUnderdogTracker !== undefined) settingsPayload.enableUnderdogTracker = !!enableUnderdogTracker;
+      if (enableOptionStatsCards !== undefined) settingsPayload.enableOptionStatsCards = !!enableOptionStatsCards;
+      if (enableSuddenDeath !== undefined) settingsPayload.enableSuddenDeath = !!enableSuddenDeath;
 
       if (Object.keys(settingsPayload).length > 0) {
         await tx.pollSettings.upsert({

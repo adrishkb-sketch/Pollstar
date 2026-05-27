@@ -208,6 +208,18 @@ export async function POST(req: Request) {
           enableCoalitionFinder: !!settings?.enableCoalitionFinder,
           enableMinorityProtection: !!settings?.enableMinorityProtection,
           enableAuditReplay: !!settings?.enableAuditReplay,
+          // Single Choice features
+          enableQuadraticVoting: !!settings?.enableQuadraticVoting,
+          enableAiProjection: !!settings?.enableAiProjection,
+          enableCohortCrossTab: !!settings?.enableCohortCrossTab,
+          enableSentimentChat: !!settings?.enableSentimentChat,
+          enableSwingMap: !!settings?.enableSwingMap,
+          // Knockout features
+          enableBracketPredictions: !!settings?.enableBracketPredictions,
+          enableDoubleElimination: !!settings?.enableDoubleElimination,
+          enableUnderdogTracker: !!settings?.enableUnderdogTracker,
+          enableOptionStatsCards: !!settings?.enableOptionStatsCards,
+          enableSuddenDeath: !!settings?.enableSuddenDeath,
         },
       });
 

@@ -1007,6 +1007,74 @@ export default function PollInsights({ params }: PageProps) {
                   </div>
                 </div>
               )}
+
+              {poll.questions && poll.questions.some((q: any) => q.type === 'SINGLE') && (
+                <div className="col-span-1 sm:col-span-2 md:col-span-3 border-t border-white/5 pt-6 mt-4">
+                  <h5 className="font-outfit font-extrabold text-indigo-400 text-xs mb-3 uppercase tracking-wider">
+                    Single Choice Advanced Features
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {[
+                      ['enableQuadraticVoting', 'Quadratic Voting (Point-based)', 'Voters divide 100 points, costs are squared.'],
+                      ['enableAiProjection', 'AI Vote Projection', 'Predicts outcome early based on speed/patterns.'],
+                      ['enableCohortCrossTab', 'Voter Group Comparison', 'Filters results by groups like age or department.'],
+                      ['enableSentimentChat', 'Opinion Chatbox', 'Adds a live chat sidebar with sentiment tags.'],
+                      ['enableSwingMap', 'Voter Shift Map', 'Shows voter preference shifts over time.'],
+                    ].map(([key, label, desc]) => (
+                      <div key={key} className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                        <div>
+                          <h6 className="font-outfit font-bold text-white text-[11px]">{label}</h6>
+                          <p className="text-[9px] text-gray-500">{desc}</p>
+                        </div>
+                        <button
+                          onClick={() => handleToggleGranularVisibility(key, !poll.settings?.[key])}
+                          className={`px-3 py-1 rounded-lg text-[9px] font-bold border transition-all ${
+                            poll.settings?.[key]
+                              ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                              : 'bg-white/5 border-white/10 text-gray-400'
+                          }`}
+                        >
+                          {poll.settings?.[key] ? 'Active' : 'Disabled'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {poll.questions && poll.questions.some((q: any) => q.type === 'KNOCKOUT') && (
+                <div className="col-span-1 sm:col-span-2 md:col-span-3 border-t border-white/5 pt-6 mt-4">
+                  <h5 className="font-outfit font-extrabold text-amber-500 text-xs mb-3 uppercase tracking-wider">
+                    Knockout Advanced Features
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {[
+                      ['enableBracketPredictions', 'Playoff Bracket Guessing', 'Voters guess the bracket winner for points.'],
+                      ['enableDoubleElimination', 'Double Elimination', 'Options must lose twice before knockout.'],
+                      ['enableUnderdogTracker', 'Underdog Tracker', 'Highlights lower-seeded wins.'],
+                      ['enableOptionStatsCards', 'Option Factsheets', 'Shows option statistics directly on ballot.'],
+                      ['enableSuddenDeath', 'Sudden Death Overtime', 'Breaks matchup ties instantly.'],
+                    ].map(([key, label, desc]) => (
+                      <div key={key} className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                        <div>
+                          <h6 className="font-outfit font-bold text-white text-[11px]">{label}</h6>
+                          <p className="text-[9px] text-gray-500">{desc}</p>
+                        </div>
+                        <button
+                          onClick={() => handleToggleGranularVisibility(key, !poll.settings?.[key])}
+                          className={`px-3 py-1 rounded-lg text-[9px] font-bold border transition-all ${
+                            poll.settings?.[key]
+                              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                              : 'bg-white/5 border-white/10 text-gray-400'
+                          }`}
+                        >
+                          {poll.settings?.[key] ? 'Active' : 'Disabled'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

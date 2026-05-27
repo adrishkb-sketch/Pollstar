@@ -171,6 +171,18 @@ model PollSettings {
   enableCoalitionFinder   Boolean @default(false)
   enableMinorityProtection Boolean @default(false)
   enableAuditReplay       Boolean @default(false)
+  // Single Choice features
+  enableQuadraticVoting   Boolean @default(false)
+  enableAiProjection      Boolean @default(false)
+  enableCohortCrossTab    Boolean @default(false)
+  enableSentimentChat     Boolean @default(false)
+  enableSwingMap          Boolean @default(false)
+  // Knockout features
+  enableBracketPredictions Boolean @default(false)
+  enableDoubleElimination Boolean @default(false)
+  enableUnderdogTracker   Boolean @default(false)
+  enableOptionStatsCards  Boolean @default(false)
+  enableSuddenDeath       Boolean @default(false)
 }
 
 model AuditLog {
