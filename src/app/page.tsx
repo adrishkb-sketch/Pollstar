@@ -110,6 +110,7 @@ export default function Home() {
             </>
           )}
         </div>
+        <Link href="/features" className="mt-6 inline-block px-6 py-3 rounded-xl font-semibold gradient-btn text-white text-sm">Explore All Features</Link>
 
         {/* Feature Grid */}
         <div id="features-grid" className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">

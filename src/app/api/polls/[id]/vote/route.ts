@@ -53,11 +53,22 @@ export async function POST(
     }
 
     const now = new Date();
-    const startTimeWithBuffer = new Date(poll.startTime.getTime() - 60000);
-    const endTimeWithBuffer = new Date(poll.endTime.getTime() + 60000);
-    if (now < startTimeWithBuffer || now > endTimeWithBuffer) {
+
+    // Auto-expire: if endTime has passed, transition to ENDED and reject
+    if (poll.endTime && now > new Date(poll.endTime)) {
+      await prisma.poll.update({
+        where: { id: pollId },
+        data: { status: 'ENDED' },
+      });
       return NextResponse.json(
-        { error: 'Voting is restricted to the poll schedule. It has either not started or already closed.' },
+        { error: 'This poll has officially ended. Voting is no longer accepted.' },
+        { status: 400 }
+      );
+    }
+
+    if (now < new Date(poll.startTime)) {
+      return NextResponse.json(
+        { error: 'Voting has not started yet. Please wait for the scheduled start time.' },
         { status: 400 }
       );
     }

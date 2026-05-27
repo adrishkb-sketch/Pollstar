@@ -56,6 +56,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
+    // Auto-expire: if the poll is ACTIVE but endTime has passed, transition to ENDED
+    if (poll.status === 'ACTIVE' && poll.endTime && new Date() > new Date(poll.endTime)) {
+      await prisma.poll.update({
+        where: { id: pollId },
+        data: { status: 'ENDED' },
+      });
+      poll.status = 'ENDED';
+    }
+
     // Check if requester is creator or admin
     const isCreatorOrAdmin = user && (poll.creatorId === user.id || user.role === 'ADMIN');
 

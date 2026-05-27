@@ -64,6 +64,23 @@ export async function GET() {
       });
     }
 
+    // Auto-expire: batch-transition any ACTIVE polls whose endTime has passed
+    const now = new Date();
+    const expiredPolls = polls.filter(
+      (p: any) => p.status === 'ACTIVE' && p.endTime && now > new Date(p.endTime)
+    );
+    if (expiredPolls.length > 0) {
+      await prisma.poll.updateMany({
+        where: {
+          id: { in: expiredPolls.map((p: any) => p.id) },
+          status: 'ACTIVE',
+        },
+        data: { status: 'ENDED' },
+      });
+      // Reflect locally so the response is accurate
+      expiredPolls.forEach((p: any) => { p.status = 'ENDED'; });
+    }
+
     return NextResponse.json({ success: true, polls });
   } catch (error: any) {
     console.error('List Polls API Error:', error);

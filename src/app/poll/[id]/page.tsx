@@ -279,9 +279,16 @@ export default function VoterPortal({ params }: PageProps) {
           throw new Error(data.error || 'Failed to fetch poll details');
         }
 
-        setPoll(data.poll);
-        setLiveStats(data.poll.stats || {});
-        setLiveTotalVotes(data.poll.totalVotes || 0);
+        const fetchedPoll = data.poll;
+
+        // Client-side deadline enforcement: if endTime has passed, treat as ENDED
+        if (fetchedPoll.status === 'ACTIVE' && fetchedPoll.endTime && Date.now() > new Date(fetchedPoll.endTime).getTime()) {
+          fetchedPoll.status = 'ENDED';
+        }
+
+        setPoll(fetchedPoll);
+        setLiveStats(fetchedPoll.stats || {});
+        setLiveTotalVotes(fetchedPoll.totalVotes || 0);
 
         const activeQ = data.poll.questions?.[0];
         if (activeQ && activeQ.type === 'KNOCKOUT') {
@@ -784,6 +791,78 @@ export default function VoterPortal({ params }: PageProps) {
         <Link href="/" className="mt-6 px-5 py-2.5 rounded-xl font-semibold gradient-btn text-white text-xs">
           Return to Home
         </Link>
+      </div>
+    );
+  }
+
+  // ── VOTING CLOSED SCREEN ──────────────────────────────────
+  if (poll && poll.status !== 'ACTIVE' && !votedSuccessfully) {
+    return (
+      <div className="flex-1 flex flex-col justify-center items-center px-6 py-16 text-center bg-[#030712] min-h-screen">
+        <div className="max-w-lg w-full space-y-8">
+          {/* Brand */}
+          <div className="flex items-center justify-center space-x-2.5 mb-4">
+            <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
+              <VoteIcon className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-outfit text-lg font-bold tracking-tight text-white">
+              Poll<span className="text-indigo-400">star</span>
+            </span>
+          </div>
+
+          {/* Closed Badge */}
+          <div className="glass-card rounded-3xl p-10 border border-red-500/20 bg-red-500/5 shadow-2xl space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex justify-center">
+              <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl">
+                <AlertCircle className="w-10 h-10" />
+              </div>
+            </div>
+
+            <h1 className="font-outfit text-3xl font-extrabold text-white">Voting Has Closed</h1>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              The poll <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting ballots.
+            </p>
+
+            {poll.endTime && (
+              <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-xs font-semibold mx-auto">
+                <span>⏱️ Deadline:</span>
+                <span className="text-white font-mono">{new Date(poll.endTime).toLocaleString()}</span>
+              </div>
+            )}
+
+            {poll.totalVotes !== undefined && (
+              <p className="text-gray-500 text-xs">
+                Total ballots recorded: <span className="text-white font-bold">{poll.totalVotes}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            {poll.isResultPublic && (
+              <button
+                type="button"
+                onClick={() => {
+                  // Allow them through to view results by marking as "voted" 
+                  setVotedSuccessfully(true);
+                }}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center justify-center space-x-2 active:scale-95"
+              >
+                <Award className="w-4 h-4" />
+                <span>View Results & Report</span>
+              </button>
+            )}
+            <Link
+              href="/"
+              className="w-full sm:w-auto px-6 py-3 rounded-xl font-semibold glass-card hover:bg-white/5 text-gray-300 hover:text-white text-sm border border-white/10 flex items-center justify-center transition-all active:scale-95"
+            >
+              Return to Home
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
