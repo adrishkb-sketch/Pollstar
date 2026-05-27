@@ -19,10 +19,15 @@ export async function POST(
     const body = await req.json();
     const { answers, captchaResponse, voterToken, email: openEmail, latitude, longitude, device, confidenceValues } = body;
 
-    // 1. Bulletproof Device detection using Client body, Next.js userAgent, and Vercel edge headers
+    // 1. Bulletproof Device detection using Client body, Next.js userAgent, Vercel edge headers, and Client Hints
     const ua = userAgent(req);
     const vercelDevice = req.headers.get('x-vercel-device-type') || '';
-    const isMobileUA = ua.device.type === 'mobile' || ua.device.type === 'tablet' || vercelDevice === 'mobile' || vercelDevice === 'tablet' || /Mobi|Android|iPhone|iPad|iPod|BlackBerry/i.test(ua.ua || '');
+    const secChUaMobile = req.headers.get('sec-ch-ua-mobile') || '';
+    const rawUA = ua.ua || req.headers.get('user-agent') || '';
+    const isMobileUA = ua.device.type === 'mobile' || ua.device.type === 'tablet' 
+      || vercelDevice === 'mobile' || vercelDevice === 'tablet' 
+      || secChUaMobile === '?1'
+      || /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA);
     const resolvedDevice = (device === 'Mobile' || isMobileUA) ? 'Mobile' : 'Desktop';
 
     // 2. High-Fidelity Geolocation using Client high-accuracy GPS, Vercel edge headers, and backup Geo-IP

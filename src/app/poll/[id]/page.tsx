@@ -785,9 +785,11 @@ export default function VoterPortal({ params }: PageProps) {
     }
 
     try {
-      const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-      const isMobileTouch = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator && navigator.maxTouchPoints > 0) || window.innerWidth < 768);
-      const detectedDevice = (isMobileUA || isMobileTouch) ? 'Mobile' : 'Desktop';
+      const isMobileUA = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(navigator?.userAgent || '');
+      const isMobileTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
+      const isMobileScreen = typeof window !== 'undefined' && (window.screen.width <= 768 || window.innerWidth <= 768);
+      const isMobilePlatform = /android|iphone|ipad|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
+      const detectedDevice = (isMobileUA || (isMobileTouch && isMobileScreen) || isMobilePlatform) ? 'Mobile' : 'Desktop';
       const res = await fetch(`/api/polls/${pollId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
