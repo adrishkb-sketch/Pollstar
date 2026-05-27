@@ -4,7 +4,8 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { 
   Vote as VoteIcon, Loader2, AlertCircle, CheckCircle, 
-  HelpCircle, ShieldAlert, Award, ArrowRight, RefreshCw, Check
+  HelpCircle, ShieldAlert, Award, ArrowRight, ArrowLeft, RefreshCw, Check, Users,
+  MessageSquare, Send, MessageCircle
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -21,6 +22,10 @@ export default function VoterPortal({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [poll, setPoll] = useState<any>(null);
+
+  // Survey Pagination & Flow States
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageHistory, setPageHistory] = useState<number[]>([]);
   
   // Closed voter entrance gate states
   const [showIntro, setShowIntro] = useState(true);
@@ -84,6 +89,65 @@ export default function VoterPortal({ params }: PageProps) {
   ]);
   const [newMessage, setNewMessage] = useState('');
   const [chatName, setChatName] = useState('Guest Voter');
+
+  // Voter-to-Creator Direct Message states
+  const [showOwnerChat, setShowOwnerChat] = useState(false);
+  const [ownerChatEmail, setOwnerChatEmail] = useState('');
+  const [ownerChatMessages, setOwnerChatMessages] = useState<any[]>([]);
+  const [ownerChatInput, setOwnerChatInput] = useState('');
+  const [ownerChatSending, setOwnerChatSending] = useState(false);
+
+  const activeVoterIdentifier = voterEmail || openEmail || voterIdentifier || ownerChatEmail;
+
+  // Fetch owner direct messages
+  useEffect(() => {
+    if (!showOwnerChat || !activeVoterIdentifier) return;
+    const fetchOwnerMessages = async () => {
+      try {
+        const res = await fetch(`/api/polls/${pollId}/messages?voterIdentifier=${encodeURIComponent(activeVoterIdentifier)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setOwnerChatMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchOwnerMessages();
+    const interval = setInterval(fetchOwnerMessages, 10000);
+    return () => clearInterval(interval);
+  }, [showOwnerChat, activeVoterIdentifier, pollId]);
+
+  const handleSendOwnerMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownerChatInput.trim() || !activeVoterIdentifier) return;
+    
+    setOwnerChatSending(true);
+    const msgText = ownerChatInput;
+    setOwnerChatInput('');
+    try {
+      const res = await fetch(`/api/polls/${pollId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: msgText,
+          voterIdentifier: activeVoterIdentifier,
+          isFromCreator: false
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOwnerChatMessages(prev => [...prev, data.message]);
+      } else {
+        setOwnerChatInput(msgText); // restore on error
+      }
+    } catch (err) {
+      console.error(err);
+      setOwnerChatInput(msgText);
+    } finally {
+      setOwnerChatSending(false);
+    }
+  };
 
   const handleSendChatMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -325,6 +389,11 @@ export default function VoterPortal({ params }: PageProps) {
         }
 
         setPoll(fetchedPoll);
+        if (fetchedPoll.pollType === 'SURVEY') {
+          const startPage = fetchedPoll.settings?.enableCrossTabulation ? 0 : 1;
+          setCurrentPage(startPage);
+          setPageHistory([startPage]);
+        }
         setLiveStats(fetchedPoll.stats || {});
         setLiveTotalVotes(fetchedPoll.totalVotes || 0);
 
@@ -705,6 +774,90 @@ export default function VoterPortal({ params }: PageProps) {
   };
 
   // ────────────────────────────────────────────────────────
+  // SURVEY NAVIGATION HANDLERS &skip branching logic
+  // ────────────────────────────────────────────────────────
+
+  const handleSurveyNext = () => {
+    setError('');
+
+    // Demographic verification (page 0)
+    if (currentPage === 0) {
+      if (!selectedAnswers['__demo_age'] || !selectedAnswers['__demo_region'] || !selectedAnswers['__demo_gender']) {
+        setError('Please complete all demographic questions to continue.');
+        return;
+      }
+      setCurrentPage(1);
+      setPageHistory([...pageHistory, 1]);
+      return;
+    }
+
+    // Filter questions on current page
+    const currentQList = poll.questions.filter((q: any) => q.pageNumber === currentPage);
+
+    // Question completeness verification
+    for (const q of currentQList) {
+      const ans = selectedAnswers[q.id];
+      const rankedRequiredCount = poll.settings?.enableRankCompleteness
+        ? (poll.settings?.rankedCompletenessRule === 'FULL'
+            ? q.options?.length
+            : poll.settings?.rankedCompletenessRule === 'TOP_3'
+              ? Math.min(3, q.options?.length || 0)
+              : 1)
+        : q.options?.length;
+
+      if (
+        ans === undefined ||
+        ans === null ||
+        (q.type === 'MULTIPLE_CHOICE' && ans.length === 0) ||
+        (q.type === 'RANKED' && ans.length < rankedRequiredCount) ||
+        (q.type === 'SHORT_TEXT' && ans.trim() === '') ||
+        (q.type === 'LONG_TEXT' && ans.trim() === '') ||
+        (q.type === 'RATING' && ans === 0)
+      ) {
+        setError('Please complete all questions on this page before continuing.');
+        return;
+      }
+    }
+
+    // Compute next page by checking logic rules
+    let nextPage: number | 'END' = currentPage + 1;
+
+    for (const q of currentQList) {
+      if (q.type === 'SINGLE' && q.logicRules && (q.logicRules as any).rules) {
+        const ans = selectedAnswers[q.id];
+        const chosenOption = q.options.find((opt: any) => opt.id === ans);
+        if (chosenOption) {
+          const matchingRule = (q.logicRules as any).rules.find((r: any) => r.option === chosenOption.text);
+          if (matchingRule) {
+            nextPage = matchingRule.goToPage;
+            break;
+          }
+        }
+      }
+    }
+
+    const maxPages = Math.max(...poll.questions.map((qu: any) => qu.pageNumber || 1));
+    if (nextPage === 'END' || (typeof nextPage === 'number' && nextPage > maxPages)) {
+      setCurrentPage(maxPages + 1); // Go to final review/submit step
+      setPageHistory([...pageHistory, maxPages + 1]);
+    } else {
+      setCurrentPage(nextPage);
+      setPageHistory([...pageHistory, nextPage]);
+    }
+  };
+
+  const handleSurveyPrev = () => {
+    setError('');
+    if (pageHistory.length > 1) {
+      const newHistory = [...pageHistory];
+      newHistory.pop();
+      const prevPage = newHistory[newHistory.length - 1];
+      setCurrentPage(prevPage);
+      setPageHistory(newHistory);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
   // VOTE PLACEMENT ROUTINE
   // ────────────────────────────────────────────────────────
 
@@ -714,16 +867,23 @@ export default function VoterPortal({ params }: PageProps) {
     setCaptchaError('');
     setVoteLoading(true);
 
-    // 1. Verify Human Math CAPTCHA
-    const parsedAnswer = parseInt(captchaAnswer);
-    if (isNaN(parsedAnswer) || parsedAnswer !== (captchaNum1 + captchaNum2)) {
-      setCaptchaError('Human validation calculation is incorrect. Please check and try again.');
-      setVoteLoading(false);
-      return;
+    // 1. Verify Human Math CAPTCHA (skipped for surveys)
+    if (poll.pollType !== 'SURVEY') {
+      const parsedAnswer = parseInt(captchaAnswer);
+      if (isNaN(parsedAnswer) || parsedAnswer !== (captchaNum1 + captchaNum2)) {
+        setCaptchaError('Human validation calculation is incorrect. Please check and try again.');
+        setVoteLoading(false);
+        return;
+      }
     }
 
     // 2. Question completeness check
-    for (const q of poll.questions) {
+    // For surveys, only check questions that were actually shown (in the navigation path)
+    const questionsToCheck = poll.pollType === 'SURVEY'
+      ? poll.questions.filter((q: any) => selectedAnswers[q.id] !== undefined || pageHistory.includes(q.pageNumber || 1))
+      : poll.questions;
+
+    for (const q of questionsToCheck) {
       const ans = selectedAnswers[q.id];
       const rankedRequiredCount = poll.settings?.enableRankCompleteness
         ? (poll.settings?.rankedCompletenessRule === 'FULL'
@@ -748,7 +908,7 @@ export default function VoterPortal({ params }: PageProps) {
       }
     }
 
-    // 3. Confirm checkbox
+    // 3. Confirm checkbox (always required)
     if (!confirmVoteChecked) {
       setError('Please check the confirmation box to submit your vote.');
       setVoteLoading(false);
@@ -1421,16 +1581,20 @@ export default function VoterPortal({ params }: PageProps) {
 
       {/* Main Ballot Casting Form */}
       {(poll.isOpenVoting || verifiedVoter) && !votedSuccessfully && (
-        <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl space-y-8 animate-fade-in-up">
+        <div className="glass-card rounded-3xl p-4 sm:p-8 border border-white/5 shadow-2xl space-y-6 sm:space-y-8 animate-fade-in-up">
           <div className="border-b border-white/5 pb-4">
             <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2">
               <VoteIcon className="w-5 h-5 text-indigo-400" />
-              <span>Official Voting Ballot</span>
+              <span>{poll.pollType === 'SURVEY' ? 'Survey Questionnaire' : 'Official Voting Ballot'}</span>
             </h3>
-            <p className="text-gray-400 text-xs mt-1">Please review candidate selections and cast your secure vote below.</p>
+            <p className="text-gray-400 text-xs mt-1">
+              {poll.pollType === 'SURVEY'
+                ? 'Answer each section honestly. Your responses help us understand different perspectives.'
+                : 'Please review candidate selections and cast your secure vote below.'}
+            </p>
           </div>
 
-          {error && (
+          {error && poll.pollType !== 'SURVEY' && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4.5 h-4.5 shrink-0" />
               <span>{error}</span>
@@ -1459,9 +1623,107 @@ export default function VoterPortal({ params }: PageProps) {
               </div>
             )}
 
+            {poll.pollType === 'SURVEY' && (
+              <div className="space-y-2 animate-fade-in-up">
+                <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-indigo-400">
+                  <span>Survey Progress</span>
+                  <span>
+                    {currentPage === 0 
+                      ? 'Demographics' 
+                      : currentPage > Math.max(...poll.questions.map((q: any) => q.pageNumber || 1))
+                        ? 'Verification & Submit'
+                        : `Page ${currentPage} of ${Math.max(...poll.questions.map((q: any) => q.pageNumber || 1))}`}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                  <div 
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out"
+                    style={{
+                      width: `${
+                        currentPage === 0
+                          ? 5
+                          : currentPage > Math.max(...poll.questions.map((q: any) => q.pageNumber || 1))
+                            ? 100
+                            : (currentPage / Math.max(...poll.questions.map((q: any) => q.pageNumber || 1))) * 90
+                      }%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {poll.pollType === 'SURVEY' && currentPage === 0 && (
+              <div className="space-y-6 animate-fade-in-up">
+                <div className="p-5 rounded-2xl border border-white/5 bg-indigo-500/5 space-y-4">
+                  <h4 className="text-white text-base font-bold flex items-center space-x-2">
+                    <Users className="w-5 h-5 text-indigo-400" />
+                    <span>Basic Demographic Information</span>
+                  </h4>
+                  <p className="text-gray-400 text-xs leading-relaxed">
+                    Please provide these anonymous metrics to help us filter and analyze responses based on different segments (Age, Location, etc.).
+                  </p>
+                  
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Age Group <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        value={selectedAnswers['__demo_age'] || ''}
+                        onChange={(e) => setSelectedAnswers({ ...selectedAnswers, '__demo_age': e.target.value })}
+                        className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      >
+                        <option value="" disabled>-- Select Age Group --</option>
+                        <option value="Under 18">Under 18</option>
+                        <option value="18-24">18-24</option>
+                        <option value="25-34">25-34</option>
+                        <option value="35-44">35-44</option>
+                        <option value="45-54">45-54</option>
+                        <option value="55-64">55-64</option>
+                        <option value="65+">65+</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Geographic Region <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={selectedAnswers['__demo_region'] || ''}
+                        onChange={(e) => setSelectedAnswers({ ...selectedAnswers, '__demo_region': e.target.value })}
+                        placeholder="e.g. California, US or West Bengal, IN"
+                        className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder-gray-700"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Gender <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        value={selectedAnswers['__demo_gender'] || ''}
+                        onChange={(e) => setSelectedAnswers({ ...selectedAnswers, '__demo_gender': e.target.value })}
+                        className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      >
+                        <option value="" disabled>-- Select Gender --</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-binary">Non-binary</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Questions block */}
             <div className="space-y-10">
-              {poll.questions.map((q: any, qIdx: number) => {
+              {poll.questions
+                .filter((q: any) => poll.pollType === 'POLL' || q.pageNumber === currentPage)
+                .map((q: any, qIdx: number) => {
                 const ans = selectedAnswers[q.id];
                 
                 return (
@@ -1592,13 +1854,9 @@ export default function VoterPortal({ params }: PageProps) {
                               min={1}
                               max={100}
                               value={confidenceValues[q.id] ?? 50}
-                              onChange={(e) => setConfidenceValues({ ...confidenceValues, [q.id]: Number(e.target.value) })}
-                              className="w-full accent-amber-400 cursor-pointer"
+                              onChange={(e) => setConfidenceValues({ ...confidenceValues, [q.id]: parseInt(e.target.value) })}
+                              className="w-full accent-amber-500"
                             />
-                            <div className="flex justify-between text-[10px] text-gray-600 font-bold">
-                              <span>1% — Just guessing</span>
-                              <span>100% — Absolutely certain</span>
-                            </div>
                           </div>
                         )}
                       </>
@@ -1609,14 +1867,20 @@ export default function VoterPortal({ params }: PageProps) {
                     {q.type === 'MULTIPLE_CHOICE' && (
                       <div className="grid grid-cols-1 gap-3">
                         {q.options.map((opt: any) => {
-                          const isSelected = ans && ans.includes(opt.id);
+                          const currentList = Array.isArray(ans) ? ans : [];
+                          const isSelected = currentList.includes(opt.id);
+
                           return (
                             <div
                               key={opt.id}
                               onClick={() => {
-                                const current = ans || [];
-                                const updated = isSelected ? current.filter((id: string) => id !== opt.id) : [...current, opt.id];
-                                setSelectedAnswers({ ...selectedAnswers, [q.id]: updated });
+                                let nextList = [...currentList];
+                                if (isSelected) {
+                                  nextList = nextList.filter((item) => item !== opt.id);
+                                } else {
+                                  nextList.push(opt.id);
+                                }
+                                setSelectedAnswers({ ...selectedAnswers, [q.id]: nextList });
                               }}
                               className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
                                 isSelected
@@ -1625,7 +1889,7 @@ export default function VoterPortal({ params }: PageProps) {
                               }`}
                             >
                               <span className="text-sm font-semibold">{opt.text}</span>
-                              <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                              <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
                                 isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-white/20'
                               }`}>
                                 {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
@@ -1641,10 +1905,11 @@ export default function VoterPortal({ params }: PageProps) {
                       <div>
                         <input
                           type="text"
+                          required
                           value={ans || ''}
                           onChange={(e) => setSelectedAnswers({ ...selectedAnswers, [q.id]: e.target.value })}
-                          placeholder="Your answer..."
-                          className="w-full glass-input text-sm"
+                          placeholder="Type your response here..."
+                          className="w-full glass-input text-sm py-3"
                         />
                       </div>
                     )}
@@ -1654,161 +1919,119 @@ export default function VoterPortal({ params }: PageProps) {
                       <div>
                         <textarea
                           rows={4}
+                          required
                           value={ans || ''}
                           onChange={(e) => setSelectedAnswers({ ...selectedAnswers, [q.id]: e.target.value })}
-                          placeholder="Your answer..."
-                          className="w-full glass-input text-sm resize-none"
+                          placeholder="Type your detailed feedback here..."
+                          className="w-full glass-input text-sm py-3 resize-none"
                         />
                       </div>
                     )}
 
-                    {/* RATING LAYOUT */}
+                    {/* RATING CHOICE LAYOUT */}
                     {q.type === 'RATING' && (
-                      <div className="flex gap-2 justify-center py-4 glass-card border border-white/5 rounded-2xl">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <div
-                            key={star}
-                            onClick={() => setSelectedAnswers({ ...selectedAnswers, [q.id]: star })}
-                            className={`cursor-pointer transition-all p-2 rounded-xl ${
-                              (ans || 0) >= star ? 'text-amber-400 bg-amber-400/10' : 'text-gray-600 hover:text-gray-400'
-                            }`}
-                          >
-                            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
-                              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                            </svg>
-                          </div>
-                        ))}
+                      <div className="flex items-center space-x-2 pt-2 justify-center">
+                        {[1, 2, 3, 4, 5].map((star) => {
+                          const isFilled = (ans || 0) >= star;
+                          return (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setSelectedAnswers({ ...selectedAnswers, [q.id]: star })}
+                              className="focus:outline-none transition-all scale-105 hover:scale-125"
+                            >
+                              <Award
+                                className={`w-10 h-10 ${
+                                  isFilled ? 'text-amber-400 fill-amber-400' : 'text-gray-600'
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* RANKED CHOICE (Borda Count) CLICK-TO-RANK PRIORITY LAYOUT */}
+                    {/* RANKED CHOICE LAYOUT */}
                     {q.type === 'RANKED' && (
                       <div className="space-y-4">
-                        <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
-                          <div className="space-y-0.5">
-                            <span className="text-gray-300 text-xs font-bold">Rank candidates in order of priority:</span>
-                            <p className="text-gray-500 text-[10px]">
-                              {poll.settings?.enableDragAndDropPodium
-                                ? 'Click to rank, or drag candidates to reorder their podium positions.'
-                                : 'Click choices to assign weights (1 = highest priority).'}
-                            </p>
-                          </div>
-                          {rankedSelections.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleResetRankings(q.id)}
-                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Reset</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3">
-                          {q.options.map((opt: any) => {
-                            const rankIndex = rankedSelections.indexOf(opt.id);
-                            const isRanked = rankIndex !== -1;
+                        <p className="text-[10px] text-gray-500 leading-normal">
+                          Drag or click choices to rank them in order of your preference. Top choice represents first priority.
+                        </p>
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {(Array.isArray(ans) ? ans : []).map((optId: string, rIdx: number) => {
+                            const option = q.options.find((o: any) => o.id === optId);
+                            if (!option) return null;
                             return (
                               <div
-                                key={opt.id}
-                                draggable={!!poll.settings?.enableDragAndDropPodium}
-                                onDragStart={(e) => e.dataTransfer.setData('text/plain', opt.id)}
-                                onDragOver={(e) => {
-                                  if (poll.settings?.enableDragAndDropPodium) e.preventDefault();
-                                }}
+                                key={optId}
+                                draggable
+                                onDragStart={(e) => e.dataTransfer.setData('text/plain', optId)}
+                                onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
-                                  if (!poll.settings?.enableDragAndDropPodium) return;
                                   e.preventDefault();
-                                  handleRankDrop(e.dataTransfer.getData('text/plain'), opt.id, q.id);
+                                  const draggedId = e.dataTransfer.getData('text/plain');
+                                  handleRankDrop(draggedId, optId, q.id);
                                 }}
-                                onClick={() => handleRankClick(opt.id, q.id)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                                  isRanked
-                                    ? 'border-purple-500 bg-purple-500/10 text-white shadow-md'
-                                    : 'border-white/5 hover:border-white/10 hover:bg-white/3 text-gray-300'
-                                }`}
+                                className="p-3.5 rounded-xl border border-indigo-500/30 bg-[#6366f1]/5 flex items-center justify-between gap-3 cursor-grab"
                               >
-                                <span className="text-sm font-semibold">{opt.text}</span>
-                                {isRanked ? (
-                                  <div className="w-6 h-6 rounded-lg bg-purple-500 text-white text-xs font-extrabold flex items-center justify-center shadow-md">
-                                    {rankIndex + 1}
-                                  </div>
-                                ) : (
-                                  <div className="w-6 h-6 rounded-lg border border-white/20 text-gray-500 text-xs font-bold flex items-center justify-center">
-                                    -
-                                  </div>
-                                )}
+                                <div className="flex items-center space-x-3">
+                                  <span className="w-6 h-6 rounded-lg bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center tabular-nums">
+                                    {rIdx + 1}
+                                  </span>
+                                  <span className="text-sm font-semibold text-white">{option.text}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentList = Array.isArray(ans) ? ans : [];
+                                    const nextList = currentList.filter((id) => id !== optId);
+                                    setSelectedAnswers({ ...selectedAnswers, [q.id]: nextList });
+                                  }}
+                                  className="text-red-400 hover:text-red-300 text-xs font-bold font-mono"
+                                >
+                                  Remove
+                                </button>
                               </div>
                             );
                           })}
+
+                          {q.options
+                            .filter((o: any) => !(Array.isArray(ans) ? ans : []).includes(o.id))
+                            .map((option: any) => (
+                              <div
+                                key={option.id}
+                                onClick={() => {
+                                  const currentList = Array.isArray(ans) ? ans : [];
+                                  setSelectedAnswers({ ...selectedAnswers, [q.id]: [...currentList, option.id] });
+                                }}
+                                className="p-3.5 rounded-xl border border-white/5 bg-white/2 hover:bg-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer text-gray-300 hover:text-white"
+                              >
+                                <span className="text-sm font-medium">{option.text}</span>
+                                <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                  Rank Option
+                                </span>
+                              </div>
+                            ))}
                         </div>
                       </div>
                     )}
 
-                    {/* TOURNAMENT KNOCKOUT BRACKET LAYOUT */}
+                    {/* TOURNAMENT BRACKET KNOCKOUT LAYOUT */}
                     {q.type === 'KNOCKOUT' && knockoutRounds.length > 0 && (
-                      <div className="space-y-6 animate-fade-in">
-                        {poll.settings?.enableBracketPredictions && (
-                          <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3 animate-fade-in-up">
-                            <div>
-                              <span className="text-purple-400 text-xs font-bold uppercase tracking-wider block">🏆 Playoff Bracket Guessing</span>
-                              <p className="text-gray-500 text-[10px] mt-0.5">Who do you think will win the whole tournament? Make your prediction before casting your bracket vote!</p>
-                            </div>
-                            <select
-                              value={selectedAnswers[q.id]?.prediction || ''}
-                              onChange={(e) => {
-                                const currentVal = selectedAnswers[q.id] || {};
-                                setSelectedAnswers({
-                                  ...selectedAnswers,
-                                  [q.id]: { ...currentVal, prediction: e.target.value }
-                                });
-                              }}
-                              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500"
-                            >
-                              <option value="">-- Choose your Predicted Champion --</option>
-                              {q.options.filter((o: any) => o.text !== 'BYE').map((o: any) => (
-                                <option key={o.id} value={o.id} className="bg-slate-900 text-white">{o.text}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
-                          <div className="space-y-0.5">
-                            <span className="text-gray-300 text-xs font-bold uppercase tracking-wide">
-                              Tournament Round {currentRoundIndex + 1} of {totalKnockoutRounds}
-                            </span>
-                            <p className="text-gray-500 text-[10px]">
-                              Select your preferred option in each match to advance them up the bracket.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleResetKnockout(q.id, q.options)}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all flex items-center space-x-1"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            <span>Restart Bracket</span>
-                          </button>
+                      <div className="space-y-6">
+                        <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-amber-400 border-b border-white/5 pb-2">
+                          <span>Bracket Stage</span>
+                          <span>Match {currentRoundIndex + 1}</span>
                         </div>
 
-                        {/* Present all matchups for the active round */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {knockoutRounds[currentRoundIndex].map((match: any, matchIdx: number) => {
-                            const isByeMatch = match.c1.text === 'BYE' || match.c2.text === 'BYE';
-                            
+                        <div className="grid grid-cols-1 gap-4">
+                          {knockoutRounds[currentRoundIndex]?.map((match: any, matchIdx: number) => {
+                            if (!match.c1) return null;
                             return (
-                              <div 
-                                key={matchIdx} 
-                                className="glass-card rounded-2xl p-4 border border-white/5 space-y-3 shadow-md hover:border-indigo-500/20 transition-all"
-                              >
-                                <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
-                                  <span>Matchup #{matchIdx + 1}</span>
-                                  {isByeMatch && <span className="text-emerald-400 text-[9px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Auto-Resolved</span>}
-                                </div>
-
-                                <div className="space-y-4">
+                              <div key={matchIdx} className="p-4 rounded-2xl border border-white/5 bg-white/2 space-y-4">
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Duel Match #{matchIdx + 1}</span>
+                                
+                                <div className="grid grid-cols-2 gap-4">
                                   {/* Candidate Option 1 */}
                                   <div className="space-y-2">
                                     <div
@@ -1851,9 +2074,6 @@ export default function VoterPortal({ params }: PageProps) {
                                       </div>
                                     )}
                                   </div>
-
-                                  {/* Versus indicator */}
-                                  <div className="text-center text-[9px] font-extrabold text-indigo-400 tracking-wider">VS</div>
 
                                   {/* Candidate Option 2 */}
                                   <div className="space-y-2">
@@ -1922,64 +2142,234 @@ export default function VoterPortal({ params }: PageProps) {
               })}
             </div>
 
-            {/* Human Math CAPTCHA Protection */}
-            <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
-              <div className="flex items-start space-x-3">
-                <HelpCircle className="w-4.5 h-4.5 text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-outfit text-xs font-bold text-gray-300 uppercase tracking-wide">
-                    Human Verification Required
-                  </h4>
-                  <p className="text-gray-500 text-[10px] mt-0.5">Solve this quick calculation to confirm you are not a bot.</p>
+            {/* ── SURVEY PAGINATION CONTROLS ─────────────────────── */}
+            {poll.pollType === 'SURVEY' && (() => {
+              const maxPage = Math.max(...poll.questions.map((q: any) => q.pageNumber || 1));
+              const isOnDemoPage = currentPage === 0;
+              const isOnFinalPage = currentPage > maxPage;
+              const isOnRegularPage = !isOnDemoPage && !isOnFinalPage;
+
+              // Final review/submit page — show answer summary + confirmation + submit
+              if (isOnFinalPage) return (
+                <div className="space-y-6 animate-fade-in-up">
+                  {/* Answer Review Summary */}
+                  <div className="space-y-3">
+                    <h4 className="text-white text-sm font-bold uppercase tracking-wider flex items-center space-x-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <span>Review Your Responses</span>
+                    </h4>
+                    <p className="text-gray-500 text-xs">Please review your answers before submitting. Once submitted, responses cannot be changed.</p>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {poll.settings?.enableCrossTabulation && (
+                        <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                          <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block mb-1.5">Demographics</span>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedAnswers['__demo_age'] && (
+                              <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 text-xs">Age: <strong className="text-white">{selectedAnswers['__demo_age']}</strong></span>
+                            )}
+                            {selectedAnswers['__demo_region'] && (
+                              <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 text-xs">Region: <strong className="text-white">{selectedAnswers['__demo_region']}</strong></span>
+                            )}
+                            {selectedAnswers['__demo_gender'] && (
+                              <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 text-xs">Gender: <strong className="text-white">{selectedAnswers['__demo_gender']}</strong></span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {poll.questions.map((q: any, idx: number) => {
+                        const ans = selectedAnswers[q.id];
+                        if (!ans) return null;
+                        let ansText = '';
+                        if (q.type === 'SINGLE') {
+                          ansText = q.options?.find((o: any) => o.id === ans)?.text || ans;
+                        } else if (q.type === 'MULTIPLE_CHOICE') {
+                          ansText = (Array.isArray(ans) ? ans : []).map((id: string) => q.options?.find((o: any) => o.id === id)?.text || id).join(', ');
+                        } else if (q.type === 'RANKED') {
+                          ansText = (Array.isArray(ans) ? ans : []).map((id: string, i: number) => `${i + 1}. ${q.options?.find((o: any) => o.id === id)?.text || id}`).join(' → ');
+                        } else if (q.type === 'RATING') {
+                          ansText = `${'★'.repeat(ans)}${'☆'.repeat(5 - ans)} (${ans}/5)`;
+                        } else {
+                          ansText = String(ans);
+                        }
+                        return (
+                          <div key={q.id} className="p-3 rounded-xl bg-white/3 border border-white/5 space-y-1">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Q{idx + 1}</span>
+                            <p className="text-xs text-gray-300 leading-snug">{q.questionText}</p>
+                            <p className="text-xs text-white font-semibold mt-0.5 truncate">{ansText}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Confirmation checkbox */}
+                  <label className="flex items-start space-x-3 cursor-pointer group">
+                    <div className="mt-0.5 shrink-0">
+                      <input
+                        type="checkbox"
+                        id="confirmVote"
+                        checked={confirmVoteChecked}
+                        onChange={(e) => setConfirmVoteChecked(e.target.checked)}
+                        className="w-4 h-4 accent-indigo-500 rounded"
+                      />
+                    </div>
+                    <p className="text-gray-400 text-xs leading-relaxed group-hover:text-gray-300 transition-colors">
+                      I confirm my responses are accurate and final. I understand that <strong className="text-gray-200">my survey submission cannot be changed or resubmitted</strong> once submitted.
+                    </p>
+                  </label>
+
+                  {/* Navigation row: Back + Submit */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleSurveyPrev}
+                      className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all text-sm active:scale-95 shrink-0"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={voteLoading || !confirmVoteChecked}
+                      className="flex-1 py-3.5 rounded-xl font-bold gradient-btn text-white text-sm shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+                    >
+                      {voteLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <span>Submit Survey</span>
+                          <CheckCircle className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
+              );
+
+              // Regular survey page — show Next/Back navigation
+              return (
+                <div className="space-y-4 animate-fade-in-up">
+                  {/* Page dot indicators */}
+                  <div className="flex items-center justify-center space-x-1.5 py-2">
+                    {poll.settings?.enableCrossTabulation && (
+                      <button
+                        type="button"
+                        onClick={() => { if (pageHistory.length > 1) handleSurveyPrev(); }}
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          currentPage === 0 ? 'bg-indigo-500 w-6' : 'bg-white/20 w-2'
+                        }`}
+                      />
+                    )}
+                    {Array.from({ length: maxPage }, (_, i) => i + 1).map(pg => (
+                      <div
+                        key={pg}
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          pg === currentPage ? 'bg-indigo-500 w-6' : pg < currentPage ? 'bg-indigo-500/40 w-2' : 'bg-white/20 w-2'
+                        }`}
+                      />
+                    ))}
+                    <div className={`h-2 rounded-full transition-all duration-300 bg-white/20 w-2`} />
+                  </div>
+
+                  {error && (
+                    <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start space-x-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* Navigation Buttons */}
+                  <div className="flex items-center gap-3">
+                    {pageHistory.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleSurveyPrev}
+                        className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all text-sm active:scale-95 shrink-0"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span className="hidden sm:inline">Back</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSurveyNext}
+                      className="flex-1 py-3.5 rounded-xl font-bold gradient-btn text-white text-sm shadow-xl flex items-center justify-center space-x-2 active:scale-95 transition-all"
+                    >
+                      <span>{currentPage === maxPage ? 'Review & Submit' : 'Next'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── POLL (non-survey) SUBMIT SECTION ──────────────── */}
+            {poll.pollType !== 'SURVEY' && (
+              <div className="space-y-5">
+                {error && (
+                  <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Math CAPTCHA */}
+                <div className="p-5 rounded-2xl border border-white/5 bg-white/2 space-y-3">
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                    Human Validation — What is {captchaNum1} + {captchaNum2}?
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="number"
+                      required
+                      value={captchaAnswer}
+                      onChange={(e) => setCaptchaAnswer(e.target.value)}
+                      placeholder="Your answer"
+                      className="flex-1 glass-input text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setCaptchaNum1(Math.floor(Math.random() * 9) + 2); setCaptchaNum2(Math.floor(Math.random() * 9) + 2); setCaptchaAnswer(''); setCaptchaError(''); }}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {captchaError && (
+                    <p className="text-red-400 text-[10px] font-semibold">{captchaError}</p>
+                  )}
+                </div>
+
+                {/* Confirm Checkbox */}
+                <label className="flex items-start space-x-3 cursor-pointer group">
+                  <div className="mt-0.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      id="confirmVote"
+                      checked={confirmVoteChecked}
+                      onChange={(e) => setConfirmVoteChecked(e.target.checked)}
+                      className="w-4 h-4 accent-indigo-500 rounded"
+                    />
+                  </div>
+                  <p className="text-gray-400 text-xs leading-relaxed group-hover:text-gray-300 transition-colors">
+                    I explicitly confirm that my selections are final. I understand that <strong className="text-gray-200">my vote cannot be changed or resubmitted</strong> once cast.
+                  </p>
+                </label>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={voteLoading || !confirmVoteChecked}
+                  className="w-full py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+                >
+                  {voteLoading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <span>Submit Secure Vote</span>
+                  )}
+                </button>
               </div>
-
-              {captchaError && (
-                <div className="text-xs text-red-400 font-semibold">{captchaError}</div>
-              )}
-
-              <div className="flex items-center space-x-4">
-                <span className="font-outfit text-base font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-xl">
-                  {captchaNum1} + {captchaNum2} = ?
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={captchaAnswer}
-                  onChange={(e) => setCaptchaAnswer(e.target.value)}
-                  placeholder="Answer"
-                  className="w-24 glass-input text-sm py-1.5 text-center font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Confirm Checkbox */}
-            <div
-              onClick={() => setConfirmVoteChecked(!confirmVoteChecked)}
-              className="flex items-start space-x-3 cursor-pointer select-none"
-            >
-              <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-all ${
-                confirmVoteChecked ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-              }`}>
-                {confirmVoteChecked && <Check className="w-3.5 h-3.5" />}
-              </div>
-              <p className="text-gray-400 text-xs leading-relaxed">
-                I explicitly confirm that my selections are final. I understand that <strong className="text-gray-200">my vote cannot be changed or resubmitted</strong> once cast.
-              </p>
-            </div>
-
-            {/* Submit button */}
-            <button
-              type="submit"
-              disabled={voteLoading}
-              className="w-full py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center"
-            >
-              {voteLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <span>Submit Secure Vote</span>
-              )}
-            </button>
+            )}
           </form>
         </div>
       )}
@@ -2170,6 +2560,113 @@ export default function VoterPortal({ params }: PageProps) {
           </div>
         </div>
       )}
+
+      {/* ── Voter-to-Creator Chat Widget ───────────────────────────────── */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end space-y-4">
+        {showOwnerChat && (
+          <div className="glass-card rounded-2xl border border-white/10 p-4 w-[320px] sm:w-[360px] h-[400px] flex flex-col justify-between bg-[#080d1a] shadow-2xl animate-fade-in-up">
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="w-4 h-4 text-indigo-400" />
+                <span className="font-outfit text-xs font-bold text-white">Message Poll Owner</span>
+              </div>
+              <button
+                onClick={() => setShowOwnerChat(false)}
+                className="text-gray-400 hover:text-white transition-all text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Chat Body */}
+            {!activeVoterIdentifier ? (
+              <div className="flex-1 flex flex-col justify-center items-center text-center p-4 space-y-3">
+                <span className="text-[11px] text-gray-400 leading-relaxed">
+                  To start messaging the poll owner, please enter your email so they can reply to you.
+                </span>
+                <input
+                  type="email"
+                  placeholder="name@example.com"
+                  value={ownerChatEmail}
+                  onChange={(e) => setOwnerChatEmail(e.target.value)}
+                  className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-all text-center"
+                />
+                <button
+                  onClick={() => {
+                    if (!ownerChatEmail || !ownerChatEmail.includes('@')) {
+                      alert('Please enter a valid email address.');
+                      return;
+                    }
+                    setOwnerChatEmail(ownerChatEmail.trim().toLowerCase());
+                  }}
+                  className="px-4 py-2 rounded-xl gradient-btn text-white text-xs font-bold transition-all w-full"
+                >
+                  Start Chat
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Message list */}
+                <div className="flex-1 overflow-y-auto py-3 space-y-2.5 pr-1 no-scrollbar">
+                  {ownerChatMessages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-center text-gray-500 text-[10px] leading-relaxed p-4">
+                      No messages yet. Send a message to the owner/creator of this poll! They will receive it on their dashboard.
+                    </div>
+                  ) : (
+                    ownerChatMessages.map((msg, idx) => {
+                      const isMe = !msg.isFromCreator;
+                      return (
+                        <div
+                          key={msg.id || idx}
+                          className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs leading-normal ${
+                            isMe 
+                              ? 'bg-indigo-600 text-white rounded-br-none' 
+                              : 'bg-white/5 border border-white/5 text-gray-200 rounded-bl-none'
+                          }`}>
+                            <p className="break-words">{msg.text}</p>
+                            <span className="block text-[8px] text-white/50 text-right mt-1">
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Input box */}
+                <form onSubmit={handleSendOwnerMessage} className="flex gap-2 pt-2 border-t border-white/5">
+                  <input
+                    type="text"
+                    placeholder="Type message to creator..."
+                    value={ownerChatInput}
+                    onChange={(e) => setOwnerChatInput(e.target.value)}
+                    className="flex-1 bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={ownerChatSending || !ownerChatInput.trim()}
+                    className="p-2 rounded-xl gradient-btn text-white transition-all flex items-center justify-center shrink-0 disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Floating Toggle Button */}
+        <button
+          onClick={() => setShowOwnerChat(!showOwnerChat)}
+          className="w-12 h-12 rounded-full gradient-btn border border-indigo-400/20 shadow-2xl flex items-center justify-center text-white hover:scale-105 transition-all duration-300"
+          title="Message Poll Owner"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      </div>
     </div>
     </div>
   );

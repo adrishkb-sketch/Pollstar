@@ -42,6 +42,7 @@ model User {
   approvedByAdmin  Boolean     @default(false)
   role             Role        @default(USER)
   polls            Poll[]
+  collaborations   PollCollaborator[]
   auditLogs        AuditLog[]
   createdAt        DateTime    @default(now())
 }
@@ -61,6 +62,7 @@ model Poll {
   title           String
   description     String
   posterUrl       String?
+  shortCode       String?        @unique
   pollType        PollType       @default(POLL)
   isOpenVoting    Boolean        @default(true)
   isAnonymous     Boolean        @default(true)
@@ -73,6 +75,7 @@ model Poll {
   settings        PollSettings?
   votes           Vote[]
   messages        DirectMessage[]
+  collaborators   PollCollaborator[]
   auditLogs       AuditLog[]
   createdAt       DateTime       @default(now())
 }
@@ -83,6 +86,9 @@ model Question {
   poll         Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
   questionText String
   type         QuestionType @default(SINGLE)
+  pageNumber   Int          @default(1)
+  order        Int          @default(1)
+  logicRules   Json?        // Stores branching logic rules
   options      Option[]
 }
 
@@ -131,6 +137,17 @@ model DirectMessage {
   text             String
   isFromCreator    Boolean  @default(false)
   createdAt        DateTime @default(now())
+}
+
+model PollCollaborator {
+  id        String   @id @default(uuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([pollId, userId])
 }
 
 model PollSettings {
@@ -183,6 +200,14 @@ model PollSettings {
   enableUnderdogTracker   Boolean @default(false)
   enableOptionStatsCards  Boolean @default(false)
   enableSuddenDeath       Boolean @default(false)
+  
+  // Premium Survey Engine Features
+  collectEmail            Boolean @default(false)
+  postEmailMessage        String?
+  enableDropOffTracking   Boolean @default(false)
+  enableSemanticAnalysis  Boolean @default(false)
+  enableCrossTabulation   Boolean @default(false)
+  enableTimeAnalytics     Boolean @default(false)
 }
 
 model AuditLog {

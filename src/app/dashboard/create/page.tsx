@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy,
-  Zap, Brain, TrendingUp
+  Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -27,7 +27,7 @@ export default function CreatePoll() {
 
   // Step 2 & 3: Questions & Types
   const [questions, setQuestions] = useState<any[]>([
-    { id: 1, questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'] }
+    { id: 1, questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: 1, logicRules: null }
   ]);
   const [activeQuestionId, setActiveQuestionId] = useState<number>(1);
 
@@ -50,6 +50,7 @@ export default function CreatePoll() {
   // Previous Voter Templates
   const [voterTemplates, setVoterTemplates] = useState<any[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
 
   // Google Sheets import states
   const [sheetUrl, setSheetUrl] = useState('');
@@ -99,6 +100,14 @@ export default function CreatePoll() {
   });
   const [rankedTieBreakerRule, setRankedTieBreakerRule] = useState('FIRST_PLACE');
   const [rankedCompletenessRule, setRankedCompletenessRule] = useState('PARTIAL');
+
+  // Survey Features
+  const [collectEmail, setCollectEmail] = useState(false);
+  const [postEmailMessage, setPostEmailMessage] = useState('');
+  const [enableDropOffTracking, setEnableDropOffTracking] = useState(false);
+  const [enableSemanticAnalysis, setEnableSemanticAnalysis] = useState(false);
+  const [enableCrossTabulation, setEnableCrossTabulation] = useState(false);
+  const [enableTimeAnalytics, setEnableTimeAnalytics] = useState(false);
 
   const hasRankedQuestion = questions.some((q: any) => q.type === 'RANKED');
   const hasSingleQuestion = questions.some((q: any) => q.type === 'SINGLE');
@@ -256,7 +265,13 @@ export default function CreatePoll() {
   };
 
   const handleAddQuestion = () => {
-    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'] }]);
+    const lastPage = questions.length > 0 ? questions[questions.length - 1].pageNumber : 1;
+    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage, logicRules: null }]);
+  };
+
+  const handleAddPage = () => {
+    const lastPage = questions.length > 0 ? questions[questions.length - 1].pageNumber : 0;
+    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage + 1, logicRules: null }]);
   };
 
   const handleRemoveQuestion = (qIndex: number) => {
@@ -528,21 +543,24 @@ export default function CreatePoll() {
       description: ballotPriority === 'LOW' && !isOpenVoting && pollType !== 'SURVEY' ? `${description} [priority: LOW]` : description,
       posterUrl,
       pollType,
-      isOpenVoting: pollType === 'SURVEY' ? true : isOpenVoting,
-      isAnonymous: pollType === 'SURVEY' ? false : isAnonymous,
+      isOpenVoting,
+      isAnonymous,
       isResultPublic,
       startTime: new Date(startTime).toISOString(),
       endTime: new Date(endTime).toISOString(),
       status,
-      questions: questions.map(q => ({
+      questions: questions.map((q, idx) => ({
         questionText: q.questionText,
         type: q.type,
         options: ['SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type) ? [] : q.options,
+        pageNumber: q.pageNumber || 1,
+        order: idx + 1,
+        logicRules: q.logicRules || null,
       })),
       settings: {
-        limitOneVotePerUser: pollType === 'SURVEY' ? false : limitOneVotePerUser,
-        limitOneVotePerIP: pollType === 'SURVEY' ? false : limitOneVotePerIP,
-        limitOneVotePerISP: pollType === 'SURVEY' ? false : limitOneVotePerISP,
+        limitOneVotePerUser,
+        limitOneVotePerIP,
+        limitOneVotePerISP,
         hideResultsUntilEnd,
         publicShowMaps,
         publicShowCharts,
@@ -560,6 +578,12 @@ export default function CreatePoll() {
         rankedTieBreakerRule,
         rankedCompletenessRule,
         postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
+        collectEmail: pollType === 'SURVEY' ? collectEmail : false,
+        postEmailMessage: pollType === 'SURVEY' ? postEmailMessage : null,
+        enableDropOffTracking: pollType === 'SURVEY' ? enableDropOffTracking : false,
+        enableSemanticAnalysis: pollType === 'SURVEY' ? enableSemanticAnalysis : false,
+        enableCrossTabulation: pollType === 'SURVEY' ? enableCrossTabulation : false,
+        enableTimeAnalytics: pollType === 'SURVEY' ? enableTimeAnalytics : false,
       },
       allowedVoters: isOpenVoting 
         ? [] 
@@ -593,9 +617,9 @@ export default function CreatePoll() {
     }
   };
 
-  const stepsList = [
-    'Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'
-  ];
+  const stepsList = pollType === 'SURVEY'
+    ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
+    : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -753,14 +777,24 @@ export default function CreatePoll() {
                   <p className="text-gray-400 text-sm mt-1">Define the questions being asked.</p>
                 </div>
                 {pollType === 'SURVEY' && (
-                  <button
-                    type="button"
-                    onClick={handleAddQuestion}
-                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Question</span>
-                  </button>
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={handleAddPage}
+                      className="px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Page Break</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddQuestion}
+                      className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Question</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -778,8 +812,11 @@ export default function CreatePoll() {
                     )}
                     
                     <div>
-                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                        Question {qIndex + 1}
+                      <label className="flex justify-between items-center text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        <span>Question {qIndex + 1}</span>
+                        {pollType === 'SURVEY' && (
+                          <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Page {q.pageNumber}</span>
+                        )}
                       </label>
                       <input
                         type="text"
@@ -860,6 +897,62 @@ export default function CreatePoll() {
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add Another Option</span>
                         </button>
+                      </div>
+                    )}
+
+                    {pollType === 'SURVEY' && q.type === 'SINGLE' && q.options.length > 0 && (
+                      <div className="mt-4 p-4 rounded-xl border border-indigo-500/10 bg-[#6366f1]/5 space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <Layers className="w-4 h-4 text-indigo-400" />
+                          <span className="text-xs font-bold text-white uppercase tracking-wider">Skip Logic &amp; Branching Rules</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400">
+                          Configure custom routing flows depending on which option the respondent selects.
+                        </p>
+                        <div className="space-y-2.5 pt-1">
+                          {q.options.map((opt: string, optIdx: number) => {
+                            const existingRule = q.logicRules && (q.logicRules as any).rules 
+                              ? (q.logicRules as any).rules.find((r: any) => r.option === opt)
+                              : null;
+                            const currentTarget = existingRule ? existingRule.goToPage : 'DEFAULT';
+
+                            return (
+                              <div key={optIdx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 bg-[#030712]/50 border border-white/5 rounded-lg text-xs">
+                                <span className="font-semibold text-gray-300">If respondent selects "{opt || `Option ${optIdx + 1}`}" :</span>
+                                <select
+                                  value={currentTarget}
+                                  onChange={(e) => {
+                                    const nextTarget = e.target.value;
+                                    const updated = [...questions];
+                                    const rules = q.logicRules && (q.logicRules as any).rules ? [...(q.logicRules as any).rules] : [];
+                                    const ruleIndex = rules.findIndex((r: any) => r.option === opt);
+
+                                    if (nextTarget === 'DEFAULT') {
+                                      if (ruleIndex > -1) rules.splice(ruleIndex, 1);
+                                    } else {
+                                      const newRule = { option: opt, goToPage: nextTarget === 'END' ? 'END' : parseInt(nextTarget) };
+                                      if (ruleIndex > -1) {
+                                        rules[ruleIndex] = newRule;
+                                      } else {
+                                        rules.push(newRule);
+                                      }
+                                    }
+
+                                    updated[qIndex].logicRules = rules.length > 0 ? { rules } : null;
+                                    setQuestions(updated);
+                                  }}
+                                  className="bg-[#030712] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                                >
+                                  <option value="DEFAULT">Default Flow (Next Page)</option>
+                                  {Array.from({ length: Math.max(...questions.map((qu) => qu.pageNumber || 1)) }, (_, i) => i + 1).map((pNum) => (
+                                    <option key={pNum} value={pNum}>Go to Page {pNum}</option>
+                                  ))}
+                                  <option value="END">Submit / End Survey</option>
+                                </select>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -991,16 +1084,16 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 4: Access Settings & Dynamic Spreadsheet (Skipped for Survey) */}
-          {currentStep === 4 && pollType === 'POLL' && (
+          {/* STEP 4: Access Settings & Dynamic Spreadsheet */}
+          {currentStep === 4 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Audience Controls</h2>
-                <p className="text-gray-400 text-sm mt-1">Select who is authorized to vote on this poll.</p>
+                <p className="text-gray-400 text-sm mt-1">Select who is authorized to participate in this {pollType === 'SURVEY' ? 'survey' : 'poll'}.</p>
               </div>
 
               <div className="flex justify-between items-center bg-white/3 border border-white/5 rounded-2xl p-4 gap-4">
-                <span className="text-sm font-semibold text-gray-300">Allow Open Public Voting?</span>
+                <span className="text-sm font-semibold text-gray-300">Allow Open Public Access?</span>
                 <div className="flex items-center space-x-1.5 bg-white/5 p-1 rounded-xl border border-white/5">
                   <button
                     type="button"
@@ -1032,18 +1125,30 @@ export default function CreatePoll() {
                   <p className="text-gray-400 text-xs leading-relaxed">
                     Instantly re-import voter profiles, custom confirmation labels, and secondary settings from your past closed polls.
                   </p>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                  <div className="flex flex-col gap-3 pt-1">
+                    <div className="relative">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                      <input
+                        type="text"
+                        placeholder="Search past polls by title..."
+                        value={templateSearchQuery}
+                        onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-[#030712] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-gray-500"
+                      />
+                    </div>
                     <select
                       onChange={(e) => handleImportTemplate(e.target.value)}
                       defaultValue=""
-                      className="flex-1 bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                     >
                       <option value="" disabled>-- Select a previous closed poll --</option>
-                      {voterTemplates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title} ({t.allowedVoters?.length || 0} Voters)
-                        </option>
-                      ))}
+                      {voterTemplates
+                        .filter((t) => t.title.toLowerCase().includes(templateSearchQuery.toLowerCase()))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title} ({t.allowedVoters?.length || 0} Voters)
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -1286,12 +1391,14 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 5: Security Restrictions (Skipped for Survey) */}
-          {currentStep === 5 && pollType === 'POLL' && (
+          {/* STEP 5: Security Restrictions */}
+          {currentStep === 5 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Stop Cheating</h2>
-                <p className="text-gray-400 text-sm mt-1">Add protections to keep votes fair and stop anyone from voting more than once.</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Add protections to keep {pollType === 'SURVEY' ? 'submissions' : 'votes'} fair and stop anyone from submitting multiple times.
+                </p>
               </div>
 
               <div className="space-y-4 pt-4">
@@ -1299,7 +1406,7 @@ export default function CreatePoll() {
                 {!isOpenVoting && (
                   <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
-                      Ballot Security Priority (Closed Voting Only)
+                      Security Priority (Closed {pollType === 'SURVEY' ? 'Survey' : 'Voting'} Only)
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div
@@ -1312,7 +1419,7 @@ export default function CreatePoll() {
                       >
                         <span className="block font-bold text-sm">🔴 High Security</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Voters must enter a 6-digit email code before they can vote or see live results.
+                          {pollType === 'SURVEY' ? 'Respondents' : 'Voters'} must enter a 6-digit email code before they can submit or see results.
                         </span>
                       </div>
                       <div
@@ -1325,7 +1432,7 @@ export default function CreatePoll() {
                       >
                         <span className="block font-bold text-sm">🟢 Easy Access</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          No email code needed. Voters go straight to the ballot and can see results instantly.
+                          No email code needed. {pollType === 'SURVEY' ? 'Respondents' : 'Voters'} go straight to the form and submit immediately.
                         </span>
                       </div>
                     </div>
@@ -1344,9 +1451,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per Person (by Email)</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Response Per Person (by Email)</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Each person can only vote once using their email. If they try again with a different email alias, it won't count.
+                        Each person can only submit once using their email. If they try again with a different email alias, it won't count.
                       </p>
                     </div>
                   </div>
@@ -1369,9 +1476,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per Device</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Response Per Device</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Spots if the same phone or computer tries to vote more than once and flags those votes as suspicious.
+                        Detects if the same phone or computer tries to submit more than once and flags suspicious attempts.
                       </p>
                     </div>
                   </div>
@@ -1394,9 +1501,9 @@ export default function CreatePoll() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">One Vote Per WiFi Network</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">One Response Per WiFi Network</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Stops multiple votes from the same internet connection or WiFi hotspot.
+                        Stops multiple submissions from the same internet connection or WiFi hotspot.
                       </p>
                     </div>
                   </div>
@@ -1410,62 +1517,117 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 6: Anonymity Settings (Skipped for Survey) */}
-          {currentStep === 6 && pollType === 'POLL' && (
-            <div className="space-y-6 animate-fade-in-up">
-              <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Voter Privacy</h2>
-                <p className="text-gray-400 text-sm mt-1">Decide if you want to know who voted for what, or keep everything fully anonymous.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
-                {/* Anonymous */}
-                <div
-                  onClick={() => setIsAnonymous(true)}
-                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
-                    isAnonymous
-                      ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
-                      : 'border-white/5 hover:border-white/10 hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                      <Users className="w-6 h-6" />
-                    </div>
-                    {isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />}
-                  </div>
-                  <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Fully Anonymous</h3>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Voter choices are never linked to names or emails in your reports. Completely private. No one can see who voted what.
-                    </p>
-                  </div>
+          {/* STEP 6: Privacy / Anonymity Settings */}
+          {currentStep === 6 && (
+            pollType === 'POLL' ? (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Voter Privacy</h2>
+                  <p className="text-gray-400 text-sm mt-1">Decide if you want to know who voted for what, or keep everything fully anonymous.</p>
                 </div>
 
-                {/* Known Voting */}
-                <div
-                  onClick={() => setIsAnonymous(false)}
-                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
-                    !isAnonymous
-                      ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
-                      : 'border-white/5 hover:border-white/10 hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
-                      <Calendar className="w-6 h-6" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+                  {/* Anonymous */}
+                  <div
+                    onClick={() => setIsAnonymous(true)}
+                    className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
+                      isAnonymous
+                        ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
+                        : 'border-white/5 hover:border-white/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      {isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />}
                     </div>
-                    {!isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />}
+                    <div>
+                      <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Fully Anonymous</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Voter choices are never linked to names or emails in your reports. Completely private. No one can see who voted what.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Tracked Voting</h3>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Voter names and emails are recorded next to their choices in your reports. You can see exactly who voted for what.
-                    </p>
+
+                  {/* Known Voting */}
+                  <div
+                    onClick={() => setIsAnonymous(false)}
+                    className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
+                      !isAnonymous
+                        ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
+                        : 'border-white/5 hover:border-white/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      {!isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />}
+                    </div>
+                    <div>
+                      <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Tracked Voting</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Voter names and emails are recorded next to their choices in your reports. You can see exactly who voted for what.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Respondent Privacy &amp; Collection</h2>
+                  <p className="text-gray-400 text-sm mt-1">Configure email collection and automated post-survey replies.</p>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  {/* Email collection toggle */}
+                  <div
+                    onClick={() => setCollectEmail(!collectEmail)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      collectEmail ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Collect Email Addresses</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Require respondents to input a verified email address before completing the survey.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      collectEmail ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {collectEmail && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Custom reply email message */}
+                  {collectEmail && (
+                    <div className="glass-card rounded-2xl p-5 border border-white/5 bg-white/2 space-y-3 animate-fade-in-up">
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                        Auto-Response Message
+                      </label>
+                      <p className="text-[10px] text-gray-400">
+                        This message will be displayed or sent to the respondents right after they complete the survey and provide their email.
+                      </p>
+                      <textarea
+                        rows={3}
+                        value={postEmailMessage}
+                        onChange={(e) => setPostEmailMessage(e.target.value)}
+                        placeholder="e.g. Thanks for participating! Your responses have been recorded and we've registered your email for our follow-up newsletter."
+                        className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
           )}
 
           {/* STEP 7: Time Scheduling */}
@@ -1508,275 +1670,398 @@ export default function CreatePoll() {
 
           {/* STEP 8: Review & Results Visibility Toggles */}
           {currentStep === 8 && (
-            <div className="space-y-6 animate-fade-in-up">
-              <div>
-                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Results &amp; Visibility</h2>
-                <p className="text-gray-400 text-sm mt-1">Choose what voters see and when they can see it.</p>
-              </div>
-
-              <div className="space-y-4 pt-4">
-                {/* Results Visibility */}
-                <div
-                  onClick={() => {
-                    const nextVal = !hideResultsUntilEnd;
-                    setHideResultsUntilEnd(nextVal);
-                    if (nextVal) {
-                      setIsResultPublic(false);
-                    }
-                  }}
-                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
-                    hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
-                      <Shield className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Keep Results Hidden Until Poll Ends</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Voters can't see any results while voting is happening. Results only appear after the poll officially closes.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                    hideResultsUntilEnd ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                  }`}>
-                    {hideResultsUntilEnd && <Check className="w-3.5 h-3.5" />}
-                  </div>
+            pollType === 'POLL' ? (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Results &amp; Visibility</h2>
+                  <p className="text-gray-400 text-sm mt-1">Choose what voters see and when they can see it.</p>
                 </div>
 
-                {/* Make Report Public */}
-                <div
-                  onClick={() => {
-                    const nextVal = !isResultPublic;
-                    setIsResultPublic(nextVal);
-                    if (nextVal) {
-                      setHideResultsUntilEnd(false);
-                    }
-                  }}
-                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
-                    isResultPublic ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 shrink-0">
-                      <Shield className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Let Anyone See the Full Results</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        When turned on, anyone with the link can see vote charts, maps, and totals — no login needed.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                    isResultPublic ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                  }`}>
-                    {isResultPublic && <Check className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
-
-                {/* Granular Analytics Controls */}
-                {isResultPublic && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 animate-fade-in-up">
-                    <div
-                      onClick={() => setPublicShowCharts(!publicShowCharts)}
-                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
-                        publicShowCharts ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowCharts ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
-                        {publicShowCharts && <Check className="w-3 h-3" />}
-                      </div>
-                      <span className="text-xs font-bold text-white">Show Charts</span>
-                      <span className="text-[10px] text-gray-500 mt-1">Bar/Pie charts of votes</span>
-                    </div>
-
-                    <div
-                      onClick={() => setPublicShowMaps(!publicShowMaps)}
-                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
-                        publicShowMaps ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowMaps ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
-                        {publicShowMaps && <Check className="w-3 h-3" />}
-                      </div>
-                      <span className="text-xs font-bold text-white">Show Maps</span>
-                      <span className="text-[10px] text-gray-500 mt-1">Live geolocation tracking</span>
-                    </div>
-
-                    <div
-                      onClick={() => setPublicShowStats(!publicShowStats)}
-                      className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
-                        publicShowStats ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowStats ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
-                        {publicShowStats && <Check className="w-3 h-3" />}
-                      </div>
-                      <span className="text-xs font-bold text-white">Show Stats</span>
-                      <span className="text-[10px] text-gray-500 mt-1">Total vote counts</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Confidence Slider Toggle — only for Single Choice polls */}
-                {questions.some((q: any) => q.type === 'SINGLE') && (
+                <div className="space-y-4 pt-4">
+                  {/* Results Visibility */}
                   <div
-                    onClick={() => setEnableConfidenceSlider(!enableConfidenceSlider)}
-                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up ${
-                      enableConfidenceSlider ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    onClick={() => {
+                      const nextVal = !hideResultsUntilEnd;
+                      setHideResultsUntilEnd(nextVal);
+                      if (nextVal) {
+                        setIsResultPublic(false);
+                      }
+                    }}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
                     }`}
                   >
                     <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                        <Award className="w-5 h-5" />
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <Shield className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Ask Voters How Confident They Are</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Keep Results Hidden Until Poll Ends</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          After picking a choice, voters move a slider from 1–100 to show how sure they are. You'll see a <strong className="text-amber-400">Conviction Score</strong> in your results showing the overall certainty level.
+                          Voters can't see any results while voting is happening. Results only appear after the poll officially closes.
                         </p>
                       </div>
                     </div>
                     <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                      enableConfidenceSlider ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      hideResultsUntilEnd ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
                     }`}>
-                      {enableConfidenceSlider && <Check className="w-3.5 h-3.5" />}
+                      {hideResultsUntilEnd && <Check className="w-3.5 h-3.5" />}
                     </div>
                   </div>
-                )}
 
-                {/* Drag and Drop Podium Toggle - Ranked choice only */}
-                {questions.some((q: any) => q.type === 'RANKED') && (
+                  {/* Make Report Public */}
                   <div
-                    onClick={() => setEnableDragAndDropPodium(!enableDragAndDropPodium)}
+                    onClick={() => {
+                      const nextVal = !isResultPublic;
+                      setIsResultPublic(nextVal);
+                      if (nextVal) {
+                        setHideResultsUntilEnd(false);
+                      }
+                    }}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      isResultPublic ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 shrink-0">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Let Anyone See the Full Results</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          When turned on, anyone with the link can see vote charts, maps, and totals — no login needed.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      isResultPublic ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {isResultPublic && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Granular Analytics Controls */}
+                  {isResultPublic && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 animate-fade-in-up">
+                      <div
+                        onClick={() => setPublicShowCharts(!publicShowCharts)}
+                        className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                          publicShowCharts ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowCharts ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                          {publicShowCharts && <Check className="w-3 h-3" />}
+                        </div>
+                        <span className="text-xs font-bold text-white">Show Charts</span>
+                        <span className="text-[10px] text-gray-500 mt-1">Bar/Pie charts of votes</span>
+                      </div>
+
+                      <div
+                        onClick={() => setPublicShowMaps(!publicShowMaps)}
+                        className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                          publicShowMaps ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowMaps ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                          {publicShowMaps && <Check className="w-3 h-3" />}
+                        </div>
+                        <span className="text-xs font-bold text-white">Show Maps</span>
+                        <span className="text-[10px] text-gray-500 mt-1">Live geolocation tracking</span>
+                      </div>
+
+                      <div
+                        onClick={() => setPublicShowStats(!publicShowStats)}
+                        className={`glass-card rounded-xl p-4 border cursor-pointer flex flex-col items-center text-center transition-all ${
+                          publicShowStats ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5 opacity-60'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border mb-2 flex items-center justify-center ${publicShowStats ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'}`}>
+                          {publicShowStats && <Check className="w-3 h-3" />}
+                        </div>
+                        <span className="text-xs font-bold text-white">Show Stats</span>
+                        <span className="text-[10px] text-gray-500 mt-1">Total vote counts</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confidence Slider Toggle — only for Single Choice polls */}
+                  {questions.some((q: any) => q.type === 'SINGLE') && (
+                    <div
+                      onClick={() => setEnableConfidenceSlider(!enableConfidenceSlider)}
+                      className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up ${
+                        enableConfidenceSlider ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                          <Award className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Ask Voters How Confident They Are</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            After picking a choice, voters move a slider from 1–100 to show how sure they are. You'll see a <strong className="text-amber-400">Conviction Score</strong> in your results showing the overall certainty level.
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                        enableConfidenceSlider ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      }`}>
+                        {enableConfidenceSlider && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drag and Drop Podium Toggle - Ranked choice only */}
+                  {questions.some((q: any) => q.type === 'RANKED') && (
+                    <div
+                      onClick={() => setEnableDragAndDropPodium(!enableDragAndDropPodium)}
+                      className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                        enableDragAndDropPodium ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                          <Trophy className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Let Voters Drag Options to a Podium</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            Instead of picking numbers, voters physically drag their top picks onto a Gold, Silver, and Bronze podium for a hands-on ranking experience.
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                        enableDragAndDropPodium ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      }`}>
+                        {enableDragAndDropPodium && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hot Streak Momentum Toggle */}
+                  {questions.some((q: any) => ['SINGLE', 'RANKED'].includes(q.type)) && (
+                    <div
+                      onClick={() => setEnableHotStreaks(!enableHotStreaks)}
+                      className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
+                        enableHotStreaks ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                          <Zap className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Show Which Option Is Going Viral 🔥</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            A glowing fire badge appears on whichever option is suddenly getting a rush of new votes. Perfect for keeping energy high at live events!
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                        enableHotStreaks ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      }`}>
+                        {enableHotStreaks && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Live Ticker Toggle */}
+                  <div
+                    onClick={() => setEnableLiveTicker(!enableLiveTicker)}
                     className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
-                      enableDragAndDropPodium ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                      enableLiveTicker ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
                     }`}
                   >
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                        <Trophy className="w-5 h-5" />
+                        <TrendingUp className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Let Voters Drag Options to a Podium</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Add a Live Score Ticker to Dashboard</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          Instead of picking numbers, voters physically drag their top picks onto a Gold, Silver, and Bronze podium for a hands-on ranking experience.
+                          Adds a scrolling live feed to your dashboard — like a stock market ticker. Green means an option is gaining votes, red means it's dropping.
                         </p>
                       </div>
                     </div>
                     <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                      enableDragAndDropPodium ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      enableLiveTicker ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
                     }`}>
-                      {enableDragAndDropPodium && <Check className="w-3.5 h-3.5" />}
+                      {enableLiveTicker && <Check className="w-3.5 h-3.5" />}
                     </div>
                   </div>
-                )}
 
-                {/* Hot Streak Momentum Toggle */}
-                {questions.some((q: any) => ['SINGLE', 'RANKED'].includes(q.type)) && (
+                  {/* Smart Debrief Toggle */}
                   <div
-                    onClick={() => setEnableHotStreaks(!enableHotStreaks)}
+                    onClick={() => setEnableSmartDebrief(!enableSmartDebrief)}
                     className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
-                      enableHotStreaks ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                      enableSmartDebrief ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
                     }`}
                   >
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                        <Zap className="w-5 h-5" />
+                        <Brain className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Show Which Option Is Going Viral 🔥</h4>
+                        <h4 className="font-outfit font-bold text-white text-sm">Auto-Generate a Result Summary</h4>
                         <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          A glowing fire badge appears on whichever option is suddenly getting a rush of new votes. Perfect for keeping energy high at live events!
+                          Automatically writes a short, plain-English breakdown of your results after the poll ends — who won, by how much, and what stood out.
                         </p>
                       </div>
                     </div>
                     <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                      enableHotStreaks ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                      enableSmartDebrief ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
                     }`}>
-                      {enableHotStreaks && <Check className="w-3.5 h-3.5" />}
+                      {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
                     </div>
                   </div>
-                )}
 
-                {/* Live Ticker Toggle */}
-                <div
-                  onClick={() => setEnableLiveTicker(!enableLiveTicker)}
-                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
-                    enableLiveTicker ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                      <TrendingUp className="w-5 h-5" />
+                  {/* Leaderboard Visibility Option (Keep it separate from reports) */}
+                  <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Leaderboard Visibility</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Define when the live voter leaderboard (who voted first, frequency etc.) should be visible. (Kept independent from statistical reports).
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Add a Live Score Ticker to Dashboard</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Adds a scrolling live feed to your dashboard — like a stock market ticker. Green means an option is gaining votes, red means it's dropping.
-                      </p>
-                    </div>
+                    <select
+                      value={leaderboardVisibility}
+                      onChange={(e) => setLeaderboardVisibility(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
+                    >
+                      <option value="HIDDEN" className="bg-slate-900 text-white">Hidden (Never Visible)</option>
+                      <option value="SHOWN_AFTER_VOTE" className="bg-slate-900 text-white">Shown After Vote (Ballot Completion Screen)</option>
+                      <option value="LIVE" className="bg-slate-900 text-white">Live (Always Visible to Electorate)</option>
+                    </select>
                   </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                    enableLiveTicker ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                  }`}>
-                    {enableLiveTicker && <Check className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
-
-                {/* Smart Debrief Toggle */}
-                <div
-                  onClick={() => setEnableSmartDebrief(!enableSmartDebrief)}
-                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
-                    enableSmartDebrief ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                      <Brain className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Auto-Generate a Result Summary</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Automatically writes a short, plain-English breakdown of your results after the poll ends — who won, by how much, and what stood out.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                    enableSmartDebrief ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                  }`}>
-                    {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
-
-                {/* Leaderboard Visibility Option (Keep it separate from reports) */}
-                <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3 mt-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
-                      <Users className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Leaderboard Visibility</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Define when the live voter leaderboard (who voted first, frequency etc.) should be visible. (Kept independent from statistical reports).
-                      </p>
-                    </div>
-                  </div>
-                  <select
-                    value={leaderboardVisibility}
-                    onChange={(e) => setLeaderboardVisibility(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
-                  >
-                    <option value="HIDDEN" className="bg-slate-900 text-white">Hidden (Never Visible)</option>
-                    <option value="SHOWN_AFTER_VOTE" className="bg-slate-900 text-white">Shown After Vote (Ballot Completion Screen)</option>
-                    <option value="LIVE" className="bg-slate-900 text-white">Live (Always Visible to Electorate)</option>
-                  </select>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Survey Flow &amp; Visibility</h2>
+                  <p className="text-gray-400 text-sm mt-1">Configure respondent access to statistics and auto-summary parameters.</p>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  {/* Results Visibility */}
+                  <div
+                    onClick={() => {
+                      const nextVal = !hideResultsUntilEnd;
+                      setHideResultsUntilEnd(nextVal);
+                      if (nextVal) {
+                        setIsResultPublic(false);
+                      }
+                    }}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <EyeOff className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Private Survey Results</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Respondents cannot see any aggregated responses. Results are only visible to the survey owner and collaborators.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      hideResultsUntilEnd ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {hideResultsUntilEnd && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Make Results Public */}
+                  <div
+                    onClick={() => {
+                      const nextVal = !isResultPublic;
+                      setIsResultPublic(nextVal);
+                      if (nextVal) {
+                        setHideResultsUntilEnd(false);
+                      }
+                    }}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      isResultPublic ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 shrink-0">
+                        <Eye className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Show Aggregated Metrics to Respondents</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Allow respondents to view real-time anonymous statistics and summary charts immediately after submitting their feedback.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      isResultPublic ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {isResultPublic && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Executive Smart Summary Debrief */}
+                  <div
+                    onClick={() => setEnableSmartDebrief(!enableSmartDebrief)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all mt-4 ${
+                      enableSmartDebrief ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Auto-Generate Executive Summary</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Enables our smart analytics pipeline to compile an automated executive digest of key takeaways, main trends, and text sentiment breakdowns.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableSmartDebrief ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Enable Cohort Filtering */}
+                  <div
+                    onClick={() => setEnableCrossTabulation(!enableCrossTabulation)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all mt-4 ${
+                      enableCrossTabulation ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Geographic &amp; Age Group Cross-Tabulation</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Prepends mandatory, smart demographic selectors (Region, Age Cohort) to capture segment data for premium analytics grouping.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableCrossTabulation ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableCrossTabulation && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           )}
 
           {/* STEP 9: Advanced Features */}
@@ -1784,168 +2069,213 @@ export default function CreatePoll() {
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Advanced Features</h2>
-                <p className="text-gray-400 text-sm mt-1">Turn on special analytics and tools for your poll type.</p>
+                <p className="text-gray-400 text-sm mt-1">Turn on special analytics and tools for your {pollType === 'SURVEY' ? 'survey' : 'poll'} type.</p>
               </div>
 
               <div className="space-y-6 pt-4">
-                {/* Single Choice features */}
-                {hasSingleQuestion && (
+                {pollType === 'SURVEY' ? (
                   <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-4 animate-fade-in-up">
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Single Choice Extras</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm">Premium Survey Analysis Suite</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Add advanced options to your single choice questions.
+                        Add enterprise-grade tracking and deep analytical capabilities to your survey.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        ['enableQuadraticVoting', 'Quadratic Voting (Point-based)', 'Voters get points to split among choices. Buying more votes for one option costs exponentially more.'],
-                        ['enableAiProjection', 'AI Vote Projection', 'Predicts the final vote outcome early on by analyzing voting speed and patterns.'],
-                        ['enableCohortCrossTab', 'Voter Group Comparison', 'Filters and shows results by different groups like age, location, or department.'],
-                        ['enableSentimentChat', 'Opinion Chatbox', 'Adds a live chat sidebar where voter comments are automatically marked with feeling/sentiment tags.'],
-                        ['enableSwingMap', 'Voter Shift Map', 'Shows how voter preferences shift from one choice to another over time.']
-                      ].map(([key, label, desc]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => toggleSingleFeature(key)}
-                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                            singleFeatures[key] ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full gap-3">
-                            <span className="text-xs font-bold text-white">{label}</span>
-                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                              singleFeatures[key] ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                            }`}>
-                              {singleFeatures[key] && <Check className="w-3 h-3" />}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                        </button>
-                      ))}
+                        [enableDropOffTracking, setEnableDropOffTracking, 'Respondent Drop-Off & Abandonment', 'Pinpoint exactly which survey page or specific question is causing respondents to quit early.'],
+                        [enableSemanticAnalysis, setEnableSemanticAnalysis, 'Semantic Grouping & Sentiment Profiling', 'Automatically aggregates open-text answers by sentiment tones and extracts common thematic keywords.'],
+                        [enableCrossTabulation, setEnableCrossTabulation, 'Demographic & Cohort Cross-Tabulation', 'Allows you to slice, dice, filter, and sort survey results by age groups, region, and responder segments.'],
+                        [enableTimeAnalytics, setEnableTimeAnalytics, 'Time-to-Complete & Attention Tracking', 'Measure the precise seconds spent by respondents on each page to identify question friction.']
+                      ].map(([val, setter, label, desc], idx) => {
+                        const isVal = val as boolean;
+                        const labelStr = label as string;
+                        const descStr = desc as string;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => (setter as any)(!isVal)}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                              isVal ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full gap-3">
+                              <span className="text-xs font-bold text-white">{labelStr}</span>
+                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                isVal ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isVal && <Check className="w-3 h-3" />}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                )}
-
-                {/* Ranked Choice features */}
-                {hasRankedQuestion && (
-                  <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up">
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Ranked Choice Extras</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Add advanced voting modules and deep analytics to your ranked questions.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        ['enablePreferenceFlowMap', 'Preference Flow Map', 'Shows where votes go when lower-ranked options get eliminated.'],
-                        ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix', 'A table showing how every choice fares head-to-head against every other.'],
-                        ['enableConsensusScore', 'Consensus Score', 'Finds the choice that most voters find acceptable, even if it is not their first choice.'],
-                        ['enablePolarizationDetector', 'Polarization Detector', 'Flags options that voters either love (1st place) or hate (last place).'],
-                        ['enableKingmakerAnalysis', 'Kingmaker Analysis', 'Identifies which eliminated option had the most power to decide the winner.'],
-                        ['enableRankHeatmap', 'Rank Distribution Heatmap', 'A map showing exactly how many 1st, 2nd, and 3rd place votes each choice got.'],
-                        ['enableRankConfidence', 'Voter Confidence by Rank', 'Measures how sure voters were about their choices at each rank level.'],
-                        ['enableScenarioSimulator', 'Scenario Simulator', 'Lets you temporarily remove a choice to see how it changes the winner.'],
-                        ['enableTieBreakerEngine', 'Tie-Breaker Engine', 'Uses custom rules to resolve close ties.'],
-                        ['enableRankCompleteness', 'Rank Completeness Rules', 'Sets whether voters must rank all choices or just their top ones.'],
-                        ['enablePodiumResults', 'Podium Result Mode', 'Displays the top three choices on a gold, silver, and bronze podium.'],
-                        ['enableCoalitionFinder', 'Preference Coalition Finder', 'Finds groups of voters who made similar top ranking patterns.'],
-                        ['enableMinorityProtection', 'Minority Protection Score', 'Checks if choices favored by smaller groups were completely ignored.'],
-                        ['enableAuditReplay', 'Audit Replay', 'Lets you review and replay the elimination rounds step-by-step.']
-                      ].map(([key, label, desc]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => toggleRankedFeature(key)}
-                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                            rankedFeatures[key] ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full gap-3">
-                            <span className="text-xs font-bold text-white">{label}</span>
-                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                              rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                            }`}>
-                              {rankedFeatures[key] && <Check className="w-3 h-3" />}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {rankedFeatures.enableTieBreakerEngine && (
-                      <select
-                        value={rankedTieBreakerRule}
-                        onChange={(e) => setRankedTieBreakerRule(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
-                      >
-                        <option value="FIRST_PLACE" className="bg-slate-900 text-white">Tie-break by most first-place votes</option>
-                        <option value="AVERAGE_RANK" className="bg-slate-900 text-white">Tie-break by best average rank</option>
-                        <option value="HEAD_TO_HEAD" className="bg-slate-900 text-white">Tie-break by head-to-head preference</option>
-                      </select>
+                ) : (
+                  <>
+                    {/* Single Choice features */}
+                    {hasSingleQuestion && (
+                      <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-4 animate-fade-in-up">
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Single Choice Extras</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            Add advanced options to your single choice questions.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            ['enableQuadraticVoting', 'Quadratic Voting (Point-based)', 'Voters get points to split among choices. Buying more votes for one option costs exponentially more.'],
+                            ['enableAiProjection', 'AI Vote Projection', 'Predicts the final vote outcome early on by analyzing voting speed and patterns.'],
+                            ['enableCohortCrossTab', 'Voter Group Comparison', 'Filters and shows results by different groups like age, location, or department.'],
+                            ['enableSentimentChat', 'Opinion Chatbox', 'Adds a live chat sidebar where voter comments are automatically marked with feeling/sentiment tags.'],
+                            ['enableSwingMap', 'Voter Shift Map', 'Shows how voter preferences shift from one choice to another over time.']
+                          ].map(([key, label, desc]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => toggleSingleFeature(key)}
+                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                                singleFeatures[key] ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full gap-3">
+                                <span className="text-xs font-bold text-white">{label}</span>
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  singleFeatures[key] ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {singleFeatures[key] && <Check className="w-3 h-3" />}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
 
-                    {rankedFeatures.enableRankCompleteness && (
-                      <select
-                        value={rankedCompletenessRule}
-                        onChange={(e) => setRankedCompletenessRule(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
-                      >
-                        <option value="PARTIAL" className="bg-slate-900 text-white">Allow partial rankings</option>
-                        <option value="TOP_3" className="bg-slate-900 text-white">Require at least top 3</option>
-                        <option value="FULL" className="bg-slate-900 text-white">Require full ranking</option>
-                      </select>
+                    {/* Ranked Choice features */}
+                    {hasRankedQuestion && (
+                      <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up">
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Ranked Choice Extras</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            Add advanced voting modules and deep analytics to your ranked questions.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            ['enablePreferenceFlowMap', 'Preference Flow Map', 'Shows where votes go when lower-ranked options get eliminated.'],
+                            ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix', 'A table showing how every choice fares head-to-head against every other.'],
+                            ['enableConsensusScore', 'Consensus Score', 'Finds the choice that most voters find acceptable, even if it is not their first choice.'],
+                            ['enablePolarizationDetector', 'Polarization Detector', 'Flags options that voters either love (1st place) or hate (last place).'],
+                            ['enableKingmakerAnalysis', 'Kingmaker Analysis', 'Identifies which eliminated option had the most power to decide the winner.'],
+                            ['enableRankHeatmap', 'Rank Distribution Heatmap', 'A map showing exactly how many 1st, 2nd, and 3rd place votes each choice got.'],
+                            ['enableRankConfidence', 'Voter Confidence by Rank', 'Measures how sure voters were about their choices at each rank level.'],
+                            ['enableScenarioSimulator', 'Scenario Simulator', 'Lets you temporarily remove a choice to see how it changes the winner.'],
+                            ['enableTieBreakerEngine', 'Tie-Breaker Engine', 'Uses custom rules to resolve close ties.'],
+                            ['enableRankCompleteness', 'Rank Completeness Rules', 'Sets whether voters must rank all choices or just their top ones.'],
+                            ['enablePodiumResults', 'Podium Result Mode', 'Displays the top three choices on a gold, silver, and bronze podium.'],
+                            ['enableCoalitionFinder', 'Preference Coalition Finder', 'Finds groups of voters who made similar top ranking patterns.'],
+                            ['enableMinorityProtection', 'Minority Protection Score', 'Checks if choices favored by smaller groups were completely ignored.'],
+                            ['enableAuditReplay', 'Audit Replay', 'Lets you review and replay the elimination rounds step-by-step.']
+                          ].map(([key, label, desc]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => toggleRankedFeature(key)}
+                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                                rankedFeatures[key] ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full gap-3">
+                                <span className="text-xs font-bold text-white">{label}</span>
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {rankedFeatures[key] && <Check className="w-3 h-3" />}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {rankedFeatures.enableTieBreakerEngine && (
+                          <select
+                            value={rankedTieBreakerRule}
+                            onChange={(e) => setRankedTieBreakerRule(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
+                          >
+                            <option value="FIRST_PLACE" className="bg-slate-900 text-white">Tie-break by most first-place votes</option>
+                            <option value="AVERAGE_RANK" className="bg-slate-900 text-white">Tie-break by best average rank</option>
+                            <option value="HEAD_TO_HEAD" className="bg-slate-900 text-white">Tie-break by head-to-head preference</option>
+                          </select>
+                        )}
+
+                        {rankedFeatures.enableRankCompleteness && (
+                          <select
+                            value={rankedCompletenessRule}
+                            onChange={(e) => setRankedCompletenessRule(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
+                          >
+                            <option value="PARTIAL" className="bg-slate-900 text-white">Allow partial rankings</option>
+                            <option value="TOP_3" className="bg-slate-900 text-white">Require at least top 3</option>
+                            <option value="FULL" className="bg-slate-900 text-white">Require full ranking</option>
+                          </select>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
 
-                {/* Knockout features */}
-                {hasKnockoutQuestion && (
-                  <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Knockout Extras</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Add bracket guessing and other game-like features to your knockout tournament questions.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        ['enableBracketPredictions', 'Playoff Bracket Guessing', 'Voters can guess the tournament bracket winner before matches start, earning prediction points.'],
-                        ['enableDoubleElimination', 'Double Elimination', 'Options must lose twice before being knocked out, giving underdogs a second chance.'],
-                        ['enableUnderdogTracker', 'Underdog Tracker', 'Highlights matches where the lower-seeded option beats the favorite.'],
-                        ['enableOptionStatsCards', 'Option Factsheets', 'Displays key stats, player cards, or descriptions for each option directly on the ballot.'],
-                        ['enableSuddenDeath', 'Sudden Death Overtime', 'Instantly breaks tie matches using a quick voter shootout or coin toss.']
-                      ].map(([key, label, desc]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => toggleKnockoutFeature(key)}
-                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                            knockoutFeatures[key] ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full gap-3">
-                            <span className="text-xs font-bold text-white">{label}</span>
-                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                              knockoutFeatures[key] ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                            }`}>
-                              {knockoutFeatures[key] && <Check className="w-3 h-3" />}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                    {/* Knockout features */}
+                    {hasKnockoutQuestion && (
+                      <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
+                        <div>
+                          <h4 className="font-outfit font-bold text-white text-sm">Knockout Extras</h4>
+                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                            Add bracket guessing and other game-like features to your knockout tournament questions.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            ['enableBracketPredictions', 'Playoff Bracket Guessing', 'Voters can guess the tournament bracket winner before matches start, earning prediction points.'],
+                            ['enableDoubleElimination', 'Double Elimination', 'Options must lose twice before being knocked out, giving underdogs a second chance.'],
+                            ['enableUnderdogTracker', 'Underdog Tracker', 'Highlights matches where the lower-seeded option beats the favorite.'],
+                            ['enableOptionStatsCards', 'Option Factsheets', 'Displays key stats, player cards, or descriptions for each option directly on the ballot.'],
+                            ['enableSuddenDeath', 'Sudden Death Overtime', 'Instantly breaks tie matches using a quick voter shootout or coin toss.']
+                          ].map(([key, label, desc]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => toggleKnockoutFeature(key)}
+                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                                knockoutFeatures[key] ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full gap-3">
+                                <span className="text-xs font-bold text-white">{label}</span>
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  knockoutFeatures[key] ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {knockoutFeatures[key] && <Check className="w-3 h-3" />}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                {/* If none of the advanced features are applicable */}
-                {!hasSingleQuestion && !hasRankedQuestion && !hasKnockoutQuestion && (
-                  <div className="text-center py-8 text-gray-400 text-sm">
-                    No advanced features are available for the selected question types.
-                  </div>
+                    {/* If none of the advanced features are applicable */}
+                    {!hasSingleQuestion && !hasRankedQuestion && !hasKnockoutQuestion && (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        No advanced features are available for the selected question types.
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

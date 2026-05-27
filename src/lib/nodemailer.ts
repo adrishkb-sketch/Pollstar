@@ -453,3 +453,63 @@ export async function sendCreatorApprovalEmail(email: string): Promise<boolean> 
 
   return true;
 }
+
+/**
+ * Sends an email notification to a collaborator.
+ */
+export async function sendPollCollaboratorInvitationEmail(
+  email: string,
+  pollTitle: string,
+  inviteLink: string,
+  isRegistered: boolean
+): Promise<boolean> {
+  const subject = `🤝 You are invited to collaborate on "${pollTitle}"`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px;">Poll Collaboration Invite</h2>
+      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 8px;">You have been invited to collaborate on the poll/survey:</p>
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+        <strong style="color: #f3f4f6; font-size: 18px; display: block;">${pollTitle}</strong>
+      </div>
+      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 24px;">
+        ${isRegistered 
+          ? 'Since you already have a Pollstar account, this poll is now active on your dashboard!'
+          : 'To start collaborating, please click the button below to register a Pollstar account:'}
+      </p>
+      <div style="text-align: center; margin-bottom: 32px;">
+        <a href="${inviteLink}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+          ${isRegistered ? 'Access Dashboard' : 'Register & Access'}
+        </a>
+      </div>
+      <p style="font-size: 12px; color: #4b5563; line-height: 18px;">
+        Or copy and paste this link in your browser: <br/>
+        <a href="${inviteLink}" style="color: #818cf8; word-break: break-all;">${inviteLink}</a>
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending collab notice:', error);
+    }
+  }
+
+  // Debug Console Fallback
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Collab Invitation to "${pollTitle.substring(0, 15)}..." │`);
+  console.log(`│ Link:    ${inviteLink.padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}

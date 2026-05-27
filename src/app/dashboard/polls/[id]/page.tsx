@@ -8,7 +8,8 @@ import {
   Trash2, ShieldCheck, Download, Check, FileDown, 
   Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
   Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay,
-  Unlock, Timer
+  Unlock, Timer, MessageSquare, Send, Mail,
+  Layers, Filter, PieChart, Hash
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -39,6 +40,33 @@ export default function PollInsights({ params }: PageProps) {
   const [prevPercentages, setPrevPercentages] = useState<Record<string, number>>({});
   const [tickerChanges, setTickerChanges] = useState<Record<string, { direction: 'UP' | 'DOWN', diff: string }>>({});
   const [tickerFlashState, setTickerFlashState] = useState<Record<string, 'UP' | 'DOWN' | null>>({});
+
+  // Analytics Inbox & Messaging states
+  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox'>('analytics');
+  const [inboxMessages, setInboxMessages] = useState<any[]>([]);
+  const [selectedVoter, setSelectedVoter] = useState<string | null>(null);
+  const [replyInput, setReplyInput] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [inboxSearch, setInboxSearch] = useState('');
+
+  // Fetch direct messages on mount and poll when active
+  useEffect(() => {
+    const fetchInbox = async () => {
+      try {
+        const res = await fetch(`/api/polls/${pollId}/messages`);
+        if (res.ok) {
+          const data = await res.json();
+          setInboxMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error('Failed to load messages inbox:', err);
+      }
+    };
+
+    fetchInbox();
+    const interval = setInterval(fetchInbox, 4000);
+    return () => clearInterval(interval);
+  }, [pollId]);
 
   // 1. Fetch Poll Details on Mount
   useEffect(() => {
@@ -208,6 +236,39 @@ export default function PollInsights({ params }: PageProps) {
       router.push('/dashboard');
     } catch (e: any) {
       alert(e.message);
+    }
+  };
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVoter || !replyInput.trim()) return;
+
+    setSendingReply(true);
+    const text = replyInput;
+    setReplyInput('');
+
+    try {
+      const res = await fetch(`/api/polls/${pollId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voterIdentifier: selectedVoter,
+          isFromCreator: true,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInboxMessages((prev) => [...prev, data.message]);
+      } else {
+        setReplyInput(text); // restore
+      }
+    } catch (err) {
+      console.error(err);
+      setReplyInput(text);
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -617,6 +678,32 @@ export default function PollInsights({ params }: PageProps) {
 
   const consensusIndex = getConsensusIndex();
 
+  // Extract and group direct messages into active voter threads
+  const threadsMap: Record<string, { lastMessage: any; unread: boolean; messagesCount: number }> = {};
+  inboxMessages.forEach((m) => {
+    const id = m.senderIdentifier;
+    if (!threadsMap[id]) {
+      threadsMap[id] = { lastMessage: m, unread: false, messagesCount: 0 };
+    }
+    threadsMap[id].messagesCount++;
+    if (new Date(m.createdAt).getTime() > new Date(threadsMap[id].lastMessage.createdAt).getTime()) {
+      threadsMap[id].lastMessage = m;
+    }
+    if (!m.isFromCreator) {
+      threadsMap[id].unread = true;
+    }
+  });
+
+  const threadsList = Object.entries(threadsMap).map(([id, info]) => ({
+    identifier: id,
+    ...info,
+  })).sort((a, b) => new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime());
+
+  const filteredThreads = threadsList.filter((t) =>
+    t.identifier.toLowerCase().includes(inboxSearch.toLowerCase()) ||
+    t.lastMessage.text.toLowerCase().includes(inboxSearch.toLowerCase())
+  );
+
   return (
     <div className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 space-y-8 print:p-0 print:m-0">
       
@@ -708,8 +795,194 @@ export default function PollInsights({ params }: PageProps) {
         )}
       </div>
 
-      {/* Wall Street Live Ticker */}
-      {poll.settings?.enableLiveTicker && activeQuestion && (
+      {/* Premium Tab Selector */}
+      <div className="flex border-b border-white/5 pb-1 gap-6 print:hidden">
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`pb-4 text-sm font-bold transition-all relative ${
+            activeTab === 'analytics' ? 'text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <span>🗳️ Analytics & Insights</span>
+          {activeTab === 'analytics' && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('inbox')}
+          className={`pb-4 text-sm font-bold transition-all relative flex items-center space-x-1.5 ${
+            activeTab === 'inbox' ? 'text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <span>📬 Voter Inbox</span>
+          {inboxMessages.some(m => m.isFromCreator === false) && (
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+          )}
+          {activeTab === 'inbox' && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
+          )}
+        </button>
+      </div>
+
+      {/* Analytics Inbox (Conditional early return) */}
+      {activeTab === 'inbox' ? (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 min-h-[550px] animate-fade-in print:hidden">
+          {/* Left panel: Threads list */}
+          <div className="md:col-span-4 glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-4 flex flex-col space-y-4 h-[550px]">
+            <div className="flex flex-col gap-1">
+              <h3 className="font-outfit text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
+                <MessageSquare className="w-4.5 h-4.5 text-indigo-400" />
+                <span>Conversations</span>
+              </h3>
+              <p className="text-gray-500 text-[10px]">Direct threads with voters submitting feedback.</p>
+            </div>
+
+            {/* Thread Search */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search threads by identifier..."
+                value={inboxSearch}
+                onChange={(e) => setInboxSearch(e.target.value)}
+                className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-indigo-500/60 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none transition-all"
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 no-scrollbar">
+              {filteredThreads.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-center text-gray-500 text-xs py-8">
+                  {inboxSearch ? 'No matching threads found.' : 'No voter messages received yet.'}
+                </div>
+              ) : (
+                filteredThreads.map((thread) => {
+                  const isActive = selectedVoter === thread.identifier;
+                  const isLastMe = thread.lastMessage.isFromCreator;
+                  return (
+                    <button
+                      key={thread.identifier}
+                      onClick={() => {
+                        setSelectedVoter(thread.identifier);
+                        setReplyInput('');
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                        isActive
+                          ? 'border-indigo-500/50 bg-indigo-500/10'
+                          : 'border-white/5 bg-white/2 hover:bg-white/5 hover:border-white/10'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center w-full gap-2">
+                        <span className="text-xs font-bold text-white truncate max-w-[140px]">{thread.identifier}</span>
+                        <span className="text-[8px] text-gray-500 font-mono shrink-0">
+                          {new Date(thread.lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center w-full gap-2">
+                        <p className="text-[10px] text-gray-400 truncate max-w-[160px]">
+                          {isLastMe && <span className="text-indigo-400 font-semibold mr-0.5">You: </span>}
+                          {thread.lastMessage.text}
+                        </p>
+                        {!isLastMe && thread.unread && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right panel: Active chat window */}
+          <div className="md:col-span-8 glass-card rounded-2xl border border-white/5 bg-[#080d1a] flex flex-col justify-between h-[550px] overflow-hidden">
+            {selectedVoter ? (
+              <>
+                {/* Active Thread Header */}
+                <div className="border-b border-white/5 p-4 flex items-center justify-between bg-white/1">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center font-bold text-xs text-indigo-400 font-mono">
+                      {selectedVoter.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-bold text-white">{selectedVoter}</span>
+                      <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" /> Direct Voter Thread
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedVoter(null)}
+                    className="text-gray-400 hover:text-white transition-all text-xs border border-white/8 hover:border-white/15 px-2.5 py-1 rounded-lg bg-white/2"
+                  >
+                    Clear Thread Selection
+                  </button>
+                </div>
+
+                {/* Messages feed */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-white/0.5 no-scrollbar">
+                  {inboxMessages
+                    .filter((m) => m.senderIdentifier === selectedVoter)
+                    .map((msg, idx) => {
+                      const isMe = msg.isFromCreator;
+                      return (
+                        <div
+                          key={msg.id || idx}
+                          className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-lg ${
+                            isMe
+                              ? 'bg-indigo-600 text-white rounded-tr-none'
+                              : 'bg-white/5 border border-white/5 text-gray-200 rounded-tl-none'
+                          }`}>
+                            <p className="break-words font-medium">{msg.text}</p>
+                            <span className="block text-[8px] text-white/50 text-right mt-1.5 font-mono">
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Reply box */}
+                <form onSubmit={handleSendReply} className="border-t border-white/5 p-4 flex gap-2.5 bg-white/1">
+                  <input
+                    type="text"
+                    required
+                    placeholder={`Write a direct reply to ${selectedVoter}...`}
+                    value={replyInput}
+                    onChange={(e) => setReplyInput(e.target.value)}
+                    className="flex-1 bg-[#030712] border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingReply || !replyInput.trim()}
+                    className="px-4 py-3 rounded-xl gradient-btn text-white transition-all flex items-center justify-center shrink-0 disabled:opacity-50"
+                  >
+                    {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col justify-center items-center text-center p-8 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 animate-bounce">
+                  <MessageSquare className="w-8 h-8" />
+                </div>
+                <div className="max-w-xs space-y-1.5">
+                  <h4 className="font-outfit text-sm font-bold text-white">Select a voter thread</h4>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Select a thread from the conversations list on the left to read voter feedback and reply to them in real time.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Wall Street Live Ticker */}
+          {poll.settings?.enableLiveTicker && activeQuestion && (
         <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-4 flex items-center overflow-hidden relative select-none animate-fade-in print:hidden mb-6">
           <div className="flex items-center space-x-2 border-r border-white/10 pr-4 shrink-0 bg-slate-950/80 backdrop-blur z-10">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1355,6 +1628,322 @@ export default function PollInsights({ params }: PageProps) {
         )}
       </div>
 
+      {/* ── Phase 8: Drop-off / Abandonment Funnel ─────────────────────── */}
+      {poll.settings?.enableDropOffTracking && poll.questions?.length > 1 && (
+        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 print:hidden">
+          <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
+            <div className="p-2.5 bg-rose-500/10 rounded-xl border border-rose-500/20 text-rose-400">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-outfit text-xl font-bold text-white leading-tight">Drop-off & Abandonment Funnel</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Identifies exactly where respondents abandon the survey. Lower bars indicate higher attrition.</p>
+            </div>
+          </div>
+
+          {(() => {
+            const pages = poll.questions.reduce((acc: Record<number, { page: number; questions: any[] }>, q: any) => {
+              const p = q.pageNumber || 1;
+              if (!acc[p]) acc[p] = { page: p, questions: [] };
+              acc[p].questions.push(q);
+              return acc;
+            }, {} as Record<number, { page: number; questions: any[] }>);
+
+            const sortedPages = Object.values(pages).sort((a: any, b: any) => a.page - b.page) as { page: number; questions: any[] }[];
+            const totalStarted = liveVotesList.length || 1;
+
+            // Calculate how many voters answered at least one question on each page
+            const pageCounts = sortedPages.map((pg) => {
+              let count = 0;
+              liveVotesList.forEach((v) => {
+                try {
+                  const ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                  const answeredAny = pg.questions.some((q: any) => ans?.[q.id] !== undefined && ans?.[q.id] !== null && ans?.[q.id] !== '');
+                  if (answeredAny) count++;
+                } catch (e) {}
+              });
+              return { page: pg.page, count, percent: Math.round((count / totalStarted) * 100) };
+            });
+
+            const maxCount = Math.max(...pageCounts.map(p => p.count), 1);
+
+            return (
+              <div className="space-y-5">
+                {/* Funnel Bars */}
+                <div className="space-y-3">
+                  {pageCounts.map((pg, idx) => {
+                    const dropOff = idx > 0 ? pageCounts[idx - 1].count - pg.count : 0;
+                    const dropPercent = idx > 0 && pageCounts[idx - 1].count > 0 ? Math.round((dropOff / pageCounts[idx - 1].count) * 100) : 0;
+                    const barWidth = Math.max(8, Math.round((pg.count / maxCount) * 100));
+                    const isWorst = dropPercent > 0 && dropPercent === Math.max(...pageCounts.slice(1).map((p, i) => {
+                      const prev = pageCounts[i].count;
+                      return prev > 0 ? Math.round(((prev - p.count) / prev) * 100) : 0;
+                    }));
+
+                    return (
+                      <div key={pg.page} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-white">Page {pg.page}</span>
+                            <span className="text-gray-500 text-[10px]">({sortedPages[idx]?.questions.length || 0} questions)</span>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <span className="font-mono text-white font-bold">{pg.count} <span className="text-gray-500 font-normal">responses</span></span>
+                            {idx > 0 && dropOff > 0 && (
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                                isWorst
+                                  ? 'bg-red-500/15 border-red-500/30 text-red-400 animate-pulse'
+                                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                              }`}>
+                                ↓ {dropOff} ({dropPercent}% drop)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-full bg-white/3 rounded-full h-4 overflow-hidden border border-white/5">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              isWorst ? 'bg-gradient-to-r from-red-600 to-red-400' : 'bg-gradient-to-r from-indigo-600 to-purple-500'
+                            }`}
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Summary Stat Row */}
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+                  <div className="text-center space-y-1">
+                    <span className="text-2xl font-extrabold text-white">{pageCounts[0]?.count || 0}</span>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Started</span>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <span className="text-2xl font-extrabold text-white">{pageCounts[pageCounts.length - 1]?.count || 0}</span>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Completed</span>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <span className={`text-2xl font-extrabold ${
+                      pageCounts[0]?.count > 0 && pageCounts[pageCounts.length - 1]?.count < pageCounts[0]?.count * 0.5 ? 'text-red-400' : 'text-emerald-400'
+                    }`}>
+                      {pageCounts[0]?.count > 0 ? Math.round((pageCounts[pageCounts.length - 1]?.count / pageCounts[0]?.count) * 100) : 100}%
+                    </span>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Completion Rate</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Phase 8: Semantic Text Analysis (Sentiment Grouping) ───────── */}
+      {liveVotesList.length > 0 && poll.questions?.some((q: any) => q.type === 'TEXT') && (
+        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 print:hidden">
+          <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
+            <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/20 text-violet-400">
+              <Hash className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-outfit text-xl font-bold text-white leading-tight">Semantic Text Analysis</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Auto-grouped sentiment classification of free-text responses using keyword pattern matching.</p>
+            </div>
+          </div>
+
+          {(() => {
+            const textQuestions = poll.questions.filter((q: any) => q.type === 'TEXT');
+            const positiveWords = ['love', 'great', 'excellent', 'good', 'best', 'amazing', 'awesome', 'wonderful', 'fantastic', 'happy', 'perfect', 'satisfied', 'helpful', 'brilliant', 'superb', 'outstanding'];
+            const negativeWords = ['hate', 'bad', 'terrible', 'worst', 'awful', 'horrible', 'poor', 'disappointed', 'useless', 'unhappy', 'broken', 'frustrating', 'annoying', 'boring', 'slow', 'ugly'];
+
+            const allResponses: { text: string; sentiment: string; questionText: string }[] = [];
+
+            textQuestions.forEach((q: any) => {
+              liveVotesList.forEach((v) => {
+                try {
+                  const ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                  const textVal = ans?.[q.id];
+                  if (textVal && typeof textVal === 'string' && textVal.trim()) {
+                    const lower = textVal.toLowerCase();
+                    let posScore = 0, negScore = 0;
+                    positiveWords.forEach(w => { if (lower.includes(w)) posScore++; });
+                    negativeWords.forEach(w => { if (lower.includes(w)) negScore++; });
+                    const sentiment = posScore > negScore ? 'POSITIVE' : negScore > posScore ? 'NEGATIVE' : 'NEUTRAL';
+                    allResponses.push({ text: textVal, sentiment, questionText: q.questionText });
+                  }
+                } catch (e) {}
+              });
+            });
+
+            const posCount = allResponses.filter(r => r.sentiment === 'POSITIVE').length;
+            const negCount = allResponses.filter(r => r.sentiment === 'NEGATIVE').length;
+            const neuCount = allResponses.filter(r => r.sentiment === 'NEUTRAL').length;
+            const total = allResponses.length || 1;
+
+            return (
+              <div className="space-y-5">
+                {/* Sentiment Distribution Bar */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    <span>Sentiment Distribution</span>
+                    <span>{allResponses.length} text responses analyzed</span>
+                  </div>
+                  <div className="w-full h-5 rounded-full overflow-hidden flex border border-white/5">
+                    {posCount > 0 && <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${(posCount / total) * 100}%` }} />}
+                    {neuCount > 0 && <div className="bg-gray-500 h-full transition-all duration-500" style={{ width: `${(neuCount / total) * 100}%` }} />}
+                    {negCount > 0 && <div className="bg-red-500 h-full transition-all duration-500" style={{ width: `${(negCount / total) * 100}%` }} />}
+                  </div>
+                  <div className="flex items-center justify-center gap-6 text-[10px]">
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Positive ({posCount})</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-500" /> Neutral ({neuCount})</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Negative ({negCount})</span>
+                  </div>
+                </div>
+
+                {/* Response Cards */}
+                {allResponses.length > 0 && (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
+                    {allResponses.slice(0, 20).map((r, idx) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-white/2 border border-white/5 text-xs">
+                        <span className={`mt-0.5 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 border ${
+                          r.sentiment === 'POSITIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                          : r.sentiment === 'NEGATIVE' ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                          : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
+                        }`}>
+                          {r.sentiment === 'POSITIVE' ? '😊' : r.sentiment === 'NEGATIVE' ? '😡' : '😐'} {r.sentiment}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-200 leading-relaxed break-words">&ldquo;{r.text}&rdquo;</p>
+                          <span className="text-[9px] text-gray-500 mt-1 block">Q: {r.questionText}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Phase 8: Demographic Cross-tabulation ─────────────────────── */}
+      {poll.settings?.enableCrossTabulation && liveVotesList.length > 0 && (
+        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 print:hidden">
+          <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
+            <div className="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/20 text-cyan-400">
+              <Filter className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-outfit text-xl font-bold text-white leading-tight">Demographic Cross-Tabulation</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Slice survey results by demographic segments collected from respondents (age, gender, region).</p>
+            </div>
+          </div>
+
+          {(() => {
+            // Extract demographic answers from page 0 (demographic questions)
+            const demoQuestions = (poll.questions || []).filter((q: any) => (q.pageNumber || 1) === 0);
+            if (demoQuestions.length === 0) {
+              return (
+                <div className="text-center py-8 text-gray-500 text-xs border border-dashed border-white/8 rounded-2xl">
+                  No demographic questions found. Demographic questions appear on page 0 when cross-tabulation is enabled.
+                </div>
+              );
+            }
+
+            // For each demographic question, group votes by selected demographic option and show vote distribution
+            return (
+              <div className="space-y-8">
+                {demoQuestions.map((dq: any) => {
+                  const segments: Record<string, Record<string, number>> = {};
+                  const segmentTotals: Record<string, number> = {};
+
+                  liveVotesList.forEach((v) => {
+                    try {
+                      const ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                      const demoChoice = ans?.[dq.id];
+                      if (!demoChoice) return;
+
+                      const demoLabel = Array.isArray(demoChoice) ? demoChoice[0] : demoChoice;
+                      const demoOpt = dq.options?.find((o: any) => o.id === demoLabel);
+                      const demoText = demoOpt ? demoOpt.text : String(demoLabel);
+
+                      if (!segments[demoText]) segments[demoText] = {};
+                      if (!segmentTotals[demoText]) segmentTotals[demoText] = 0;
+                      segmentTotals[demoText]++;
+
+                      // Track main question vote
+                      if (activeQuestion) {
+                        const mainChoice = ans?.[activeQuestion.id];
+                        if (mainChoice) {
+                          const mainId = Array.isArray(mainChoice) ? mainChoice[0] : mainChoice;
+                          const mainOpt = activeQuestion.options?.find((o: any) => o.id === mainId);
+                          const mainText = mainOpt ? mainOpt.text : String(mainId);
+                          segments[demoText][mainText] = (segments[demoText][mainText] || 0) + 1;
+                        }
+                      }
+                    } catch (e) {}
+                  });
+
+                  const segmentEntries = Object.entries(segments).sort((a, b) => (segmentTotals[b[0]] || 0) - (segmentTotals[a[0]] || 0));
+
+                  return (
+                    <div key={dq.id} className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <PieChart className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <h4 className="font-outfit text-sm font-bold text-white">{dq.questionText}</h4>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {segmentEntries.map(([segName, choices]) => {
+                          const total = segmentTotals[segName] || 1;
+                          const sortedChoices = Object.entries(choices).sort((a, b) => b[1] - a[1]);
+                          const topChoice = sortedChoices[0];
+                          const colors = ['bg-indigo-500', 'bg-purple-500', 'bg-cyan-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+
+                          return (
+                            <div key={segName} className="bg-white/2 rounded-2xl p-4 border border-white/5 space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-white">{segName}</span>
+                                <span className="text-[10px] text-gray-500 font-bold">{total} respondents</span>
+                              </div>
+
+                              {/* Mini bar chart */}
+                              <div className="space-y-1.5">
+                                {sortedChoices.slice(0, 4).map(([name, count], cIdx) => {
+                                  const pct = Math.round((count / total) * 100);
+                                  return (
+                                    <div key={name} className="space-y-0.5">
+                                      <div className="flex justify-between text-[9px] font-bold">
+                                        <span className="text-gray-300 truncate max-w-[120px]">{name}</span>
+                                        <span className="text-white">{pct}%</span>
+                                      </div>
+                                      <div className="w-full bg-white/3 rounded-full h-1.5 overflow-hidden">
+                                        <div className={`${colors[cIdx % colors.length]} h-full rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {topChoice && (
+                                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px]">
+                                  <span className="text-gray-500 font-bold uppercase tracking-wider">Top Pick</span>
+                                  <span className="text-indigo-400 font-bold truncate max-w-[100px]">{topChoice[0]}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Request-only OTP bypass management */}
       {isOwner && !poll.isOpenVoting && activeBypassRequests.length > 0 && (
         <div className="space-y-3 print:hidden">
@@ -1494,6 +2083,8 @@ export default function PollInsights({ params }: PageProps) {
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* customized printing overrides style */}
       <style jsx global>{`

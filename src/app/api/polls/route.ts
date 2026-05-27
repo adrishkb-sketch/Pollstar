@@ -50,16 +50,32 @@ export async function GET() {
           questions: { include: { options: true } },
           votes: true,
           settings: true,
+          collaborators: {
+            include: {
+              user: { select: { email: true } }
+            }
+          }
         },
       });
     } else {
       polls = await prisma.poll.findMany({
-        where: { creatorId: user.id },
+        where: {
+          OR: [
+            { creatorId: user.id },
+            { collaborators: { some: { userId: user.id } } }
+          ]
+        },
         orderBy: { createdAt: 'desc' },
         include: {
+          creator: { select: { email: true } },
           questions: { include: { options: true } },
           votes: true,
           settings: true,
+          collaborators: {
+            include: {
+              user: { select: { email: true } }
+            }
+          }
         },
       });
     }
@@ -120,6 +136,7 @@ export async function POST(req: Request) {
       questions, // array
       settings,  // object
       allowedVoters, // array (only for closed voting)
+      pollType, // 'POLL' | 'SURVEY'
     } = body;
 
     if (!title || !description || !startTime || !endTime || !questions || !questions.length) {
@@ -144,6 +161,7 @@ export async function POST(req: Request) {
           startTime: new Date(startTime),
           endTime: new Date(endTime),
           status: status === 'ACTIVE' ? 'ACTIVE' : 'DRAFT',
+          pollType: pollType === 'SURVEY' ? 'SURVEY' : 'POLL',
         },
       });
 
@@ -156,6 +174,9 @@ export async function POST(req: Request) {
             type: ['RANKED', 'KNOCKOUT', 'MULTIPLE_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type)
               ? q.type
               : 'SINGLE',
+            pageNumber: q.pageNumber || 1,
+            order: q.order || 1,
+            logicRules: q.logicRules ? q.logicRules : null,
           },
         });
 
@@ -178,6 +199,12 @@ export async function POST(req: Request) {
           limitOneVotePerIP: !!settings?.limitOneVotePerIP,
           limitOneVotePerISP: !!settings?.limitOneVotePerISP,
           hideResultsUntilEnd: !!settings?.hideResultsUntilEnd,
+          collectEmail: !!settings?.collectEmail,
+          postEmailMessage: settings?.postEmailMessage || null,
+          enableDropOffTracking: !!settings?.enableDropOffTracking,
+          enableSemanticAnalysis: !!settings?.enableSemanticAnalysis,
+          enableCrossTabulation: !!settings?.enableCrossTabulation,
+          enableTimeAnalytics: !!settings?.enableTimeAnalytics,
           publicShowMaps: settings?.publicShowMaps !== false,
           publicShowCharts: settings?.publicShowCharts !== false,
           publicShowStats: settings?.publicShowStats !== false,
