@@ -964,6 +964,49 @@ export default function PollInsights({ params }: PageProps) {
                   <option value="LIVE">Live</option>
                 </select>
               </div>
+ 
+               {poll.questions && poll.questions.some((q: any) => q.type === 'RANKED') && (
+                <div className="col-span-1 sm:col-span-2 md:col-span-3 border-t border-white/5 pt-6 mt-4">
+                  <h5 className="font-outfit font-extrabold text-purple-400 text-xs mb-3 uppercase tracking-wider">
+                    Ranked Poll Beast Features
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {[
+                      ['enablePreferenceFlowMap', 'Preference Flow Map', 'Iterative IRV rounds'],
+                      ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix', 'Pairwise voter preferences'],
+                      ['enableConsensusScore', 'Consensus Score', 'Broad acceptability indexing'],
+                      ['enablePolarizationDetector', 'Polarization Detector', 'First vs last rank split'],
+                      ['enableKingmakerAnalysis', 'Kingmaker Analysis', 'Transfers from first eliminated'],
+                      ['enableRankHeatmap', 'Rank Distribution Heatmap', 'Complete rank density matrix'],
+                      ['enableRankConfidence', 'Voter Confidence by Rank', 'Average confidence per rank option'],
+                      ['enableScenarioSimulator', 'Scenario Simulator', 'Remove candidate point simulator'],
+                      ['enableTieBreakerEngine', 'Tie-Breaker Engine', 'Auto tie-break calculations'],
+                      ['enableRankCompleteness', 'Rank Completeness Rules', 'Force full or partial ranking'],
+                      ['enablePodiumResults', 'Podium Result Mode', '3D gold/silver/bronze podiums'],
+                      ['enableCoalitionFinder', 'Preference Coalition Finder', 'Common priority voter pairs'],
+                      ['enableMinorityProtection', 'Minority Protection Score', 'Protects least ranked options'],
+                      ['enableAuditReplay', 'Audit Replay', 'Verifies full round calculations'],
+                    ].map(([key, label, desc]) => (
+                      <div key={key} className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
+                        <div>
+                          <h6 className="font-outfit font-bold text-white text-[11px]">{label}</h6>
+                          <p className="text-[9px] text-gray-500">{desc}</p>
+                        </div>
+                        <button
+                          onClick={() => handleToggleGranularVisibility(key, !poll.settings?.[key])}
+                          className={`px-3 py-1 rounded-lg text-[9px] font-bold border transition-all ${
+                            poll.settings?.[key]
+                              ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                              : 'bg-white/5 border-white/10 text-gray-400'
+                          }`}
+                        >
+                          {poll.settings?.[key] ? 'Active' : 'Disabled'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

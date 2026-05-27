@@ -398,7 +398,7 @@ export default function PollChart({ questionId, questionText, type, stats, votes
         </div>
 
         {/* Dynamic Tab Toggles */}
-        <div className="flex bg-[#0b0f19] border border-white/5 p-1 rounded-xl self-center md:self-auto shadow-inner">
+        <div className="flex bg-[#0b0f19] border border-white/5 p-1 rounded-xl self-center md:self-auto shadow-inner print:hidden">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
@@ -455,8 +455,7 @@ export default function PollChart({ questionId, questionText, type, stats, votes
       {/* ========================================================
           TAB 1: OVERVIEW RESULTS
          ======================================================== */}
-      {activeTab === 'overview' && (
-        <div className="space-y-8 animate-fade-in">
+      <div className={activeTab === 'overview' ? 'space-y-8 animate-fade-in block' : 'space-y-8 animate-fade-in hidden print:block'}>
           {/* General Stats Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="glass-card rounded-2xl p-5 border border-white/5 flex items-center space-x-4">
@@ -588,13 +587,11 @@ export default function PollChart({ questionId, questionText, type, stats, votes
             </div>
           </div>
         </div>
-      )}
 
       {/* ========================================================
           TAB 2: DEEP INSIGHTS
          ======================================================== */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-8 animate-fade-in">
+      <div className={activeTab === 'analytics' ? 'space-y-8 animate-fade-in block' : 'space-y-8 animate-fade-in hidden print:block'}>
 
           {/* ────────────────────────────────────────────────────────
               1. SINGLE CHOICE DEEP ANALYTICS: VELOCITY TIMELINE
@@ -976,9 +973,7 @@ export default function PollChart({ questionId, questionText, type, stats, votes
               </div>
             </div>
           )}
-
         </div>
-      )}
-    </div>
+      </div>
   );
 }
