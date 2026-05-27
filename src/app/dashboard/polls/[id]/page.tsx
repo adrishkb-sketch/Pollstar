@@ -1569,15 +1569,15 @@ export default function PollInsights({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Voter Segment Preferences Trend analysis (Roll Number Ranges / Prefix) */}
+      {/* Voter Segment Preferences Trend analysis (Identifier Ranges / Prefix) */}
       {liveVotesList.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2 print:text-black">
             <Users className="w-5 h-5 text-indigo-400 print:hidden" />
-            <span>Voter Segment Preference Trends</span>
+            <span>{poll.settings?.identifierLabel || 'Voter'} Segment Preference Trends</span>
           </h3>
           <p className="text-gray-500 text-xs print:text-gray-600">
-            A comprehensive batch trend resolution identifying batch clusters, roll number prefixes, or numeric ranges alongside their dominant preferences.
+            A comprehensive batch trend resolution identifying batch clusters, {(poll.settings?.identifierLabel || 'unique identifier').toLowerCase()} prefixes, or numeric ranges alongside their dominant preferences.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1739,7 +1739,7 @@ export default function PollInsights({ params }: PageProps) {
       )}
 
       {/* ── Phase 8: Semantic Text Analysis (Sentiment Grouping) ───────── */}
-      {liveVotesList.length > 0 && poll.questions?.some((q: any) => q.type === 'TEXT') && (
+      {liveVotesList.length > 0 && poll.questions?.some((q: any) => q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') && (
         <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 print:hidden">
           <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
             <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/20 text-violet-400">
@@ -1752,7 +1752,7 @@ export default function PollInsights({ params }: PageProps) {
           </div>
 
           {(() => {
-            const textQuestions = poll.questions.filter((q: any) => q.type === 'TEXT');
+            const textQuestions = poll.questions.filter((q: any) => q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT');
             const positiveWords = ['love', 'great', 'excellent', 'good', 'best', 'amazing', 'awesome', 'wonderful', 'fantastic', 'happy', 'perfect', 'satisfied', 'helpful', 'brilliant', 'superb', 'outstanding'];
             const negativeWords = ['hate', 'bad', 'terrible', 'worst', 'awful', 'horrible', 'poor', 'disappointed', 'useless', 'unhappy', 'broken', 'frustrating', 'annoying', 'boring', 'slow', 'ugly'];
 
@@ -1840,15 +1840,12 @@ export default function PollInsights({ params }: PageProps) {
           </div>
 
           {(() => {
-            // Extract demographic answers from page 0 (demographic questions)
-            const demoQuestions = (poll.questions || []).filter((q: any) => (q.pageNumber || 1) === 0);
-            if (demoQuestions.length === 0) {
-              return (
-                <div className="text-center py-8 text-gray-500 text-xs border border-dashed border-white/8 rounded-2xl">
-                  No demographic questions found. Demographic questions appear on page 0 when cross-tabulation is enabled.
-                </div>
-              );
-            }
+            // Virtual demographic questions representing dynamically prepended survey inputs
+            const demoQuestions = [
+              { id: '__demo_age', questionText: 'Age Group', options: [{ id: 'Under 18', text: 'Under 18' }, { id: '18-24', text: '18-24' }, { id: '25-34', text: '25-34' }, { id: '35-44', text: '35-44' }, { id: '45-54', text: '45-54' }, { id: '55-64', text: '55-64' }, { id: '65+', text: '65+' }] },
+              { id: '__demo_gender', questionText: 'Gender', options: [{ id: 'Male', text: 'Male' }, { id: 'Female', text: 'Female' }, { id: 'Non-binary', text: 'Non-binary' }, { id: 'Prefer not to say', text: 'Prefer not to say' }] },
+              { id: '__demo_region', questionText: 'Geographic Region', options: [] }
+            ];
 
             // For each demographic question, group votes by selected demographic option and show vote distribution
             return (

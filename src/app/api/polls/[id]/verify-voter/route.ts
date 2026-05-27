@@ -54,14 +54,16 @@ export async function POST(
 
       if (!allowedVoter) {
         return NextResponse.json({ 
-          error: `Voter record not found. Please double-check your unique identifier value.` 
+          error: `${poll.pollType === 'SURVEY' ? 'Respondent' : 'Voter'} record not found. Please double-check your unique identifier value.` 
         }, { status: 404 });
       }
 
       if (allowedVoter.voted && poll.settings?.limitOneVotePerUser) {
         if (!poll.isResultPublic) {
           return NextResponse.json({ 
-            error: 'Your unique identifier has already cast a vote in this poll. Results are private.' 
+            error: poll.pollType === 'SURVEY' 
+              ? 'Your unique identifier has already submitted a response in this survey. Results are private.' 
+              : 'Your unique identifier has already cast a vote in this poll. Results are private.' 
           }, { status: 403 });
         }
       }
@@ -121,7 +123,11 @@ export async function POST(
       if (allowedVoter.voted && poll.settings?.limitOneVotePerUser) {
         if (!poll.isResultPublic) {
           return NextResponse.json(
-            { error: 'You have already cast your vote in this poll. Results are private.' },
+            { 
+              error: poll.pollType === 'SURVEY' 
+                ? 'You have already submitted your response in this survey. Results are private.' 
+                : 'You have already cast your vote in this poll. Results are private.' 
+            },
             { status: 403 }
           );
         }
@@ -146,8 +152,9 @@ export async function POST(
         return NextResponse.json({
           success: true,
           isBypassGranted: true,
-          message:
-            'OTP Bypass allowed for you by poll creator. Redirecting to ballot...',
+          message: poll.pollType === 'SURVEY' 
+            ? 'OTP Bypass allowed for you by survey creator. Redirecting to questionnaire...' 
+            : 'OTP Bypass allowed for you by poll creator. Redirecting to ballot...',
           voterToken,
           hasVotedAlready: allowedVoter.voted,
         });
@@ -202,7 +209,9 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: 'Identity confirmed! An OTP has been sent to your email to verify and cast your vote.',
+        message: poll.pollType === 'SURVEY' 
+          ? 'Identity confirmed! An OTP has been sent to your email to verify and submit your response.' 
+          : 'Identity confirmed! An OTP has been sent to your email to verify and cast your vote.',
       });
     }
 

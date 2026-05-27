@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   Vote as VoteIcon, Loader2, AlertCircle, CheckCircle, 
   HelpCircle, ShieldAlert, Award, ArrowRight, ArrowLeft, RefreshCw, Check, Users,
-  MessageSquare, Send, MessageCircle
+  MessageSquare, Send, MessageCircle, ClipboardList
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -329,7 +329,7 @@ export default function VoterPortal({ params }: PageProps) {
     const isVotingActive = (!loading && poll) && (
       (!poll.isOpenVoting && verifiedVoter && !votedSuccessfully) || 
       (poll.isOpenVoting && !showIntro && !votedSuccessfully)
-    );
+    ) && poll.pollType !== 'SURVEY';
 
     if (isVotingActive) {
       const duration = getSessionDuration();
@@ -1114,6 +1114,76 @@ export default function VoterPortal({ params }: PageProps) {
 
 
   if (showIntro) {
+    if (poll.pollType === 'SURVEY') {
+      return (
+        <div className="flex-1 max-w-2xl w-full mx-auto px-6 py-12 flex flex-col justify-center min-h-[80vh] space-y-8 relative animate-fade-in">
+          {/* Glass background effects */}
+          <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex items-center justify-center space-x-2.5 mb-2">
+            <div className="p-2.5 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-xl shadow-lg shadow-purple-500/20">
+              <ClipboardList className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-outfit text-xl font-bold tracking-tight text-white">
+              Poll<span className="text-purple-400">star</span> Survey
+            </span>
+          </div>
+
+          <div className="glass-card rounded-3xl p-8 border border-purple-500/30 bg-[#080d1a] shadow-2xl space-y-6 animate-fade-in-up relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+            
+            {poll.posterUrl && (
+              <div className="w-full h-56 rounded-2xl border border-white/10 overflow-hidden bg-white/5 shadow-inner">
+                <img src={poll.posterUrl} alt="Survey Banner" className="w-full h-full object-cover transform hover:scale-105 transition-all duration-700" />
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-purple-500/10 border border-purple-500/20 text-purple-400 uppercase tracking-widest">
+                Welcome to this Survey
+              </span>
+              <h1 className="font-outfit text-3xl font-extrabold text-white leading-tight">
+                {poll.title}
+              </h1>
+              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line bg-white/3 p-4 rounded-2xl border border-white/5">
+                {poll.description ? poll.description.replace(/\[domains:\s*([^\]]+)\]/i, '').replace(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i, '').trim() : 'Please complete the survey questionnaire below.'}
+              </p>
+            </div>
+
+            {/* Survey stats metadata */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
+                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Length</span>
+                <span className="text-white font-bold text-sm mt-1">{poll.questions.length} Question{poll.questions.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
+                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Pages</span>
+                <span className="text-white font-bold text-sm mt-1">{Math.max(...poll.questions.map((q: any) => q.pageNumber || 1))} Page{Math.max(...poll.questions.map((q: any) => q.pageNumber || 1)) === 1 ? '' : 's'}</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
+                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Anonymity</span>
+                <span className="text-purple-300 font-bold text-xs mt-1">
+                  {poll.settings?.collectEmail ? 'Email Verified' : 'Fully Anonymous'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                className="px-6 py-3.5 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:opacity-95 shadow-lg shadow-purple-500/20 transition-all text-xs flex items-center space-x-2 active:scale-95 animate-pulse-slow"
+              >
+                <span>Start Survey</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 max-w-2xl w-full mx-auto px-6 py-12 flex flex-col justify-center min-h-[80vh] space-y-8 relative animate-fade-in">
         <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1350,14 +1420,14 @@ export default function VoterPortal({ params }: PageProps) {
       {poll.isAnonymous && (
         <div className="glass-card rounded-2xl p-6 border-indigo-500/25 bg-indigo-500/5 flex items-start space-x-4">
           <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400 shrink-0">
-            <VoteIcon className="w-5 h-5" />
+            {poll.pollType === 'SURVEY' ? <ClipboardList className="w-5 h-5" /> : <VoteIcon className="w-5 h-5" />}
           </div>
           <div>
             <h4 className="font-outfit font-extrabold uppercase text-xs tracking-widest text-indigo-300">
-              Strictly Anonymous Election
+              {poll.pollType === 'SURVEY' ? 'Strictly Anonymous Survey' : 'Strictly Anonymous Election'}
             </h4>
             <p className="text-white text-sm font-extrabold mt-1 leading-relaxed">
-              Your vote won't be visible to anyone.
+              {poll.pollType === 'SURVEY' ? 'Your responses will remain strictly anonymous.' : "Your vote won't be visible to anyone."}
             </p>
           </div>
         </div>
@@ -1722,7 +1792,7 @@ export default function VoterPortal({ params }: PageProps) {
             {/* Questions block */}
             <div className="space-y-10">
               {poll.questions
-                .filter((q: any) => poll.pollType === 'POLL' || q.pageNumber === currentPage)
+                .filter((q: any) => poll.pollType === 'POLL' || (q.pageNumber || 1) === currentPage)
                 .map((q: any, qIdx: number) => {
                 const ans = selectedAnswers[q.id];
                 
@@ -2382,9 +2452,13 @@ export default function VoterPortal({ params }: PageProps) {
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-outfit text-2xl font-bold text-white">Vote Submitted Successfully!</h3>
+            <h3 className="font-outfit text-2xl font-bold text-white">
+              {poll.pollType === 'SURVEY' ? 'Survey Submitted Successfully!' : 'Vote Submitted Successfully!'}
+            </h3>
             <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-              {poll.settings?.postSurveyAction || 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.'}
+              {poll.settings?.postSurveyAction || (poll.pollType === 'SURVEY' 
+                ? 'Thank you for participating! Your valuable feedback and responses have been securely recorded.' 
+                : 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.')}
             </p>
             {flaggedSuspicious && (
               <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
@@ -2431,11 +2505,13 @@ export default function VoterPortal({ params }: PageProps) {
           {poll.settings?.publicShowStats !== false && (
             <div className="glass-card rounded-2xl p-6 flex justify-between items-center">
               <div>
-                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Total Votes Logged</span>
+                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">
+                  {poll.pollType === 'SURVEY' ? 'Total Responses Logged' : 'Total Votes Logged'}
+                </span>
                 <span className="font-outfit text-3xl font-extrabold text-white">{liveTotalVotes}</span>
               </div>
               <div className="p-3.5 bg-indigo-500/10 rounded-xl text-indigo-400">
-                <VoteIcon className="w-6 h-6" />
+                {poll.pollType === 'SURVEY' ? <ClipboardList className="w-6 h-6 text-purple-400" /> : <VoteIcon className="w-6 h-6" />}
               </div>
             </div>
           )}

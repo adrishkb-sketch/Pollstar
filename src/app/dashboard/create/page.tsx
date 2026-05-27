@@ -225,9 +225,9 @@ export default function CreatePoll() {
         setUseConfirmer2(false);
       }
       
-      alert(`Imported ${mappedVoters.length} voter profiles successfully from previous poll: "${selected.title}"!`);
+      alert(`Imported ${mappedVoters.length} ${pollType === 'SURVEY' ? 'respondent' : 'voter'} profiles successfully from previous ${pollType === 'SURVEY' ? 'survey' : 'poll'}: "${selected.title}"!`);
     } else {
-      alert("This previous poll does not have any allowed voters to import.");
+      alert(`This previous ${pollType === 'SURVEY' ? 'survey' : 'poll'} does not have any allowed ${pollType === 'SURVEY' ? 'respondents' : 'voters'} to import.`);
     }
   };
 
@@ -686,7 +686,7 @@ export default function CreatePoll() {
               <div className="flex gap-4 border-b border-white/5 pb-6">
                 <button
                   type="button"
-                  onClick={() => setPollType('POLL')}
+                  onClick={() => { setPollType('POLL'); setIdentifierLabel('Roll Number'); setConfirmer1Label('Student Name'); setConfirmer2Label('Parent Name'); }}
                   className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
                     pollType === 'POLL' ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
                   }`}
@@ -696,13 +696,13 @@ export default function CreatePoll() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPollType('SURVEY')}
+                  onClick={() => { setPollType('SURVEY'); setIdentifierLabel('Respondent ID'); setConfirmer1Label('Full Name'); setConfirmer2Label('Department'); }}
                   className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
                     pollType === 'SURVEY' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
                   }`}
                 >
                   <div>Create Survey <span className="bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded ml-2 uppercase animate-pulse">New</span></div>
-                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open public voting</span>
+                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open public responses</span>
                 </button>
               </div>
 
@@ -723,21 +723,23 @@ export default function CreatePoll() {
 
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                    Description / Voter Guidelines
+                    {pollType === 'SURVEY' ? 'Description / Survey Guidelines' : 'Description / Voter Guidelines'}
                   </label>
                   <textarea
                     required
                     rows={4}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Provide details about the poll candidate bios, voting guidelines, and other rules."
+                    placeholder={pollType === 'SURVEY' 
+                      ? "Provide details about the survey's purpose, scope, guidelines, and other rules." 
+                      : "Provide details about the poll candidate bios, voting guidelines, and other rules."}
                     className="w-full glass-input placeholder-gray-600 text-sm resize-none"
                   />
                 </div>
 
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                    Poll Poster (Optional)
+                    {pollType === 'SURVEY' ? 'Survey Banner (Optional)' : 'Poll Poster (Optional)'}
                   </label>
                   <div className="flex items-center space-x-6">
                     <label className="cursor-pointer px-5 py-3 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-all flex items-center space-x-2">
@@ -1120,17 +1122,19 @@ export default function CreatePoll() {
                 <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-3">
                   <div className="flex items-center space-x-2">
                     <Upload className="w-4 h-4 text-indigo-400" />
-                    <span className="text-sm font-bold text-white">Import Previous Voter Roster</span>
+                    <span className="text-sm font-bold text-white">
+                      {pollType === 'SURVEY' ? 'Import Previous Respondent Roster' : 'Import Previous Voter Roster'}
+                    </span>
                   </div>
                   <p className="text-gray-400 text-xs leading-relaxed">
-                    Instantly re-import voter profiles, custom confirmation labels, and secondary settings from your past closed polls.
+                    Instantly re-import respondent/voter profiles, custom confirmation labels, and secondary settings from your past closed surveys/polls.
                   </p>
                   <div className="flex flex-col gap-3 pt-1">
                     <div className="relative">
                       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                       <input
                         type="text"
-                        placeholder="Search past polls by title..."
+                        placeholder={pollType === 'SURVEY' ? "Search past surveys by title..." : "Search past polls by title..."}
                         value={templateSearchQuery}
                         onChange={(e) => setTemplateSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 bg-[#030712] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-gray-500"
@@ -1141,12 +1145,12 @@ export default function CreatePoll() {
                       defaultValue=""
                       className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                     >
-                      <option value="" disabled>-- Select a previous closed poll --</option>
+                      <option value="" disabled>-- Select a previous closed {pollType === 'SURVEY' ? 'survey' : 'poll'} --</option>
                       {voterTemplates
                         .filter((t) => t.title.toLowerCase().includes(templateSearchQuery.toLowerCase()))
                         .map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.title} ({t.allowedVoters?.length || 0} Voters)
+                            {t.title} ({t.allowedVoters?.length || 0} {pollType === 'SURVEY' ? 'Respondents' : 'Voters'})
                           </option>
                         ))}
                     </select>
@@ -1161,10 +1165,14 @@ export default function CreatePoll() {
                   <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between border-b border-white/5 pb-4">
                     <div className="flex items-center space-x-2.5">
                       <Users className="w-5 h-5 text-indigo-400" />
-                      <h3 className="font-outfit text-lg font-bold text-white">Voter Register</h3>
+                      <h3 className="font-outfit text-lg font-bold text-white">
+                        {pollType === 'SURVEY' ? 'Respondent Register' : 'Voter Register'}
+                      </h3>
                     </div>
                     <div className="flex items-center space-x-3 w-full md:w-auto">
-                      <label className="text-xs font-semibold text-gray-500 uppercase shrink-0">Voter Count:</label>
+                      <label className="text-xs font-semibold text-gray-500 uppercase shrink-0">
+                        {pollType === 'SURVEY' ? 'Respondent Count' : 'Voter Count'}:
+                      </label>
                       <input
                         type="number"
                         min={1}
