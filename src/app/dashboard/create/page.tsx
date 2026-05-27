@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy,
-  Zap, Brain, Timer, TrendingUp
+  Zap, Brain, TrendingUp
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -79,7 +79,6 @@ export default function CreatePoll() {
   const [enableDragAndDropPodium, setEnableDragAndDropPodium] = useState(false);
   const [enableHotStreaks, setEnableHotStreaks] = useState(false);
   const [enableLiveTicker, setEnableLiveTicker] = useState(false);
-  const [enableFomoPopups, setEnableFomoPopups] = useState(false);
   const [enableSmartDebrief, setEnableSmartDebrief] = useState(false);
   const [leaderboardVisibility, setLeaderboardVisibility] = useState('HIDDEN');
 
@@ -502,7 +501,7 @@ export default function CreatePoll() {
         enableDragAndDropPodium,
         enableHotStreaks,
         enableLiveTicker,
-        enableFomoPopups,
+        enableFomoPopups: false,
         enableSmartDebrief,
         leaderboardVisibility,
         postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
@@ -1670,31 +1669,6 @@ export default function CreatePoll() {
                     enableLiveTicker ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
                   }`}>
                     {enableLiveTicker && <Check className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
-
-                {/* FOMO Social Proof Toggle */}
-                <div
-                  onClick={() => setEnableFomoPopups(!enableFomoPopups)}
-                  className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all animate-fade-in-up mt-4 ${
-                    enableFomoPopups ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
-                      <Timer className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Enable Live Activity Toasts (FOMO)</h4>
-                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Encourage voting speed and excitement on the voter panel with live activity notifications (e.g. *"5 people are currently voting"*).
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                    enableFomoPopups ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                  }`}>
-                    {enableFomoPopups && <Check className="w-3.5 h-3.5" />}
                   </div>
                 </div>
 

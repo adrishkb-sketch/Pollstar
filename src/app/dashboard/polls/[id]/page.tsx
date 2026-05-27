@@ -76,6 +76,13 @@ export default function PollInsights({ params }: PageProps) {
         const res = await fetch(`/api/polls/${pollId}`);
         const data = await res.json();
         if (res.ok && data.poll) {
+          setPoll((prev: any) => prev ? {
+            ...prev,
+            allowedVoters: data.poll.allowedVoters || prev.allowedVoters,
+            settings: data.poll.settings || prev.settings,
+            status: data.poll.status,
+            totalVotes: data.poll.totalVotes,
+          } : data.poll);
           setLiveStats(data.poll.stats || {});
           setLiveTotalVotes(data.poll.totalVotes || 0);
           setLiveVotesList(data.poll.votes || []);
@@ -288,6 +295,11 @@ export default function PollInsights({ params }: PageProps) {
   // Turnout Stats
   const allowedCount = poll.allowedVoters?.length || 0;
   const turnoutPercent = allowedCount > 0 ? Math.round((liveTotalVotes / allowedCount) * 100) : 0;
+  const bypassRequestNow = velocityNow || new Date(poll.startTime).getTime();
+  const activeBypassRequests = (poll.allowedVoters || []).filter((v: any) => {
+    const requestExpiry = v.bypassOtpUntil ? Date.parse(v.bypassOtpUntil) : 0;
+    return v.bypassRequested && requestExpiry > bypassRequestNow;
+  });
 
   // Hourly Velocity
   const getVotingVelocity = () => {
@@ -918,24 +930,6 @@ export default function PollInsights({ params }: PageProps) {
                 </button>
               </div>
 
-              {/* FOMO Popups */}
-              <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
-                <div>
-                  <h5 className="font-outfit font-bold text-white text-xs">FOMO Activity Toasts</h5>
-                  <p className="text-[10px] text-gray-500">Encourage voter activity.</p>
-                </div>
-                <button
-                  onClick={() => handleToggleGranularVisibility('enableFomoPopups', !poll.settings?.enableFomoPopups)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                    poll.settings?.enableFomoPopups
-                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                      : 'bg-white/5 border-white/10 text-gray-400'
-                  }`}
-                >
-                  {poll.settings?.enableFomoPopups ? 'Active' : 'Disabled'}
-                </button>
-              </div>
-
               {/* Smart Debrief */}
               <div className="flex items-center justify-between border border-white/5 rounded-xl p-3 bg-white/2">
                 <div>
@@ -1170,6 +1164,7 @@ export default function PollInsights({ params }: PageProps) {
             stats={liveStats[activeQuestion.id] || {}}
             votesList={liveVotesList}
             optionsList={activeQuestion.options}
+            settings={poll.settings}
           />
         </div>
       </div>
@@ -1233,45 +1228,15 @@ export default function PollInsights({ params }: PageProps) {
         )}
       </div>
 
-      {/* SOS Bypass Requests Panel */}
-      {isOwner && !poll.isOpenVoting && poll.allowedVoters && poll.allowedVoters.some((v: any) => v.bypassRequested) && (
+      {/* Request-only OTP bypass management */}
+      {isOwner && !poll.isOpenVoting && activeBypassRequests.length > 0 && (
         <div className="space-y-3 print:hidden">
           <h3 className="font-outfit text-xl font-bold text-amber-500 flex items-center space-x-2 animate-pulse">
             <AlertCircle className="w-5 h-5 text-red-500" />
-            <span>SOS Bypass Requests</span>
-          </h3>
-          <p className="text-gray-400 text-xs">
-            The following voters have reported being unable to access their emails. Granting a bypass gives them a 30-second window to enter the poll without an OTP.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {poll.allowedVoters.filter((v: any) => v.bypassRequested).map((voter: any) => (
-              <div key={voter.id} className="glass-card rounded-2xl p-4 border border-red-500/30 bg-red-500/5 flex justify-between items-center animate-fade-in shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                <div>
-                  <div className="text-white font-bold text-sm">{voter.identifier}</div>
-                  <div className="text-gray-400 text-xs">{voter.email}</div>
-                </div>
-                <button
-                  onClick={() => handleGrantBypass(voter.id)}
-                  disabled={bypassCountdowns[voter.id] > 0}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-black hover:bg-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.4)] disabled:opacity-50"
-                >
-                  {bypassCountdowns[voter.id] > 0 ? 'Granted' : 'Grant 30s Bypass'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Voter Management Panel (OTP Bypass) — Closed polls only */}
-      {isOwner && !poll.isOpenVoting && poll.allowedVoters && poll.allowedVoters.length > 0 && (
-        <div className="space-y-3 print:hidden">
-          <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2">
-            <Unlock className="w-5 h-5 text-amber-400" />
             <span>Registered Voter Management</span>
           </h3>
-          <p className="text-gray-500 text-xs">
-            If a high-priority voter cannot access their email to receive the OTP, click <strong className="text-amber-400">Grant 30s Bypass</strong> next to their name. They will have exactly 30 seconds to enter their credentials and be let in without needing an OTP code.
+          <p className="text-gray-400 text-xs">
+            Only voters who requested OTP bypass appear here. Requests expire automatically after 5 minutes if you do not grant the 30-second bypass.
           </p>
           <div className="glass-card rounded-2xl border border-white/5 overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -1279,26 +1244,25 @@ export default function PollInsights({ params }: PageProps) {
                 <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
                   <th className="py-3 px-4">#</th>
                   <th className="py-3 px-4">Identifier</th>
+                  <th className="py-3 px-4">Name / Confirmer</th>
                   <th className="py-3 px-4">Email</th>
-                  <th className="py-3 px-4">Voted</th>
+                  <th className="py-3 px-4">Expires</th>
                   <th className="py-3 px-4 text-center">OTP Bypass</th>
                 </tr>
               </thead>
               <tbody>
-                {poll.allowedVoters.map((voter: any, idx: number) => {
+                {activeBypassRequests.map((voter: any, idx: number) => {
                   const countdown = bypassCountdowns[voter.id];
+                  const requestSecondsLeft = Math.max(0, Math.ceil((Date.parse(voter.bypassOtpUntil) - bypassRequestNow) / 1000));
                   return (
                     <tr key={voter.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
                       <td className="py-3 px-4 text-gray-500 font-mono">{idx + 1}</td>
                       <td className="py-3 px-4 font-semibold text-white">{voter.identifier}</td>
+                      <td className="py-3 px-4 text-gray-300">{voter.confirmer1}</td>
                       <td className="py-3 px-4 text-gray-400">{voter.email}</td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          voter.voted
-                            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                            : 'bg-white/5 border border-white/10 text-gray-500'
-                        }`}>
-                          {voter.voted ? '✓ Voted' : 'Pending'}
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                          {Math.floor(requestSecondsLeft / 60)}m {requestSecondsLeft % 60}s
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -1307,8 +1271,6 @@ export default function PollInsights({ params }: PageProps) {
                             <Timer className="w-3 h-3 animate-pulse" />
                             <span>{countdown}s remaining</span>
                           </div>
-                        ) : voter.voted ? (
-                          <span className="text-gray-600 text-[10px] font-semibold">Already voted</span>
                         ) : (
                           <button
                             onClick={() => handleGrantBypass(voter.id)}

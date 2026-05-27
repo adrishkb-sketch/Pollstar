@@ -130,7 +130,8 @@ export async function POST(
       // Check if Creator granted a temporary 30-second OTP bypass
       if (
         allowedVoter.bypassOtpUntil &&
-        allowedVoter.bypassOtpUntil > new Date()
+        allowedVoter.bypassOtpUntil > new Date() &&
+        !allowedVoter.bypassRequested
       ) {
         const voterToken = jwt.sign(
           {
@@ -287,7 +288,8 @@ export async function POST(
 
       if (
         allowedVoter.bypassOtpUntil &&
-        allowedVoter.bypassOtpUntil > new Date()
+        allowedVoter.bypassOtpUntil > new Date() &&
+        !allowedVoter.bypassRequested
       ) {
         if (allowedVoter.bypassRequested) {
           await prisma.allowedVoter.update({

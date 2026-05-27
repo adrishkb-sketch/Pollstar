@@ -289,6 +289,10 @@ export default function PollChart({ questionId, questionText, type, stats, votes
 
   const convictionScores = getConvictionScores();
   const hasConvictionData = Object.values(convictionScores).some((s: any) => s.count > 0);
+  const leader = overviewData[0];
+  const runnerUp = overviewData[1];
+  const leaderShare = statsTotal > 0 && leader ? Math.round((leader.value / statsTotal) * 100) : 0;
+  const runnerUpShare = statsTotal > 0 && runnerUp ? Math.round((runnerUp.value / statsTotal) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -327,6 +331,34 @@ export default function PollChart({ questionId, questionText, type, stats, votes
           </button>
         </div>
       </div>
+
+      {settings?.enableSmartDebrief && leader && (
+        <div className="glass-card rounded-2xl p-5 border border-emerald-500/20 bg-emerald-500/5 space-y-2">
+          <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Smart Debrief</span>
+          <p className="text-gray-300 text-sm leading-relaxed">
+            {leader.name} is currently leading this question
+            {statsTotal > 0 ? ` with ${leaderShare}% of the measured result weight` : ''}.
+            {runnerUp
+              ? ` The closest challenger is ${runnerUp.name} at ${runnerUpShare}%, leaving a ${Math.max(0, leaderShare - runnerUpShare)} point gap.`
+              : ' No close challenger has emerged yet.'}
+            {' '}This summary updates with the live report data as more ballots are recorded.
+          </p>
+        </div>
+      )}
+
+      {settings?.enableHotStreaks && leader && (
+        <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 flex items-center justify-between gap-4">
+          <div>
+            <span className="text-amber-400 text-[10px] font-black uppercase tracking-widest">Hot Streak Momentum</span>
+            <p className="text-gray-300 text-sm mt-1">
+              {leader.name} has the strongest current momentum in this report.
+            </p>
+          </div>
+          <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-black">
+            Leading
+          </div>
+        </div>
+      )}
 
       {/* ========================================================
           TAB 1: OVERVIEW RESULTS

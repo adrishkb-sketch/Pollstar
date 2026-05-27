@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Shield, BarChart3, Globe, Sparkles, ArrowRight, Zap, Gift, TrendingUp, Trophy, ArrowRightCircle } from 'lucide-react';
+import { Shield, BarChart3, Globe, Sparkles, ArrowRight, Zap, TrendingUp, Trophy, ArrowRightCircle } from 'lucide-react';
 
 export default function Features() {
   const features = [
@@ -22,11 +22,6 @@ export default function Features() {
       icon: <Zap className="w-8 h-8 text-amber-400" />, // live ticker
       title: 'Live Ticker (Dashboard)',
       description: 'Wall‑Street style ticker flashes green/red percentage gains as votes surge, visible when enabled.',
-    },
-    {
-      icon: <Gift className="w-8 h-8 text-pink-400" />, // fomo popups
-      title: 'FOMO & Social Proof Popups',
-      description: 'Non‑intrusive toasts (e.g., "5 people are voting now!") create urgency and engagement.',
     },
     {
       icon: <TrendingUp className="w-8 h-8 text-orange-400" />, // hot streaks

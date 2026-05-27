@@ -334,7 +334,6 @@ export default function VoterPortal({ params }: PageProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, [otpCooldown]);
-  // (FOMO popups removed)
   // 2. Real-Time Serverless Polling Connection
   useEffect(() => {
     if (!poll || !poll.isResultPublic) return;
@@ -571,7 +570,7 @@ export default function VoterPortal({ params }: PageProps) {
       const res = await fetch(`/api/polls/${pollId}/request-bypass`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: voterEmail }),
+        body: JSON.stringify({ email: voterEmail, voterId }),
       });
       if (res.ok) {
         setBypassStatus('WAITING');
@@ -616,7 +615,7 @@ export default function VoterPortal({ params }: PageProps) {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [bypassStatus, pollId, voterEmail]);
+  }, [bypassStatus, pollId, voterEmail, voterId]);
 
   // ────────────────────────────────────────────────────────
   // CLICK-TO-RANK PRIORITY SELECTOR
@@ -644,6 +643,26 @@ export default function VoterPortal({ params }: PageProps) {
     setSelectedAnswers({
       ...selectedAnswers,
       [questionId]: [],
+    });
+  };
+
+  const handleRankDrop = (draggedId: string, targetId: string, questionId: string) => {
+    if (!draggedId || draggedId === targetId) return;
+
+    const withoutDragged = rankedSelections.filter((id) => id !== draggedId);
+    const targetIndex = withoutDragged.indexOf(targetId);
+    const updated = [...withoutDragged];
+
+    if (targetIndex === -1) {
+      updated.push(draggedId);
+    } else {
+      updated.splice(targetIndex, 0, draggedId);
+    }
+
+    setRankedSelections(updated);
+    setSelectedAnswers({
+      ...selectedAnswers,
+      [questionId]: updated,
     });
   };
 
@@ -1528,7 +1547,11 @@ export default function VoterPortal({ params }: PageProps) {
                         <div className="flex justify-between items-center bg-white/2 p-4 rounded-xl border border-white/5">
                           <div className="space-y-0.5">
                             <span className="text-gray-300 text-xs font-bold">Rank candidates in order of priority:</span>
-                            <p className="text-gray-500 text-[10px]">Click choices to assign weights (① = highest priority).</p>
+                            <p className="text-gray-500 text-[10px]">
+                              {poll.settings?.enableDragAndDropPodium
+                                ? 'Click to rank, or drag candidates to reorder their podium positions.'
+                                : 'Click choices to assign weights (1 = highest priority).'}
+                            </p>
                           </div>
                           {rankedSelections.length > 0 && (
                             <button
@@ -1549,6 +1572,16 @@ export default function VoterPortal({ params }: PageProps) {
                             return (
                               <div
                                 key={opt.id}
+                                draggable={!!poll.settings?.enableDragAndDropPodium}
+                                onDragStart={(e) => e.dataTransfer.setData('text/plain', opt.id)}
+                                onDragOver={(e) => {
+                                  if (poll.settings?.enableDragAndDropPodium) e.preventDefault();
+                                }}
+                                onDrop={(e) => {
+                                  if (!poll.settings?.enableDragAndDropPodium) return;
+                                  e.preventDefault();
+                                  handleRankDrop(e.dataTransfer.getData('text/plain'), opt.id, q.id);
+                                }}
                                 onClick={() => handleRankClick(opt.id, q.id)}
                                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
                                   isRanked
@@ -1775,6 +1808,30 @@ export default function VoterPortal({ params }: PageProps) {
             <h3 className="font-outfit text-xl font-bold text-white">Live Insights Report</h3>
           </div>
 
+          {votedSuccessfully && poll.settings?.enableLiveTicker && poll.questions?.[0]?.options?.length > 0 && (
+            <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-4 flex items-center overflow-hidden relative select-none animate-fade-in">
+              <div className="flex items-center space-x-2 border-r border-white/10 pr-4 shrink-0 bg-slate-950/80 backdrop-blur z-10">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest">Live Ticker</span>
+              </div>
+              <div className="flex items-center space-x-6 pl-6 overflow-x-auto no-scrollbar py-1">
+                {poll.questions[0].options.map((opt: any) => {
+                  const questionStats = liveStats[poll.questions[0].id] || {};
+                  const optStats = questionStats[opt.id] || { count: 0 };
+                  const total = Object.values(questionStats).reduce((acc: number, cur: any) => acc + (cur.count || 0), 0) as number;
+                  const percentage = total > 0 ? (optStats.count / total) * 100 : 0;
+
+                  return (
+                    <div key={opt.id} className="inline-flex items-center space-x-2 border border-white/5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-white/2">
+                      <span className="text-gray-300 font-medium truncate max-w-[120px]">{opt.text}</span>
+                      <span className="text-white font-mono">{percentage.toFixed(1)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Aggregate counts */}
           {poll.settings?.publicShowStats !== false && (
             <div className="glass-card rounded-2xl p-6 flex justify-between items-center">
@@ -1802,6 +1859,7 @@ export default function VoterPortal({ params }: PageProps) {
                       stats={liveStats[q.id] || {}}
                       votesList={poll?.votes || []}
                       optionsList={q.options || []}
+                      settings={poll.settings}
                     />
                   </div>
                 );
