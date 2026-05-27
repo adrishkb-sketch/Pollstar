@@ -1020,7 +1020,7 @@ export default function VoterPortal({ params }: PageProps) {
     return (
       <div className="flex-1 flex flex-col justify-center items-center bg-[#030712]">
         <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-        <span className="text-gray-400 text-sm mt-4 font-semibold">Opening secure poll...</span>
+        <span className="text-gray-400 text-sm mt-4 font-semibold">Loading, please wait...</span>
       </div>
     );
   }
@@ -1066,9 +1066,13 @@ export default function VoterPortal({ params }: PageProps) {
               </div>
             </div>
 
-            <h1 className="font-outfit text-3xl font-extrabold text-white">Voting Has Closed</h1>
+            <h1 className="font-outfit text-3xl font-extrabold text-white">{poll.pollType === 'SURVEY' ? 'Survey Has Closed' : 'Voting Has Closed'}</h1>
             <p className="text-gray-400 text-sm leading-relaxed">
-              The poll <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting ballots.
+              {poll.pollType === 'SURVEY' ? (
+                <>The survey <span className="text-white font-bold">"{poll.title}"</span> has officially closed and is no longer accepting responses.</>
+              ) : (
+                <>The poll <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting ballots.</>
+              )}
             </p>
 
             {poll.endTime && (
@@ -1080,7 +1084,7 @@ export default function VoterPortal({ params }: PageProps) {
 
             {poll.totalVotes !== undefined && (
               <p className="text-gray-500 text-xs">
-                Total ballots recorded: <span className="text-white font-bold">{poll.totalVotes}</span>
+                {poll.pollType === 'SURVEY' ? 'Total responses recorded:' : 'Total ballots recorded:'} <span className="text-white font-bold">{poll.totalVotes}</span>
               </p>
             )}
           </div>
@@ -1239,9 +1243,9 @@ export default function VoterPortal({ params }: PageProps) {
               <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
                 Step 2 of 2: Security & Protocols
               </span>
-              <h2 className="font-outfit text-2xl font-bold text-white">Electoral Integrity Features</h2>
+              <h2 className="font-outfit text-2xl font-bold text-white">{poll.pollType === 'SURVEY' ? 'Participation & Privacy Details' : 'Electoral Integrity Features'}</h2>
               <p className="text-gray-400 text-xs">
-                To guarantee clean, transparent and fair outcomes, the administrator has locked this session under the following protocols:
+                {poll.pollType === 'SURVEY' ? 'To maintain data integrity and research quality, this survey session is governed by the following protocols:' : 'To guarantee clean, transparent and fair outcomes, the administrator has locked this session under the following protocols:'}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1250,11 +1254,11 @@ export default function VoterPortal({ params }: PageProps) {
                     <VoteIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Ballot Privacy</h4>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Response Privacy</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
                       {poll.isAnonymous 
-                        ? 'Your vote won\'t be visible to anyone.' 
-                        : 'Your vote will be visible to everyone based on choices made by the creator.'
+                        ? (poll.pollType === 'SURVEY' ? 'Your responses will remain fully anonymous.' : 'Your vote won\'t be visible to anyone.') 
+                        : (poll.pollType === 'SURVEY' ? 'Responses will be logged as per creator settings.' : 'Your vote will be visible to everyone based on choices made by the creator.')
                       }
                     </p>
                   </div>
@@ -1297,7 +1301,7 @@ export default function VoterPortal({ params }: PageProps) {
                   <div>
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Session Limit</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
-                      Time-limited session active: <span className="text-red-400 font-extrabold">{formatTime(getSessionDuration())}</span>. Unfinished ballots automatically expire.
+                      Time-limited session active: <span className="text-red-400 font-extrabold">{formatTime(getSessionDuration())}</span>. {poll.pollType === 'SURVEY' ? 'Unfinished survey responses automatically expire.' : 'Unfinished ballots automatically expire.'}
                     </p>
                   </div>
                 </div>
@@ -1318,7 +1322,7 @@ export default function VoterPortal({ params }: PageProps) {
                 onClick={() => setShowIntro(false)}
                 className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-xs flex items-center space-x-2 active:scale-95 animate-pulse-slow"
               >
-                <span>Start Poll</span>
+                <span>{poll.pollType === 'SURVEY' ? 'Begin Survey' : 'Start Poll'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -1348,7 +1352,7 @@ export default function VoterPortal({ params }: PageProps) {
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              <span className="text-[10px] font-extrabold tracking-widest text-red-400 uppercase">Voting Session Time Limit</span>
+              <span className="text-[10px] font-extrabold tracking-widest text-red-400 uppercase">{poll.pollType === 'SURVEY' ? 'Survey Session Time Limit' : 'Voting Session Time Limit'}</span>
             </div>
             <div className="flex items-center space-x-3">
               <span className="font-mono text-xs font-extrabold text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg">
@@ -1377,15 +1381,15 @@ export default function VoterPortal({ params }: PageProps) {
 
       {/* Brand Icon */}
       <div className="flex items-center space-x-2.5">
-        <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
-          <VoteIcon className="w-5 h-5 text-white" />
+        <div className={`p-2.5 bg-gradient-to-tr ${poll.pollType === 'SURVEY' ? 'from-purple-500 to-indigo-500 shadow-purple-500/20' : 'from-indigo-500 to-purple-500 shadow-indigo-500/20'} rounded-xl shadow-lg`}>
+          {poll.pollType === 'SURVEY' ? <ClipboardList className="w-5 h-5 text-white" /> : <VoteIcon className="w-5 h-5 text-white" />}
         </div>
         <span className="font-outfit text-lg font-bold tracking-tight text-white">
-          Poll<span className="text-indigo-400">star</span> Secure
+          Poll<span className={poll.pollType === 'SURVEY' ? 'text-purple-400' : 'text-indigo-400'}>star</span> {poll.pollType === 'SURVEY' ? 'Survey' : 'Secure'}
         </span>
       </div>
 
-      {/* Poll Details Header Card */}
+      {/* Poll/Survey Details Header Card */}
       <div className="glass-card rounded-3xl p-8 border border-white/5 flex flex-col md:flex-row gap-8 items-start md:items-center relative overflow-hidden">
         {poll.posterUrl && (
           <div className="w-full md:w-32 h-32 rounded-2xl border border-white/10 overflow-hidden shrink-0 bg-white/5 shadow-inner">
@@ -1834,7 +1838,7 @@ export default function VoterPortal({ params }: PageProps) {
                                 return (
                                   <div key={opt.id} className="p-4 rounded-xl border border-white/5 bg-white/2 flex items-center justify-between gap-4">
                                     <div className="space-y-1">
-                                      <span className="text-sm font-semibold text-white block">{opt.text}</span>
+                                      <span className="text-sm font-semibold text-white">{opt.text}</span>
                                       <span className="text-[10px] text-gray-500 block">
                                         Allocated: <strong className="text-indigo-400">{votes} vote{votes === 1 ? '' : 's'}</strong> ({votes * votes} points)
                                       </span>
@@ -2395,7 +2399,7 @@ export default function VoterPortal({ params }: PageProps) {
                       value={captchaAnswer}
                       onChange={(e) => setCaptchaAnswer(e.target.value)}
                       placeholder="Your answer"
-                      className="flex-1 glass-input text-sm"
+                      className="w-full glass-input text-sm"
                     />
                     <button
                       type="button"
@@ -2462,7 +2466,7 @@ export default function VoterPortal({ params }: PageProps) {
             </p>
             {flaggedSuspicious && (
               <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
-                ⚠️ Cast flagged for Administrator inspection
+                ⚠️ {poll.pollType === 'SURVEY' ? 'Response flagged for Administrator review' : 'Cast flagged for Administrator inspection'}
               </span>
             )}
           </div>
@@ -2552,7 +2556,7 @@ export default function VoterPortal({ params }: PageProps) {
       {/* If Results are kept completely private */}
       {votedSuccessfully && !poll.isResultPublic && (
         <div className="p-5 rounded-2xl bg-white/2 border border-white/5 text-center text-gray-500 text-xs">
-          Live statistics and maps are set to private by the poll administrator.
+          Live statistics and maps are set to private by the {poll.pollType === 'SURVEY' ? 'survey creator' : 'poll administrator'}.
         </div>
       )}
       </div>

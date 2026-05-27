@@ -1104,7 +1104,7 @@ export default function CreatePoll() {
                       isOpenVoting ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    Open Vote
+                    {pollType === 'SURVEY' ? 'Open Survey' : 'Open Vote'}
                   </button>
                   <button
                     type="button"
@@ -1113,7 +1113,7 @@ export default function CreatePoll() {
                       !isOpenVoting ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    Closed Vote
+                    {pollType === 'SURVEY' ? 'Closed Survey' : 'Closed Vote'}
                   </button>
                 </div>
               </div>
@@ -1233,8 +1233,8 @@ export default function CreatePoll() {
                       <Users className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xs font-bold text-white">Enable 2nd Voter Confirmer Field (Optional)</h4>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Voters must match two confirmation items (e.g. Student Name AND Parent Name) before voting.</p>
+                      <h4 className="text-xs font-bold text-white">{pollType === 'SURVEY' ? 'Enable 2nd Respondent Confirmer Field (Optional)' : 'Enable 2nd Voter Confirmer Field (Optional)'}</h4>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{pollType === 'SURVEY' ? 'Respondents must match two confirmation items before accessing the survey.' : 'Voters must match two confirmation items (e.g. Student Name AND Parent Name) before voting.'}</p>
                     </div>
                     <button
                       type="button"
