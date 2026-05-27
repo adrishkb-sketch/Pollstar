@@ -716,33 +716,39 @@ export default function PollChart({ questionId, questionText, type, stats, votes
           {/* ────────────────────────────────────────────────────────
               1. SINGLE CHOICE DEEP ANALYTICS: VELOCITY TIMELINE
              ──────────────────────────────────────────────────────── */}
+          {/* ────────────────────────────────────────────────────────
+              TURNOUT VELOCITY TIMELINE — visible for ALL poll types
+             ──────────────────────────────────────────────────────── */}
+          <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 relative">
+            <div className="absolute top-6 left-6">
+              <h4 className="text-white text-xs font-bold uppercase tracking-wider">Turnout Velocity Timeline</h4>
+              <p className="text-gray-500 text-[10px] mt-0.5">Live visualization of cumulative and periodic ballot casting velocity.</p>
+            </div>
+
+            <div className="w-full h-full pt-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={getVelocityData()} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 8 }} tickLine={false} />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 8 }} tickLine={false} />
+                  <Tooltip contentStyle={{ background: '#0b0f19', border: '1px solid rgba(255,255,255,0.08)' }} />
+                  <Area type="monotone" dataKey="cumulative" stroke="#6366f1" fillOpacity={1} fill="url(#colorVelocity)" name="Cumulative Ballots" />
+                  <Area type="monotone" dataKey="ballots" stroke="#10b981" fill="none" name="Votes Cast" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* ────────────────────────────────────────────────────────
+              1. SINGLE CHOICE DEEP ANALYTICS
+             ──────────────────────────────────────────────────────── */}
           {type === 'SINGLE' && (
             <div className="space-y-6">
-              <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 relative">
-                <div className="absolute top-6 left-6">
-                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Turnout Velocity Timeline</h4>
-                  <p className="text-gray-500 text-[10px] mt-0.5">Live visualization of cumulative and periodic ballot casting velocity.</p>
-                </div>
-
-                <div className="w-full h-full pt-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={getVelocityData()} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 8 }} tickLine={false} />
-                      <YAxis tick={{ fill: '#6b7280', fontSize: 8 }} tickLine={false} />
-                      <Tooltip contentStyle={{ background: '#0b0f19', border: '1px solid rgba(255,255,255,0.08)' }} />
-                      <Area type="monotone" dataKey="cumulative" stroke="#6366f1" fillOpacity={1} fill="url(#colorVelocity)" name="Cumulative Ballots" />
-                      <Area type="monotone" dataKey="ballots" stroke="#10b981" fill="none" name="Votes Cast" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
               {/* Standings list */}
               <div className="glass-card border border-white/5 p-6 rounded-2xl space-y-4">
                 <span className="text-white text-xs font-bold uppercase tracking-wider block">Standings Heat-Map</span>
@@ -827,6 +833,7 @@ export default function PollChart({ questionId, questionText, type, stats, votes
               )}
             </div>
           )}
+
 
           {/* ────────────────────────────────────────────────────────
               KNOCKOUT STANDINGS (Shared Component)
