@@ -18,6 +18,12 @@ import {
   Coins
 } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
+const getCurrencySymbol = (currencyCode?: string) => {
+  if (currencyCode === 'INR') return '₹';
+  if (currencyCode === 'EUR') return '€';
+  if (currencyCode === 'GBP') return '£';
+  return '$';
+};
 
 interface Plan {
   id: string;
@@ -258,7 +264,7 @@ function CheckoutContent() {
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Amount Paid</span>
-              <span className="text-emerald-400 font-bold">${finalPrice.toFixed(2)}</span>
+              <span className="text-emerald-400 font-bold">{getCurrencySymbol(plan.currency)}{finalPrice.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Billing Cycle</span>
@@ -345,8 +351,8 @@ function CheckoutContent() {
                       <tr>
                         <td className="p-3 font-semibold text-gray-800">{generatedInvoice.planName} Tier Upgrade</td>
                         <td className="p-3 text-gray-500">{plan.billingCycle}</td>
-                        <td className="p-3 text-right text-gray-500">${plan.price.toFixed(2)}</td>
-                        <td className="p-3 text-right font-bold text-gray-800">${generatedInvoice.amountPaid.toFixed(2)}</td>
+                        <td className="p-3 text-right text-gray-500">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</td>
+                        <td className="p-3 text-right font-bold text-gray-800">{getCurrencySymbol(plan.currency)}{generatedInvoice.amountPaid.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -356,21 +362,21 @@ function CheckoutContent() {
                 <div className="border-t border-gray-100 pt-4 flex flex-col items-end text-xs space-y-2">
                   <div className="flex w-64 justify-between text-gray-500">
                     <span>Base Amount</span>
-                    <span>${plan.price.toFixed(2)}</span>
+                    <span>{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex w-64 justify-between text-emerald-600 font-semibold">
                       <span>Promo Coupon Discount</span>
-                      <span>-${discountAmount.toFixed(2)}</span>
+                      <span>-{getCurrencySymbol(plan.currency)}{discountAmount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex w-64 justify-between text-gray-500">
                     <span>GST/VAT Estimate (0%)</span>
-                    <span>$0.00</span>
+                    <span>{getCurrencySymbol(plan.currency)}0.00</span>
                   </div>
                   <div className="flex w-64 justify-between font-black text-gray-900 border-t border-gray-100 pt-2 text-sm">
                     <span>Total Amount Paid</span>
-                    <span>${generatedInvoice.amountPaid.toFixed(2)}</span>
+                    <span>{getCurrencySymbol(plan.currency)}{generatedInvoice.amountPaid.toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -682,7 +688,7 @@ function CheckoutContent() {
                     <ShieldCheck className="w-5 h-5 text-emerald-400" />
                     <span>
                       {finalPrice > 0 
-                        ? `Secure simulated checkout ($${finalPrice.toFixed(2)})` 
+                        ? `Secure simulated checkout (${getCurrencySymbol(plan.currency)}${finalPrice.toFixed(2)})` 
                         : 'Activate Free Plan Upgrade'}
                     </span>
                   </>
@@ -705,7 +711,7 @@ function CheckoutContent() {
                     <p className="text-xs text-gray-500">{plan.billingCycle} Subscription</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-2xl font-black text-white">${plan.price.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-white">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest">{plan.currency}</p>
                   </div>
                 </div>
@@ -758,28 +764,28 @@ function CheckoutContent() {
                 <div className="border-t border-white/5 pt-5 space-y-3.5 text-sm">
                   <div className="flex justify-between text-gray-400">
                     <span>Base Price</span>
-                    <span className="font-semibold text-white">${plan.price.toFixed(2)}</span>
+                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-400 font-semibold">
                       <span>Promo Coupon Discount</span>
-                      <span>-${discountAmount.toFixed(2)}</span>
+                      <span>-{getCurrencySymbol(plan.currency)}{discountAmount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-gray-400">
                     <span>Simulated Platform Fees</span>
-                    <span className="font-semibold text-white">$0.00</span>
+                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}0.00</span>
                   </div>
                   <div className="flex justify-between text-gray-400">
                     <span>Tax Estimate (GST/VAT)</span>
-                    <span className="font-semibold text-white">$0.00</span>
+                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}0.00</span>
                   </div>
 
                   <div className="border-t border-white/5 pt-4 flex justify-between items-baseline">
                     <span className="text-base font-bold">Total Amount Due</span>
                     <div className="text-right">
                       <span className="text-3xl font-black bg-gradient-to-r from-purple-400 to-indigo-300 bg-clip-text text-transparent">
-                        ${finalPrice.toFixed(2)}
+                        {getCurrencySymbol(plan.currency)}{finalPrice.toFixed(2)}
                       </span>
                     </div>
                   </div>

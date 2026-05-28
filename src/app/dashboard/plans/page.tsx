@@ -44,6 +44,45 @@ const FEATURES_INFO = [
   { key: 'linkShortener', label: 'Link Shortener Option', desc: 'Generate customized short links (e.g. /s/abcde) for simplified voter sharing.' }
 ];
 
+const getCurrencySymbol = (currencyCode?: string) => {
+  if (currencyCode === 'INR') return '₹';
+  if (currencyCode === 'EUR') return '€';
+  if (currencyCode === 'GBP') return '£';
+  return '$';
+};
+
+const getHasFeature = (features: any, key: string): boolean => {
+  if (!features) return false;
+  
+  // Direct match
+  if (features[key] === true) return true;
+  
+  // Key mappings between admin dashboard keys and plans display keys
+  const mappings: Record<string, string[]> = {
+    singleChoice: ['singleChoiceMultiSelect', 'singleChoice'],
+    bordaCount: ['rankedChoiceBordaCount', 'bordaCount'],
+    knockoutBracket: ['knockoutBracket'],
+    multipageSurveys: ['multiPageSurveys', 'multipageSurveys'],
+    sentimentAnalysis: ['aiSentimentAnalysis', 'sentimentAnalysis'],
+    dropOffTracking: ['enableDropOffTracking', 'dropOffTracking'],
+    crossTabulation: ['enableCrossTabulation', 'crossTabulation'],
+    geolocations: ['liveGeolocationMap', 'geolocations'],
+    domainLocking: ['enableDomainRestriction', 'domainLocking'],
+    otpVerification: ['otpVoterVerification', 'otpVerification'],
+    collaborations: ['collaborations'],
+    inboxMessages: ['enableDirectInbox', 'inboxMessages'],
+    dataExport: ['exportResults', 'dataExport'],
+    creatorScribbleCanvas: ['creatorScribbleCanvas'],
+    studentWhiteboardQuestion: ['studentWhiteboardQuestion'],
+    inbuiltScientificCalculator: ['inbuiltScientificCalculator'],
+    saveResumeLater: ['saveResumeLater', 'saveResumeLaterExam'],
+    customBrandingThemes: ['customBrandingThemes', 'customBranding']
+  };
+  
+  const altKeys = mappings[key] || [key];
+  return altKeys.some(altKey => features[altKey] === true);
+};
+
 export default function PlansPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -213,7 +252,7 @@ export default function PlansPage() {
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
                       <div className="flex items-baseline">
-                        <span className="text-3xl font-black text-white font-outfit">${p.price.toFixed(2)}</span>
+                        <span className="text-3xl font-black text-white font-outfit">{getCurrencySymbol(p.currency)}{p.price.toFixed(2)}</span>
                         <span className="text-xs text-gray-500 font-semibold ml-1">/{p.billingCycle.toLowerCase()}</span>
                       </div>
                     </div>
@@ -223,7 +262,7 @@ export default function PlansPage() {
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
                       <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                         {FEATURES_INFO.map((feat) => {
-                          const hasFeature = p.features ? !!p.features[feat.key] : false;
+                          const hasFeature = getHasFeature(p.features, feat.key);
                           return (
                             <div key={feat.key} className="flex items-start gap-2 text-[10px] leading-relaxed">
                               {hasFeature ? (
@@ -305,7 +344,7 @@ export default function PlansPage() {
                         {inv.plan.name} Tier Upgrade
                       </td>
                       <td className="py-3.5 pr-2 font-bold font-mono text-emerald-400">
-                        ${inv.amountPaid.toFixed(2)}
+                        {getCurrencySymbol(inv.plan.currency)}{inv.amountPaid.toFixed(2)}
                       </td>
                       <td className="py-3.5 pr-2 text-right">
                         <button
@@ -315,6 +354,7 @@ export default function PlansPage() {
                               ...inv,
                               receiptRef: `PST-${Math.floor(Math.random()*900000+100000)}`,
                               planName: inv.plan.name,
+                              planCurrency: inv.plan.currency,
                               createdAt: new Date(inv.createdAt).toLocaleDateString()
                             });
                             setShowInvoiceModal(true);
@@ -393,7 +433,7 @@ export default function PlansPage() {
                       <tr>
                         <td className="p-3 font-semibold text-gray-800">{selectedInvoice.planName} Tier Upgrade</td>
                         <td className="p-3 text-gray-500">MONTHLY</td>
-                        <td className="p-3 text-right font-bold text-gray-800">${selectedInvoice.amountPaid.toFixed(2)}</td>
+                        <td className="p-3 text-right font-bold text-gray-800">{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -403,7 +443,7 @@ export default function PlansPage() {
                 <div className="border-t border-gray-100 pt-4 flex flex-col items-end text-xs space-y-2">
                   <div className="flex w-64 justify-between text-gray-500">
                     <span>Base Amount</span>
-                    <span>${selectedInvoice.amountPaid.toFixed(2)}</span>
+                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</span>
                   </div>
                   {selectedInvoice.couponCode && (
                     <div className="flex w-64 justify-between text-emerald-600 font-semibold">
@@ -413,11 +453,11 @@ export default function PlansPage() {
                   )}
                   <div className="flex w-64 justify-between text-gray-500">
                     <span>GST/VAT Estimate (0%)</span>
-                    <span>$0.00</span>
+                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}0.00</span>
                   </div>
                   <div className="flex w-64 justify-between font-black text-gray-900 border-t border-gray-100 pt-2 text-sm">
                     <span>Total Amount Paid</span>
-                    <span>${selectedInvoice.amountPaid.toFixed(2)}</span>
+                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</span>
                   </div>
                 </div>
 
