@@ -110,6 +110,7 @@ export async function GET() {
         researchPos: user.researchPos,
         otherDetail: user.otherDetail,
         bio: user.bio,
+        gender: user.gender,
         verificationStatus: user.verificationStatus,
         verificationReason: user.verificationReason,
         verificationDocUrl: user.verificationDocUrl,

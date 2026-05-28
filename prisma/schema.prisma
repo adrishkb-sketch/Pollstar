@@ -63,6 +63,7 @@ model User {
   researchPos          String?
   otherDetail          String?
   bio                  String?
+  gender               String?
 
   verificationStatus   String      @default("UNAPPLIED") // UNAPPLIED, PENDING, VERIFIED, REJECTED
   verificationReason   String?

@@ -9,15 +9,11 @@ import {
   ExternalLink, Send, ArrowRight, Calendar
 } from 'lucide-react';
 
-const AVATARS: Record<string, { name: string; bg: string }> = {
-  'avatar-ninja': { name: 'Ninja', bg: 'from-red-500 to-rose-600' },
-  'avatar-astronaut': { name: 'Astronaut', bg: 'from-purple-500 to-indigo-600' },
-  'avatar-artist': { name: 'Artist', bg: 'from-yellow-400 to-orange-500' },
-  'avatar-scientist': { name: 'Scientist', bg: 'from-green-400 to-emerald-600' },
-  'avatar-chef': { name: 'Chef', bg: 'from-orange-500 to-red-600' },
-  'avatar-detective': { name: 'Detective', bg: 'from-slate-500 to-slate-700' },
-  'avatar-writer': { name: 'Writer', bg: 'from-teal-400 to-cyan-600' },
-  'avatar-athlete': { name: 'Athlete', bg: 'from-cyan-500 to-blue-600' },
+const AVATARS: Record<string, { name: string; src: string; bg: string }> = {
+  'avatar-boy': { name: 'Joyful Boy', src: '/avatars/avatar-boy.png', bg: 'from-blue-500 to-indigo-600' },
+  'avatar-girl': { name: 'Cheerful Girl', src: '/avatars/avatar-girl.png', bg: 'from-pink-500 to-rose-600' },
+  'avatar-ninja': { name: 'Playful Ninja', src: '/avatars/avatar-ninja.png', bg: 'from-red-500 to-rose-600' },
+  'avatar-astronaut': { name: 'Curious Astro', src: '/avatars/avatar-astronaut.png', bg: 'from-purple-500 to-indigo-600' },
 };
 
 export default function ProfilePage() {
@@ -95,7 +91,7 @@ export default function ProfilePage() {
     );
   }
 
-  const avatarInfo = AVATARS[user?.avatar || 'avatar-ninja'] || AVATARS['avatar-ninja'];
+  const avatarInfo = AVATARS[user?.avatar || 'avatar-boy'] || AVATARS['avatar-boy'];
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#030712]">
@@ -181,8 +177,8 @@ export default function ProfilePage() {
           <div className="md:col-span-2 space-y-6">
             <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6 bg-[#080d1a]">
               <div className="flex items-center space-x-4 pb-6 border-b border-white/5">
-                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${avatarInfo.bg} flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-500/10`}>
-                  {user?.fullName ? user.fullName.charAt(0).toUpperCase() : user?.email.charAt(0).toUpperCase()}
+                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${avatarInfo.bg} p-0.5 flex items-center justify-center shadow-lg shadow-indigo-500/10`}>
+                  <img src={avatarInfo.src} alt={avatarInfo.name} className="w-full h-full object-cover rounded-xl" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white flex items-center gap-1.5">
@@ -213,6 +209,14 @@ export default function ProfilePage() {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">Demographic Credentials</h4>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center space-x-3">
+                    <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold block uppercase">Gender</span>
+                      <span className="text-xs text-white font-medium">{user?.gender || 'Not Specified'}</span>
+                    </div>
+                  </div>
+
                   <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center space-x-3">
                     <Phone className="w-4 h-4 text-indigo-400 shrink-0" />
                     <div>

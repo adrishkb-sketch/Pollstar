@@ -10,14 +10,10 @@ import {
 import confetti from 'canvas-confetti';
 
 const AVATARS = [
-  { id: 'avatar-ninja', name: 'Ninja', icon: Shield, bg: 'from-red-500 to-rose-600' },
-  { id: 'avatar-astronaut', name: 'Astronaut', icon: Rocket, bg: 'from-purple-500 to-indigo-600' },
-  { id: 'avatar-artist', name: 'Artist', icon: PenTool, bg: 'from-yellow-400 to-orange-500' },
-  { id: 'avatar-scientist', name: 'Scientist', icon: FlaskConical, bg: 'from-green-400 to-emerald-600' },
-  { id: 'avatar-chef', name: 'Chef', icon: ChefHat, bg: 'from-orange-500 to-red-600' },
-  { id: 'avatar-detective', name: 'Detective', icon: Search, bg: 'from-slate-500 to-slate-700' },
-  { id: 'avatar-writer', name: 'Writer', icon: BookOpen, bg: 'from-teal-400 to-cyan-600' },
-  { id: 'avatar-athlete', name: 'Athlete', icon: Trophy, bg: 'from-cyan-500 to-blue-600' },
+  { id: 'avatar-boy', name: 'Joyful Boy', src: '/avatars/avatar-boy.png', bg: 'from-blue-500 to-indigo-600' },
+  { id: 'avatar-girl', name: 'Cheerful Girl', src: '/avatars/avatar-girl.png', bg: 'from-pink-500 to-rose-600' },
+  { id: 'avatar-ninja', name: 'Playful Ninja', src: '/avatars/avatar-ninja.png', bg: 'from-red-500 to-rose-600' },
+  { id: 'avatar-astronaut', name: 'Curious Astro', src: '/avatars/avatar-astronaut.png', bg: 'from-purple-500 to-indigo-600' },
 ];
 
 const PUBLIC_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yandex.ru', 'mail.ru', 'zoho.com', 'protonmail.com', 'proton.me'];
@@ -61,6 +57,7 @@ export default function Onboarding() {
   const [fullName, setFullName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [gender, setGender] = useState('');
   const [occupation, setOccupation] = useState('');
   const [bio, setBio] = useState('');
 
@@ -121,6 +118,10 @@ export default function Onboarding() {
       setError('Please enter a valid phone number');
       return;
     }
+    if (!gender) {
+      setError('Please select your gender');
+      return;
+    }
 
     setStep(2);
   };
@@ -175,6 +176,7 @@ export default function Onboarding() {
       avatar: selectedAvatar,
       phoneNumber,
       occupation,
+      gender,
       institution,
       studyField,
       gradYear: gradYear ? parseInt(gradYear, 10) : null,
@@ -304,11 +306,28 @@ export default function Onboarding() {
 
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                    Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    required
+                    className="w-full bg-[#080c16] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    <option value="" disabled>-- Select Gender --</option>
+                    <option value="Male">👨 Male</option>
+                    <option value="Female">👩 Female</option>
+                    <option value="Non-binary">⚧ Non-binary</option>
+                    <option value="Prefer not to say">🤫 Prefer not to say</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
                     Choose Your Avatar
                   </label>
-                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 pt-1">
+                  <div className="grid grid-cols-4 gap-3 pt-1">
                     {AVATARS.map((av) => {
-                      const Icon = av.icon;
                       const isSelected = selectedAvatar === av.id;
                       return (
                         <button
@@ -322,8 +341,8 @@ export default function Onboarding() {
                           }`}
                           title={av.name}
                         >
-                          <div className={`p-2 rounded-xl bg-gradient-to-tr ${av.bg} text-white`}>
-                            <Icon className="w-4 h-4" />
+                          <div className={`w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-tr ${av.bg} p-0.5 flex items-center justify-center shadow-md`}>
+                            <img src={av.src} alt={av.name} className="w-full h-full object-cover rounded-lg" />
                           </div>
                           <span className="text-[9px] text-gray-400 font-bold mt-1.5">{av.name}</span>
                         </button>

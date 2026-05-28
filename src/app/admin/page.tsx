@@ -970,6 +970,12 @@ export default function AdminPortal() {
                       <span className="text-gray-500 font-bold block uppercase text-[9px]">Institution / Co.</span>
                       <span className="text-white font-medium">{selectedUser.institution || 'N/A'}</span>
                     </div>
+                    {selectedUser.gender && (
+                      <div>
+                        <span className="text-gray-500 font-bold block uppercase text-[9px]">Gender</span>
+                        <span className="text-white font-medium">{selectedUser.gender}</span>
+                      </div>
+                    )}
                     {selectedUser.phoneNumber && (
                       <div>
                         <span className="text-gray-500 font-bold block uppercase text-[9px]">Phone Number</span>

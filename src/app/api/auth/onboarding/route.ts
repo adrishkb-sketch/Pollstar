@@ -52,9 +52,10 @@ export async function POST(req: Request) {
       researchPos,
       otherDetail,
       bio,
+      gender,
     } = body;
 
-    if (!fullName || !avatar || !phoneNumber || !occupation) {
+    if (!fullName || !avatar || !phoneNumber || !occupation || !gender) {
       return NextResponse.json({ error: 'Missing compulsory profile fields' }, { status: 400 });
     }
 
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
         avatar,
         phoneNumber,
         occupation,
+        gender,
         institution: institution || null,
         studyField: studyField || null,
         gradYear: gradYear ? parseInt(gradYear, 10) : null,
