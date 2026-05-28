@@ -7,7 +7,7 @@ import {
   Vote, ArrowLeft, Loader2, Users, FileText, CheckCircle, 
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
   Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
-  ExternalLink, User, HelpCircle
+  ExternalLink, User, HelpCircle, Tag, Globe, Coins, Settings
 } from 'lucide-react';
 
 const POLL_FEATURES = [
@@ -141,8 +141,44 @@ export default function AdminPortal() {
   const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor' | 'coupons_domains' | 'monetization'>('users');
   const [issueLoadingId, setIssueLoadingId] = useState<string | null>(null);
+
+  // Coupons & Domain Suffixes
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [domainMappings, setDomainMappings] = useState<any[]>([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [loadingMappings, setLoadingMappings] = useState(false);
+  
+  // Coupon Form
+  const [couponCode, setCouponCode] = useState('');
+  const [couponType, setCouponType] = useState('PERCENTAGE'); // FLAT, PERCENTAGE, FREE
+  const [couponValue, setCouponValue] = useState('10');
+  const [couponStart, setCouponStart] = useState('');
+  const [couponEnd, setCouponEnd] = useState('');
+  const [couponFirstTimeOnly, setCouponFirstTimeOnly] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  
+  // Whitelist Form
+  const [whitelistDomain, setWhitelistDomain] = useState('');
+  const [whitelistPlanId, setWhitelistPlanId] = useState('');
+  const [whitelistError, setWhitelistError] = useState<string | null>(null);
+  const [whitelistSuccess, setWhitelistSuccess] = useState<string | null>(null);
+
+  // Monetization & Referrals
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [globalReferralPercentage, setGlobalReferralPercentage] = useState('10');
+  const [monetizationStats, setMonetizationStats] = useState<any>({
+    totalEarned: 0,
+    currentOutstandingBalance: 0,
+    totalWithdrawn: 0,
+    pendingPayoutsCount: 0,
+    pendingPayoutsAmount: 0
+  });
+  const [loadingPayouts, setLoadingPayouts] = useState(false);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const [payoutSuccess, setPayoutSuccess] = useState<string | null>(null);
 
   // Inspector States
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -295,9 +331,218 @@ export default function AdminPortal() {
     }
   };
 
+  const fetchCoupons = async () => {
+    setLoadingCoupons(true);
+    try {
+      const res = await fetch('/api/admin/coupons');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) setCoupons(data.coupons || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  const fetchDomainMappings = async () => {
+    setLoadingMappings(true);
+    try {
+      const res = await fetch('/api/admin/domain-mappings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) setDomainMappings(data.mappings || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMappings(false);
+    }
+  };
+
+  const fetchPayoutsAndStats = async () => {
+    setLoadingPayouts(true);
+    try {
+      const res = await fetch('/api/admin/payouts');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setPayouts(data.payouts || []);
+          setGlobalReferralPercentage(data.globalReferralPercentage || '10');
+          setMonetizationStats(data.stats || {
+            totalEarned: 0,
+            currentOutstandingBalance: 0,
+            totalWithdrawn: 0,
+            pendingPayoutsCount: 0,
+            pendingPayoutsAmount: 0
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingPayouts(false);
+    }
+  };
+
+  const handleCreateCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError(null);
+    setCouponSuccess(null);
+    if (!couponCode || !couponType || !couponStart || !couponEnd) {
+      setCouponError('Please fill in required coupon details.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode,
+          discountType: couponType,
+          discountValue: parseFloat(couponValue),
+          startDate: couponStart,
+          endDate: couponEnd,
+          firstTimeOnly: couponFirstTimeOnly
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCouponSuccess(`Coupon code ${couponCode.toUpperCase()} created successfully!`);
+        setCouponCode('');
+        setCouponValue('10');
+        setCouponFirstTimeOnly(false);
+        setCouponStart('');
+        setCouponEnd('');
+        fetchCoupons();
+      } else {
+        setCouponError(data.error || 'Failed to create coupon.');
+      }
+    } catch (err) {
+      setCouponError('Connection error saving coupon.');
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this coupon code permanently?')) return;
+    try {
+      const res = await fetch(`/api/admin/coupons?id=${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchCoupons();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCreateMapping = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWhitelistError(null);
+    setWhitelistSuccess(null);
+    if (!whitelistDomain || !whitelistPlanId) {
+      setWhitelistError('Please specify domain suffix and target upgrade plan.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/domain-mappings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: whitelistDomain,
+          planId: whitelistPlanId
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWhitelistSuccess(`Successfully mapped @${whitelistDomain.toLowerCase()} suffix!`);
+        setWhitelistDomain('');
+        fetchDomainMappings();
+      } else {
+        setWhitelistError(data.error || 'Failed to create whitelisted mapping.');
+      }
+    } catch (err) {
+      setWhitelistError('Connection error saving whitelist.');
+    }
+  };
+
+  const handleDeleteMapping = async (id: string) => {
+    if (!confirm('Remove this domain suffix mapping? users signing up with this email suffix will no longer receive auto-upgrades.')) return;
+    try {
+      const res = await fetch(`/api/admin/domain-mappings?id=${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchDomainMappings();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateReferralPercentage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPayoutError(null);
+    setPayoutSuccess(null);
+    try {
+      const res = await fetch('/api/admin/payouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          globalReferralPercentage
+        })
+      });
+      if (res.ok) {
+        setPayoutSuccess('Platform global referral commission rate successfully updated!');
+        fetchPayoutsAndStats();
+      } else {
+        const data = await res.json();
+        setPayoutError(data.error || 'Failed to update commission rate.');
+      }
+    } catch (err) {
+      setPayoutError('Connection error saving rate.');
+    }
+  };
+
+  const handleProcessPayout = async (payoutRequestId: string, action: 'CLEAR' | 'REJECT') => {
+    if (!confirm(`Are you sure you want to ${action === 'CLEAR' ? 'approve and clear' : 'decline and refund'} this withdrawal request?`)) return;
+    setPayoutError(null);
+    setPayoutSuccess(null);
+    try {
+      const res = await fetch('/api/admin/payouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payoutRequestId,
+          action
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPayoutSuccess(`Withdrawal request successfully ${action === 'CLEAR' ? 'cleared' : 'declined and refunded'}!`);
+        fetchPayoutsAndStats();
+      } else {
+        setPayoutError(data.error || 'Failed to process withdrawal request.');
+      }
+    } catch (err) {
+      setPayoutError('Connection error processing request.');
+    }
+  };
+
   useEffect(() => {
     fetchAdminData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'coupons_domains') {
+      fetchCoupons();
+      fetchDomainMappings();
+    } else if (activeTab === 'monetization') {
+      fetchPayoutsAndStats();
+    }
+  }, [activeTab]);
 
   const handleToggleActivity = async (userId: string, currentRestricted: boolean) => {
     setActionLoadingId(userId);
@@ -1155,6 +1400,33 @@ export default function AdminPortal() {
               </span>
             )}
             {activeTab === 'issues' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('coupons_domains')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider shrink-0 ${
+              activeTab === 'coupons_domains' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            🏷️ Coupons & Domains
+            {activeTab === 'coupons_domains' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('monetization')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'monetization' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            💰 Payouts & MLM
+            {payouts.filter(p => p.status === 'PENDING').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold rounded-full">
+                {payouts.filter(p => p.status === 'PENDING').length}
+              </span>
+            )}
+            {activeTab === 'monetization' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
           </button>
@@ -2218,6 +2490,473 @@ export default function AdminPortal() {
                 </div>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {/* TAB 9: COUPONS & DOMAINS */}
+        {activeTab === 'coupons_domains' && (
+          <div className="space-y-8 animate-fade-in">
+            {/* Upper: CRUD Forms Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Card 1: Add Coupon Form */}
+              <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+                <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
+                  <Tag className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <h3 className="font-outfit text-base font-bold text-white">Create Promo Coupon</h3>
+                    <p className="text-gray-500 text-[10px] mt-0.5">Generate campaign codes for price overrides</p>
+                  </div>
+                </div>
+
+                {couponError && (
+                  <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-3 text-xs text-red-400">
+                    {couponError}
+                  </div>
+                )}
+
+                {couponSuccess && (
+                  <div className="border border-emerald-500/25 bg-emerald-500/5 rounded-xl p-3 text-xs text-emerald-400">
+                    {couponSuccess}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateCoupon} className="space-y-4 text-xs text-left">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Coupon Code</label>
+                      <input
+                        type="text"
+                        required
+                        value={couponCode}
+                        onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="SUMMERSALE"
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-mono tracking-widest text-center"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Discount Type</label>
+                      <select
+                        value={couponType}
+                        onChange={e => setCouponType(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                      >
+                        <option value="PERCENTAGE">PERCENTAGE (%)</option>
+                        <option value="FLAT">FLAT AMOUNT ($)</option>
+                        <option value="FREE">100% FREE</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Discount Value</label>
+                      <input
+                        type="number"
+                        required
+                        disabled={couponType === 'FREE'}
+                        value={couponType === 'FREE' ? '0' : couponValue}
+                        onChange={e => setCouponValue(e.target.value)}
+                        placeholder="10"
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5 flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/5 self-end">
+                      <div>
+                        <span className="text-gray-300 font-bold block">First-Time Buyers</span>
+                        <span className="text-gray-500 text-[9px]">Limit to new accounts</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={couponFirstTimeOnly}
+                        onChange={e => setCouponFirstTimeOnly(e.target.checked)}
+                        className="w-4 h-4 rounded accent-purple-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Start Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={couponStart}
+                        onChange={e => setCouponStart(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">End Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={couponEnd}
+                        onChange={e => setCouponEnd(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs transition-all border border-purple-400/20 active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Campaign Code</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Card 2: Domain Suffix Whitelist Manager Form */}
+              <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+                <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
+                  <Globe className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <h3 className="font-outfit text-base font-bold text-white">Email Suffix Auto-Onboarding</h3>
+                    <p className="text-gray-500 text-[10px] mt-0.5">Map corporate/university domains onto premium plans</p>
+                  </div>
+                </div>
+
+                {whitelistError && (
+                  <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-3 text-xs text-red-400">
+                    {whitelistError}
+                  </div>
+                )}
+
+                {whitelistSuccess && (
+                  <div className="border border-emerald-500/25 bg-emerald-500/5 rounded-xl p-3 text-xs text-emerald-400">
+                    {whitelistSuccess}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateMapping} className="space-y-4 text-xs text-left">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Domain Suffix</label>
+                    <input
+                      type="text"
+                      required
+                      value={whitelistDomain}
+                      onChange={e => setWhitelistDomain(e.target.value)}
+                      placeholder="e.g. school.edu or @iit.ac.in"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500"
+                    />
+                    <span className="text-[9px] text-gray-500 leading-relaxed block">
+                      Users registering or fetching credentials with this email domain suffix (e.g. `@school.edu`) will be automatically upgraded to the pre-assigned premium tier.
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Target Premium Plan</label>
+                    <select
+                      required
+                      value={whitelistPlanId}
+                      onChange={e => setWhitelistPlanId(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                    >
+                      <option value="">-- Assign Premium Plan --</option>
+                      {plans.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} (${p.price}/{p.billingCycle})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white text-xs transition-all border border-indigo-400/20 active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Auto-Upgrade Mapping</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Lower: Lists Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Coupons Table Grid */}
+              <div className="lg:col-span-7 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                  <Tag className="w-4.5 h-4.5 text-purple-400" />
+                  <span>Promo Coupons List</span>
+                </h3>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
+                        <th className="pb-3 pr-2">Code</th>
+                        <th className="pb-3 pr-2">Discount</th>
+                        <th className="pb-3 pr-2">Schedule</th>
+                        <th className="pb-3 pr-2 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {loadingCoupons ? (
+                        <tr>
+                          <td colSpan={4} className="py-6 text-center text-gray-500">Loading coupons...</td>
+                        </tr>
+                      ) : coupons.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-6 text-center text-gray-500">No active coupons created.</td>
+                        </tr>
+                      ) : (
+                        coupons.map((c) => (
+                          <tr key={c.id} className="text-gray-300">
+                            <td className="py-3 pr-2 font-mono font-bold tracking-wider text-purple-300">
+                              {c.code}
+                            </td>
+                            <td className="py-3 pr-2">
+                              {c.discountType === 'FREE' ? (
+                                <span className="font-bold text-emerald-400">FREE</span>
+                              ) : c.discountType === 'PERCENTAGE' ? (
+                                <span className="font-semibold text-white">{c.discountValue}% Off</span>
+                              ) : (
+                                <span className="font-semibold text-white">${c.discountValue} Off</span>
+                              )}
+                              {c.firstTimeOnly && (
+                                <span className="block text-[8px] uppercase tracking-wider font-bold text-gray-500">First-Time</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-2 font-mono text-[10px] text-gray-500">
+                              {new Date(c.startDate).toLocaleDateString()} - {new Date(c.endDate).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 pr-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCoupon(c.id)}
+                                className="p-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-red-400 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Mappings Whitelists Table Grid */}
+              <div className="lg:col-span-5 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                  <Globe className="w-4.5 h-4.5 text-indigo-400" />
+                  <span>Suffix Domain Whitelists</span>
+                </h3>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
+                        <th className="pb-3 pr-2">Suffix</th>
+                        <th className="pb-3 pr-2">Target Plan</th>
+                        <th className="pb-3 pr-2 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {loadingMappings ? (
+                        <tr>
+                          <td colSpan={3} className="py-6 text-center text-gray-500">Loading whitelist...</td>
+                        </tr>
+                      ) : domainMappings.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="py-6 text-center text-gray-500">No domain whitelists set up.</td>
+                        </tr>
+                      ) : (
+                        domainMappings.map((m) => (
+                          <tr key={m.id} className="text-gray-300">
+                            <td className="py-3 pr-2 font-semibold font-mono text-indigo-300">
+                              @{m.domain}
+                            </td>
+                            <td className="py-3 pr-2">
+                              {m.plan && (
+                                <span 
+                                  className="inline-block px-2 py-0.5 rounded text-[10px] font-bold" 
+                                  style={{ backgroundColor: `${m.plan.badgeColor}15`, color: m.plan.badgeColor, border: `1px solid ${m.plan.badgeColor}25` }}
+                                >
+                                  {m.plan.name}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMapping(m.id)}
+                                className="p-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-red-400 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 10: MONETIZATION & REFERRALS */}
+        {activeTab === 'monetization' && (
+          <div className="space-y-8 animate-fade-in text-xs text-left">
+            {/* Financial metrics summary */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+              <div className="glass-card rounded-2xl p-5 border border-white/5 bg-[#030712] space-y-1">
+                <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest block text-center">Total Distributed Commission</span>
+                <span className="text-2xl font-black text-emerald-400">${monetizationStats.totalEarned.toFixed(2)}</span>
+              </div>
+              <div className="glass-card rounded-2xl p-5 border border-white/5 bg-[#030712] space-y-1">
+                <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest block text-center">Current Locked Balance</span>
+                <span className="text-2xl font-black text-purple-400">${monetizationStats.currentOutstandingBalance.toFixed(2)}</span>
+              </div>
+              <div className="glass-card rounded-2xl p-5 border border-white/5 bg-[#030712] space-y-1">
+                <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest block text-center">Settled Cleared Payouts</span>
+                <span className="text-2xl font-black text-indigo-400">${monetizationStats.totalWithdrawn.toFixed(2)}</span>
+              </div>
+              <div className="glass-card rounded-2xl p-5 border border-white/5 bg-[#030712] space-y-1">
+                <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest block text-center">Outstanding Requests</span>
+                <span className={`text-2xl font-black ${monetizationStats.pendingPayoutsAmount > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                  ${monetizationStats.pendingPayoutsAmount.toFixed(2)} ({monetizationStats.pendingPayoutsCount})
+                </span>
+              </div>
+            </div>
+
+            {/* Settings & Alerts clearance row */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Form (4 cols) */}
+              <div className="lg:col-span-4 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-5">
+                <div className="border-b border-white/5 pb-3">
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                    <Settings className="w-4.5 h-4.5 text-purple-400" />
+                    <span>Affiliate Referral Settings</span>
+                  </h3>
+                  <p className="text-gray-500 text-[10px] mt-0.5">Control dynamic multilevel MLM commission rates</p>
+                </div>
+
+                {payoutError && (
+                  <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-3 text-xs text-red-400">
+                    {payoutError}
+                  </div>
+                )}
+
+                {payoutSuccess && (
+                  <div className="border border-emerald-500/25 bg-emerald-500/5 rounded-xl p-3 text-xs text-emerald-400">
+                    {payoutSuccess}
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateReferralPercentage} className="space-y-4 text-left">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Global Commission Rate (%)</label>
+                    <input
+                      type="number"
+                      required
+                      value={globalReferralPercentage}
+                      onChange={e => setGlobalReferralPercentage(e.target.value)}
+                      placeholder="10"
+                      min="0"
+                      max="100"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 text-center font-bold text-lg"
+                    />
+                    <span className="text-[9px] text-gray-500 leading-relaxed block">
+                      Specifies Direct Level 1 percentage. Level 2 and Level 3 auto-calculate half ({parseFloat(globalReferralPercentage)/2 || 5}%) and quarter ({parseFloat(globalReferralPercentage)/4 || 2.5}%) of this rate respectively under standard Direct Selling multi-tier rules.
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs transition-all border border-purple-400/20 active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Save MLM Parameters</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Pending Payout Clearance Table (8 cols) */}
+              <div className="lg:col-span-8 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                  <Coins className="w-4.5 h-4.5 text-indigo-400" />
+                  <span>Withdrawal Requests & Clearance Console</span>
+                </h3>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
+                        <th className="pb-3 pr-2">Date</th>
+                        <th className="pb-3 pr-2">User Affiliate</th>
+                        <th className="pb-3 pr-2">Method</th>
+                        <th className="pb-3 pr-2">Amount</th>
+                        <th className="pb-3 pr-2 text-right">Clearance Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {loadingPayouts ? (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-gray-500">Loading payout requests...</td>
+                        </tr>
+                      ) : payouts.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-gray-500">No withdrawal history found.</td>
+                        </tr>
+                      ) : (
+                        payouts.map((p) => (
+                          <tr key={p.id} className="text-gray-300">
+                            <td className="py-3.5 pr-2 font-mono text-[10px] text-gray-500">
+                              {new Date(p.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="py-3.5 pr-2">
+                              <span className="font-bold text-white block">{p.user?.fullName || 'Anonymous Account'}</span>
+                              <span className="text-[10px] text-gray-500 font-mono block">{p.user?.email}</span>
+                            </td>
+                            <td className="py-3.5 pr-2">
+                              <span className="uppercase font-extrabold text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/5">{p.method}</span>
+                              <span className="text-[10px] text-gray-500 font-mono block truncate max-w-[150px] mt-0.5">{p.details}</span>
+                            </td>
+                            <td className="py-3.5 pr-2 font-black font-mono text-white text-sm">
+                              ${p.amount.toFixed(2)}
+                            </td>
+                            <td className="py-3.5 pr-2 text-right">
+                              {p.status === 'PENDING' ? (
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProcessPayout(p.id, 'REJECT')}
+                                    className="px-2.5 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-red-400 text-[10px] font-bold uppercase transition-all"
+                                  >
+                                    Decline
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProcessPayout(p.id, 'CLEAR')}
+                                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold uppercase transition-all border border-indigo-400/20"
+                                  >
+                                    Clear Payout
+                                  </button>
+                                </div>
+                              ) : p.status === 'CLEARED' ? (
+                                <span className="inline-block px-2.5 py-1 rounded-lg border border-emerald-500/25 bg-emerald-500/5 text-emerald-400 text-[10px] uppercase font-bold tracking-wider">
+                                  Cleared Bank
+                                </span>
+                              ) : (
+                                <span className="inline-block px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 text-[10px] uppercase font-bold tracking-wider">
+                                  Declined
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         )}

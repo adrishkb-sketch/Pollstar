@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { email, password } = await req.json();
+    const { email, password, referralCode, ref } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -47,11 +47,31 @@ export async function POST(req: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    let referredById: string | null = null;
+    const refCode = referralCode || ref;
+    if (refCode) {
+      const referringUser = await prisma.user.findUnique({
+        where: { referralCode: refCode },
+      });
+      if (referringUser) {
+        referredById = referringUser.id;
+      }
+    }
+
+    const uniqueReferralCode = 'ref_' + Math.random().toString(36).substring(2, 9);
+
     // Write or update user (if they signed up before but never verified)
     if (existingUser) {
+      const updateData: any = { passwordHash };
+      if (!existingUser.referralCode) {
+        updateData.referralCode = uniqueReferralCode;
+      }
+      if (referredById && !existingUser.referredById) {
+        updateData.referredById = referredById;
+      }
       await prisma.user.update({
         where: { email },
-        data: { passwordHash },
+        data: updateData,
       });
     } else {
       await prisma.user.create({
@@ -60,6 +80,8 @@ export async function POST(req: Request) {
           passwordHash,
           verified: false,
           approvedByAdmin: false,
+          referralCode: uniqueReferralCode,
+          referredById,
         },
       });
     }

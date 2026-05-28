@@ -3,15 +3,21 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
-import { verifyAccessToken } from '@/lib/jwt';
+import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 
 // Helper to confirm admin privileges
 async function getAuthAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('accessToken')?.value;
-  if (!token) return null;
+  let payload = token ? verifyAccessToken(token) : null;
 
-  const payload = verifyAccessToken(token);
+  if (!payload) {
+    const refreshToken = cookieStore.get('refreshToken')?.value;
+    if (refreshToken) {
+      payload = verifyRefreshToken(refreshToken);
+    }
+  }
+
   if (!payload || payload.role !== 'ADMIN') return null;
 
   return prisma.user.findUnique({

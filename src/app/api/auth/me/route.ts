@@ -77,7 +77,39 @@ export async function GET() {
       );
     }
 
-    // Auto-assign Free plan if missing
+    // Auto-heal missing referral code
+    if (!user.referralCode) {
+      const uniqueReferralCode = 'ref_' + Math.random().toString(36).substring(2, 9);
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { referralCode: uniqueReferralCode },
+        include: { plan: true }
+      });
+    }
+
+    // Auto-upgrade if email matches whitelisted domain mapping
+    const mappings = await prisma.emailDomainMapping.findMany({
+      include: { plan: true }
+    });
+
+    let autoUpgradePlan = null;
+    for (const mapping of mappings) {
+      const domainSuffix = mapping.domain.startsWith('@') ? mapping.domain : `@${mapping.domain}`;
+      if (user.email.toLowerCase().endsWith(domainSuffix.toLowerCase())) {
+        autoUpgradePlan = mapping.plan;
+        break;
+      }
+    }
+
+    if (autoUpgradePlan && (!user.planId || user.plan?.name === 'Free') && user.planId !== autoUpgradePlan.id) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { planId: autoUpgradePlan.id },
+        include: { plan: true }
+      });
+    }
+
+    // Auto-assign Free plan if still missing planId
     if (!user.planId) {
       user = await prisma.user.update({
         where: { id: user.id },
@@ -133,6 +165,7 @@ export async function GET() {
         suspensionReason: user.suspensionReason,
         isActivityRestricted: user.isActivityRestricted,
         plan: user.plan,
+        referralCode: user.referralCode,
       },
     });
 

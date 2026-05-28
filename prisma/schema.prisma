@@ -85,6 +85,14 @@ model User {
   // Subscriptions & Plans
   planId               String?
   plan                 Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  // Referral & Wallets System
+  referralCode         String?     @unique
+  referredById         String?
+  referredBy           User?       @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals            User[]      @relation("Referrals")
+  wallet               Wallet?
+  payoutRequests       PayoutRequest[]
 }
 
 model OTP {
@@ -338,6 +346,7 @@ model Plan {
   isActive        Boolean  @default(true) // Admin can deactivate plans
   features        Json     // JSON object with feature boolean flags
   users           User[]
+  emailDomainMappings EmailDomainMapping[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -382,4 +391,58 @@ model SupportIssue {
   status      String   @default("PENDING") // PENDING, RESOLVED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Wallet {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance       Float    @default(0.0)
+  totalEarned   Float    @default(0.0)
+  totalWithdrawn Float   @default(0.0)
+  transactions  Transaction[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  amount      Float
+  type        String   // EARNING, PAYOUT
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model PayoutRequest {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Float
+  status      String   // PENDING, CLEARED, REJECTED
+  method      String   // UPI, BANK, PAYPAL
+  details     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Coupon {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  discountType  String   // FLAT, PERCENTAGE, FREE
+  discountValue Float
+  startDate     DateTime
+  endDate       DateTime
+  firstTimeOnly Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+model EmailDomainMapping {
+  id        String   @id @default(uuid())
+  domain    String   @unique // e.g. "school.edu"
+  planId    String
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
