@@ -5,6 +5,17 @@ import { sendOTPEmail } from '@/lib/nodemailer';
 
 export async function POST(req: Request) {
   try {
+    // Check if new signups are suspended by admin
+    const signupConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'new_signups_enabled' }
+    });
+    if (signupConfig && signupConfig.value === 'false') {
+      return NextResponse.json(
+        { error: 'Platform registration is currently suspended by system administrators.' },
+        { status: 403 }
+      );
+    }
+
     const { email, password } = await req.json();
 
     if (!email || !password) {

@@ -86,6 +86,17 @@ export async function GET() {
       });
     }
 
+    // Check if maintenance mode is active
+    const maintenanceConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'maintenance_mode_enabled' }
+    });
+    if (maintenanceConfig && maintenanceConfig.value === 'true' && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { maintenance: true, error: 'Platform is currently undergoing scheduled maintenance.' },
+        { status: 503 }
+      );
+    }
+
     const response = NextResponse.json({
       success: true,
       user: {

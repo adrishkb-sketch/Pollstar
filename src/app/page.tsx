@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Vote, Shield, BarChart3, Globe, Award, Sparkles, ArrowRight } from 'lucide-react';
 import Footer from '@/components/Footer';
+import AdvertisementZone from '@/components/AdvertisementZone';
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
@@ -160,6 +161,7 @@ export default function Home() {
         </div>
       </main>
 
+      <AdvertisementZone />
       <Footer />
 
     </div>

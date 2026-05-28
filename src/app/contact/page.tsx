@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Footer from '@/components/Footer';
 import {
   ArrowLeft, Vote, Mail, MessageSquare, MapPin, Clock, Phone,
-  Send, Sparkles, HelpCircle, ChevronDown, ChevronUp
+  Send, Sparkles, HelpCircle, ChevronDown, ChevronUp, Check
 } from 'lucide-react';
 
 export default function ContactPage() {
@@ -18,13 +18,29 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
+  // 🎯 Advertising Inquiry States
+  const [companyName, setCompanyName] = useState('');
+  const [targetAudience, setTargetAudience] = useState('General Public');
+  const [adFormats, setAdFormats] = useState({ desktop: true, tablet: false, mobile: false });
+  const [monthlyBudget, setMonthlyBudget] = useState('< $500/mo');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    let compiledMessage = formState.message;
+    if (formState.subject === 'Advertise with Us') {
+      const chosenFormats = Object.keys(adFormats).filter(k => (adFormats as any)[k]).join(', ');
+      compiledMessage += `\n\n--- 🎯 ADVERTISING INQUIRY DETAILS ---\n• Company Name: ${companyName}\n• Target Audience: ${targetAudience}\n• Formats Wanted: ${chosenFormats}\n• Monthly Budget: ${monthlyBudget}`;
+    }
+
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formState),
+        body: JSON.stringify({
+          ...formState,
+          message: compiledMessage
+        }),
       });
       if (res.ok) {
         setSubmitted(true);
@@ -215,15 +231,93 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 mb-1.5">Subject</label>
-                    <input
-                      type="text"
+                    <select
                       required
                       value={formState.subject}
                       onChange={(e) => setFormState({ ...formState, subject: e.target.value })}
-                      placeholder="What's this about?"
-                      className="glass-input w-full text-sm"
-                    />
+                      className="glass-input w-full text-sm bg-[#030712]"
+                    >
+                      <option value="">-- Select a Subject --</option>
+                      <option value="General Inquiries & Feedback">General Inquiries & Feedback</option>
+                      <option value="Creator Platform Assistance">Creator Platform Assistance</option>
+                      <option value="Enterprise Upgrade Inquiries">Enterprise Upgrade Inquiries</option>
+                      <option value="Advertise with Us">Advertise with Us (Monetization Slots)</option>
+                    </select>
                   </div>
+
+                  {formState.subject === 'Advertise with Us' && (
+                    <div className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-4 animate-slide-in">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block border-b border-emerald-500/10 pb-1.5">
+                        🎯 Advertising Inquiry Details
+                      </span>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-semibold text-gray-400">Company / Brand Name</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Acme Corp"
+                            value={companyName}
+                            onChange={e => setCompanyName(e.target.value)}
+                            className="glass-input w-full text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-semibold text-gray-400">Target Audience Focus</label>
+                          <select
+                            value={targetAudience}
+                            onChange={e => setTargetAudience(e.target.value)}
+                            className="glass-input w-full text-sm bg-[#030712]"
+                          >
+                            <option value="General Public">General Public</option>
+                            <option value="Students & Educators">Students & Educators</option>
+                            <option value="Developer Community">Developer Community</option>
+                            <option value="Enterprise Teams">Enterprise Teams</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-gray-400">Ad Formats Wanted</label>
+                          <div className="flex gap-4 pt-1">
+                            {['desktop', 'tablet', 'mobile'].map(formatKey => {
+                              const isChecked = (adFormats as any)[formatKey];
+                              return (
+                                <div
+                                  key={formatKey}
+                                  onClick={() => setAdFormats({ ...adFormats, [formatKey]: !isChecked })}
+                                  className="flex items-center space-x-1.5 cursor-pointer select-none"
+                                >
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                    isChecked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-white/20 bg-white/3'
+                                  }`}>
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  <span className="text-xs text-gray-300 capitalize">{formatKey}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-semibold text-gray-400">Estimated Monthly Ad Budget</label>
+                          <select
+                            value={monthlyBudget}
+                            onChange={e => setMonthlyBudget(e.target.value)}
+                            className="glass-input w-full text-sm bg-[#030712]"
+                          >
+                            <option value="< $500/mo">&lt; $500/mo</option>
+                            <option value="$500 - $2,000/mo">$500 - $2,000/mo</option>
+                            <option value="$2,000 - $5,000/mo">$2,000 - $5,000/mo</option>
+                            <option value="> $5,000/mo">&gt; $5,000/mo</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 mb-1.5">Message</label>
                     <textarea

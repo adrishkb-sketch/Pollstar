@@ -26,7 +26,10 @@ const POLL_FEATURES = [
   { key: 'multipleChartTypes', label: 'Multiple Chart Types' },
   { key: 'voteTimelineGraph', label: 'Vote Timeline Graph' },
   { key: 'multiRoundPolls', label: 'Multi-Round Polls' },
-  { key: 'revoteChangeVote', label: 'Revote / Change Vote' }
+  { key: 'revoteChangeVote', label: 'Revote / Change Vote' },
+  { key: 'knockoutBracket', label: 'Knockout Tournament Bracket' },
+  { key: 'enableScenarioSimulator', label: 'What-If Scenario Simulator' },
+  { key: 'enableAiProjection', label: 'AI Vote Projection & Live Predictions' }
 ];
 
 const SURVEY_FEATURES = [
@@ -51,7 +54,9 @@ const SURVEY_FEATURES = [
   { key: 'anonymousResponses', label: 'Anonymous Responses' },
   { key: 'targetedDistribution', label: 'Targeted Distribution' },
   { key: 'responseFilteringSegmentation', label: 'Response Filtering & Segmentation' },
-  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey)' }
+  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey)' },
+  { key: 'enableDropOffTracking', label: 'Abandonment & Drop-off Tracking' },
+  { key: 'enableCrossTabulation', label: 'Demographic Cross-Tabulation' }
 ];
 
 const EXAM_FEATURES = [
@@ -105,7 +110,11 @@ const PLATFORM_FEATURES = [
   { key: 'organizationAccounts', label: 'Organization Accounts' },
   { key: 'apiWebhooks', label: 'API & Webhooks' },
   { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
-  { key: 'exportResults', label: 'Export Results' }
+  { key: 'exportResults', label: 'Export Results' },
+  { key: 'enableDomainRestriction', label: 'Domain and Email Lock Lists' },
+  { key: 'collaborations', label: 'Real-time Creator Collaboration' },
+  { key: 'enableDirectInbox', label: 'Voter Inbox Direct Messages' },
+  { key: 'removeAdvertisements', label: 'Ad-Free Experience (No Ads on Platform)' }
 ];
 
 const FEATURES_KEYS = [
@@ -504,26 +513,52 @@ export default function AdminPortal() {
   };
 
   const isFeatureVisible = (featKey: string) => {
-    if (planType === 'POLL_PACK') {
-      const isPoll = POLL_FEATURES.some(f => f.key === featKey);
-      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
-      if (!isPoll && !isPlatform) return false;
+    const isPoll = POLL_FEATURES.some(f => f.key === featKey);
+    const isSurvey = SURVEY_FEATURES.some(f => f.key === featKey);
+    const isExam = EXAM_FEATURES.some(f => f.key === featKey);
+    const isExamQType = EXAM_QUESTION_TYPES.some(f => f.key === featKey);
+    const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
 
-      // subtype conditional overlaps
-      if (featKey === 'rankedChoiceBordaCount' && !planPollSubtypes.ranked) return false;
-      if (featKey === 'quadraticVoting' && !planPollSubtypes.mcq) return false;
-      if (featKey === 'singleChoiceMultiSelect' && !planPollSubtypes.mcq && !planPollSubtypes.multi) return false;
-      if (featKey === 'enableDragAndDropPodium' && !planPollSubtypes.ranked) return false;
+    // 1. Plan Type category gating
+    if (planType === 'POLL_PACK') {
+      if (!isPoll && !isPlatform) return false;
     } else if (planType === 'SURVEY_PACK') {
-      const isSurvey = SURVEY_FEATURES.some(f => f.key === featKey);
-      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
       if (!isSurvey && !isPlatform) return false;
     } else if (planType === 'EXAM_PACK') {
-      const isExam = EXAM_FEATURES.some(f => f.key === featKey);
-      const isQType = EXAM_QUESTION_TYPES.some(f => f.key === featKey);
-      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
-      if (!isExam && !isQType && !isPlatform) return false;
+      if (!isExam && !isExamQType && !isPlatform) return false;
+    } else if (planType === 'COMBO_PACK') {
+      // Filter based on comboTypes selected
+      const showPoll = planComboTypes.includes('POLL');
+      const showSurvey = planComboTypes.includes('SURVEY');
+      const showExam = planComboTypes.includes('EXAM');
+
+      if (isPoll && !showPoll) return false;
+      if (isSurvey && !showSurvey) return false;
+      if ((isExam || isExamQType) && !showExam) return false;
+
+      // If it belongs to a category that is not selected in combo types, hide it
+      if (!isPlatform && (!isPoll || !showPoll) && (!isSurvey || !showSurvey) && (!isExam && !isExamQType || !showExam)) {
+        return false;
+      }
     }
+
+    // 2. Poll subtype conditional checks (should apply globally if Poll features are active)
+    const pollActive = planType === 'SUBSCRIPTION' || planType === 'POLL_PACK' || (planType === 'COMBO_PACK' && planComboTypes.includes('POLL'));
+    if (pollActive && isPoll) {
+      if ((featKey === 'rankedChoiceBordaCount' || featKey === 'enableDragAndDropPodium' || featKey === 'enableScenarioSimulator') && !planPollSubtypes.ranked) {
+        return false;
+      }
+      if (featKey === 'quadraticVoting' && !planPollSubtypes.mcq) {
+        return false;
+      }
+      if (featKey === 'singleChoiceMultiSelect' && !planPollSubtypes.mcq && !planPollSubtypes.multi) {
+        return false;
+      }
+      if (featKey === 'knockoutBracket' && !planPollSubtypes.knockout) {
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -756,6 +791,20 @@ export default function AdminPortal() {
     } finally {
       setConfigSaving(false);
     }
+  };
+
+  const handleAdImageUpload = (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setConfigValues(prev => ({
+        ...prev,
+        [key]: reader.result as string
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDeletePlan = async (planId: string, name: string) => {
@@ -1811,6 +1860,73 @@ export default function AdminPortal() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 🛡️ Global Platform Operations Control Panel */}
+              <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1 col-span-1 md:col-span-2">
+                <div className="border-b border-white/5 pb-2">
+                  <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400">🛡️ Global Platform Operations Control Panel</h4>
+                  <p className="text-gray-500 text-[9px] uppercase font-bold mt-0.5">Enforce system lockdowns, restrict logins, or activate absolute voter verification filters platform-wide</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* 1. Maintenance Mode Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Maintenance Mode</span>
+                      <span className="text-gray-500 text-[9px]">Gates platform access; Admins bypass only</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfigValues({ ...configValues, maintenance_mode_enabled: configValues['maintenance_mode_enabled'] === 'true' ? 'false' : 'true' })}
+                      className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none shrink-0 ml-2"
+                    >
+                      {configValues['maintenance_mode_enabled'] === 'true' ? (
+                        <ToggleRight className="w-9 h-9 stroke-[1.5]" />
+                      ) : (
+                        <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 2. New Registrations Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Suspsend New Signups</span>
+                      <span className="text-gray-500 text-[9px]">Lock registrations globally on the database</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfigValues({ ...configValues, new_signups_enabled: configValues['new_signups_enabled'] === 'false' ? 'true' : 'false' })}
+                      className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none shrink-0 ml-2"
+                    >
+                      {configValues['new_signups_enabled'] === 'false' ? (
+                        <ToggleRight className="w-9 h-9 stroke-[1.5]" />
+                      ) : (
+                        <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 3. Global OTP Verification Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Global Voter OTP Gate</span>
+                      <span className="text-gray-500 text-[9px]">Force OTP voter verification across all sessions</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfigValues({ ...configValues, force_global_otp_voter_verification: configValues['force_global_otp_voter_verification'] === 'true' ? 'false' : 'true' })}
+                      className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none shrink-0 ml-2"
+                    >
+                      {configValues['force_global_otp_voter_verification'] === 'true' ? (
+                        <ToggleRight className="w-9 h-9 stroke-[1.5]" />
+                      ) : (
+                        <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Home Page Copy */}
               <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1">
                 <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400 border-b border-white/5 pb-2">Home Page Hero</h4>
@@ -1913,6 +2029,195 @@ export default function AdminPortal() {
                   />
                 </div>
               </div>
+
+              {/* 🎯 Global Advertising & Monetization Control */}
+              <div className="col-span-1 md:col-span-2 space-y-6 border border-white/5 rounded-2xl p-6 bg-white/1">
+                <div className="border-b border-white/5 pb-3">
+                  <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400">🎯 Global Advertising & Monetization Control</h4>
+                  <p className="text-gray-500 text-[10px] uppercase font-bold mt-0.5">Paste third-party script integrations or upload custom image banners for targeted monetization</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Network Ad Agencies */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Enable Network Script Ads</span>
+                        <span className="text-gray-500 text-[9px]">Google AdSense, Media.net scripts injection</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfigValues({ ...configValues, ad_network_enabled: configValues['ad_network_enabled'] === 'true' ? 'false' : 'true' })}
+                        className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none"
+                      >
+                        {configValues['ad_network_enabled'] === 'true' ? (
+                          <ToggleRight className="w-9 h-9 stroke-[1.5]" />
+                        ) : (
+                          <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Google AdSense Integration Snippet</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Paste your Google AdSense <script> tags or header code..."
+                        value={configValues['ad_google_adsense_code'] || ''}
+                        onChange={e => setConfigValues({ ...configValues, ad_google_adsense_code: e.target.value })}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-purple-500 font-mono resize-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Media.net / Generic Ad Script Snippet</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Paste Media.net or other advertising agency script code..."
+                        value={configValues['ad_medianet_code'] || ''}
+                        onChange={e => setConfigValues({ ...configValues, ad_medianet_code: e.target.value })}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-purple-500 font-mono resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right Column: Custom Upload Banner Advertisements */}
+                  <div className="space-y-4 border-l border-white/5 pl-0 md:pl-6">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Enable Custom Image Ads</span>
+                        <span className="text-gray-500 text-[9px]">Render uploaded image banners on different viewports</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfigValues({ ...configValues, ad_custom_enabled: configValues['ad_custom_enabled'] === 'true' ? 'false' : 'true' })}
+                        className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none"
+                      >
+                        {configValues['ad_custom_enabled'] === 'true' ? (
+                          <ToggleRight className="w-9 h-9 stroke-[1.5]" />
+                        ) : (
+                          <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Desktop Custom Banner */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-3">
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-400 font-bold block">Desktop Custom Banner Layout (970x90 or 728x90)</span>
+                      <div className="grid grid-cols-2 gap-3 items-center">
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Upload Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => handleAdImageUpload(e, 'ad_custom_desktop_image')}
+                            className="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-white/5 file:text-indigo-400 hover:file:bg-white/10 file:cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Redirection Link</span>
+                          <input
+                            type="text"
+                            placeholder="https://example.com/target"
+                            value={configValues['ad_custom_desktop_link'] || ''}
+                            onChange={e => setConfigValues({ ...configValues, ad_custom_desktop_link: e.target.value })}
+                            className="w-full bg-[#030712] border border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      {configValues['ad_custom_desktop_image'] && (
+                        <div className="relative rounded-lg overflow-hidden border border-white/5 max-h-12 bg-black flex items-center justify-center">
+                          <img src={configValues['ad_custom_desktop_image']} alt="Desktop Preview" className="max-h-12 w-auto object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setConfigValues({ ...configValues, ad_custom_desktop_image: '' })}
+                            className="absolute top-1 right-1 p-0.5 rounded bg-black/60 hover:bg-black text-gray-400 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tablet Custom Banner */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-3">
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-400 font-bold block">Tablet Custom Banner Layout (728x90 or 468x60)</span>
+                      <div className="grid grid-cols-2 gap-3 items-center">
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Upload Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => handleAdImageUpload(e, 'ad_custom_tablet_image')}
+                            className="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-white/5 file:text-indigo-400 hover:file:bg-white/10 file:cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Redirection Link</span>
+                          <input
+                            type="text"
+                            placeholder="https://example.com/target"
+                            value={configValues['ad_custom_tablet_link'] || ''}
+                            onChange={e => setConfigValues({ ...configValues, ad_custom_tablet_link: e.target.value })}
+                            className="w-full bg-[#030712] border border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      {configValues['ad_custom_tablet_image'] && (
+                        <div className="relative rounded-lg overflow-hidden border border-white/5 max-h-12 bg-black flex items-center justify-center">
+                          <img src={configValues['ad_custom_tablet_image']} alt="Tablet Preview" className="max-h-12 w-auto object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setConfigValues({ ...configValues, ad_custom_tablet_image: '' })}
+                            className="absolute top-1 right-1 p-0.5 rounded bg-black/60 hover:bg-black text-gray-400 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mobile Custom Banner */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-3">
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-400 font-bold block">Mobile Custom Banner Layout (320x50 or 300x50)</span>
+                      <div className="grid grid-cols-2 gap-3 items-center">
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Upload Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => handleAdImageUpload(e, 'ad_custom_mobile_image')}
+                            className="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-white/5 file:text-indigo-400 hover:file:bg-white/10 file:cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400 block">Redirection Link</span>
+                          <input
+                            type="text"
+                            placeholder="https://example.com/target"
+                            value={configValues['ad_custom_mobile_link'] || ''}
+                            onChange={e => setConfigValues({ ...configValues, ad_custom_mobile_link: e.target.value })}
+                            className="w-full bg-[#030712] border border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      {configValues['ad_custom_mobile_image'] && (
+                        <div className="relative rounded-lg overflow-hidden border border-white/5 max-h-12 bg-black flex items-center justify-center">
+                          <img src={configValues['ad_custom_mobile_image']} alt="Mobile Preview" className="max-h-12 w-auto object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setConfigValues({ ...configValues, ad_custom_mobile_image: '' })}
+                            className="absolute top-1 right-1 p-0.5 rounded bg-black/60 hover:bg-black text-gray-400 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         )}

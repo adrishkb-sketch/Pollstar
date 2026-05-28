@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
-  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy,
+  Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy, Lock,
   Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search, GripVertical,
   X, Eraser, RotateCcw, FileText, Palette
 } from 'lucide-react';
@@ -361,6 +361,226 @@ export default function CreatePoll() {
   };
 
   const [userPlan, setUserPlan] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+
+  const isFeatureLocked = (key: string): boolean => {
+    if (!userPlan) return false;
+    if (user?.role === 'ADMIN') return false;
+    if (!userPlan.features) return false;
+    return !userPlan.features[key];
+  };
+
+  const isSubtypeLocked = (subtype: 'mcq' | 'ranked' | 'multi' | 'knockout'): boolean => {
+    if (!userPlan) return false;
+    if (user?.role === 'ADMIN') return false;
+    if (!userPlan.pollSubtypes) return false;
+    const raw = userPlan.pollSubtypes;
+    const allowed = typeof raw === 'string' ? raw.split(',') : (Array.isArray(raw) ? raw.map(String) : []);
+    return !allowed.includes(subtype);
+  };
+
+  const toggleFeatureState = (key: string, val: boolean) => {
+    if (key in singleFeatures) {
+      setSingleFeatures(prev => ({ ...prev, [key]: val }));
+    } else if (key in rankedFeatures) {
+      setRankedFeatures(prev => ({ ...prev, [key]: val }));
+    } else if (key in knockoutFeatures) {
+      setKnockoutFeatures(prev => ({ ...prev, [key]: val }));
+    }
+  };
+
+  const getDynamicPollExtras = () => {
+    const qType = questions[0]?.type || 'SINGLE';
+    if (qType === 'RANKED') {
+      return [
+        {
+          key: 'enableDragAndDropPodium',
+          label: 'Drag-and-Drop Ballot Podium',
+          desc: 'Let voters interactively rank options on a physical visual gold/silver/bronze podium.',
+          val: enableDragAndDropPodium,
+          setter: setEnableDragAndDropPodium,
+          gateKey: 'enableDragAndDropPodium'
+        },
+        {
+          key: 'enableScenarioSimulator',
+          label: 'What-If Scenario Simulator',
+          desc: 'Let voters run simulations on the results chart to see what would happen if candidates were removed.',
+          val: rankedFeatures.enableScenarioSimulator,
+          gateKey: 'enableScenarioSimulator'
+        },
+        {
+          key: 'enableTieBreakerEngine',
+          label: 'Automatic Tie Resolver',
+          desc: 'Instantly break close ties using customized priority or duel criteria.',
+          val: enableTieBreakerEngine,
+          setter: setEnableTieBreakerEngine,
+          gateKey: 'quadraticVoting'
+        },
+        {
+          key: 'enableConsensusScore',
+          label: 'Consensus & Polarization Score',
+          desc: 'Measure and display community agreement rates or highly divided choices.',
+          val: enableConsensusScore,
+          setter: setEnableConsensusScore,
+          gateKey: 'quadraticVoting'
+        },
+        {
+          key: 'enableLiveTicker',
+          label: 'Scrolling Live Ticker',
+          desc: 'Display a rolling real-time ticker bar of ongoing vote transitions.',
+          val: enableLiveTicker,
+          setter: setEnableLiveTicker,
+          gateKey: 'liveVoteTicker'
+        },
+        {
+          key: 'enableVpnBlocking',
+          label: 'Block VPNs & Proxies',
+          desc: 'Verify IPs and refuse votes coming from anonymous proxy lists or VPN servers.',
+          val: enableVpnBlocking,
+          setter: setEnableVpnBlocking,
+          gateKey: 'deviceFingerprinting'
+        },
+        {
+          key: 'enableSentimentChat',
+          label: 'Opinion Chat & Sentiment Sidebar',
+          desc: 'Include a sidebar chatbox where text is sorted by positive, neutral, or negative feelings.',
+          val: enableSentimentChat,
+          setter: setEnableSentimentChat,
+          gateKey: 'opinionChatbox'
+        }
+      ];
+    }
+
+    if (qType === 'KNOCKOUT') {
+      return [
+        {
+          key: 'enableBracketPredictions',
+          label: 'Playoff Bracket Guessing',
+          desc: 'Let voters predict the complete knockout brackets outcome before voting begins.',
+          val: knockoutFeatures.enableBracketPredictions,
+          gateKey: 'knockoutBracket'
+        },
+        {
+          key: 'enableDoubleElimination',
+          label: 'Double Elimination Tournament',
+          desc: 'Set up double brackets so options must lose twice before getting knocked out.',
+          val: knockoutFeatures.enableDoubleElimination,
+          gateKey: 'knockoutBracket'
+        },
+        {
+          key: 'enableUnderdogTracker',
+          label: 'Matchup Underdog Tracker',
+          desc: 'Highlight and track matchups won by lower-seeded options in brackets.',
+          val: knockoutFeatures.enableUnderdogTracker,
+          gateKey: 'knockoutBracket'
+        },
+        {
+          key: 'enableOptionStatsCards',
+          label: 'Option Facts & Stats Cards',
+          desc: 'Show beautiful charts and details for each option during bracket matchups.',
+          val: knockoutFeatures.enableOptionStatsCards,
+          gateKey: 'knockoutBracket'
+        },
+        {
+          key: 'enableSuddenDeath',
+          label: 'Sudden Death Overtime',
+          desc: 'Resolve matchup voting ties automatically using immediate overtime scoring.',
+          val: knockoutFeatures.enableSuddenDeath,
+          gateKey: 'knockoutBracket'
+        },
+        {
+          key: 'enableLiveTicker',
+          label: 'Scrolling Live Ticker',
+          desc: 'Display a rolling real-time ticker bar of ongoing vote transitions.',
+          val: enableLiveTicker,
+          setter: setEnableLiveTicker,
+          gateKey: 'liveVoteTicker'
+        },
+        {
+          key: 'enableVpnBlocking',
+          label: 'Block VPNs & Proxies',
+          desc: 'Verify IPs and refuse votes coming from anonymous proxy lists or VPN servers.',
+          val: enableVpnBlocking,
+          setter: setEnableVpnBlocking,
+          gateKey: 'deviceFingerprinting'
+        }
+      ];
+    }
+
+    return [
+      {
+        key: 'enableQuadraticVoting',
+        label: 'Point-Based Voting (Quadratic)',
+        desc: 'Voters get points to split. Buying more votes for one option costs exponentially more.',
+        val: enableQuadraticVoting,
+        setter: setEnableQuadraticVoting,
+        gateKey: 'quadraticVoting'
+      },
+      {
+        key: 'enableAiProjection',
+        label: 'AI Vote Projection & Live Predictions',
+        desc: 'Predict outcome early based on velocity momentum, turnout trends, and historical distribution models.',
+        val: singleFeatures.enableAiProjection,
+        gateKey: 'enableAiProjection'
+      },
+      {
+        key: 'enableLiveTicker',
+        label: 'Scrolling Live Ticker',
+        desc: 'Display a rolling real-time ticker bar of ongoing vote transitions.',
+        val: enableLiveTicker,
+        setter: setEnableLiveTicker,
+        gateKey: 'liveVoteTicker'
+      },
+      {
+        key: 'enableHotStreaks',
+        label: 'Fast Surge Detector (Hot Streaks)',
+        desc: 'Highlight options that are receiving votes exceptionally fast in real time.',
+        val: enableHotStreaks,
+        setter: setEnableHotStreaks,
+        gateKey: 'viralVoteIndicators'
+      },
+      {
+        key: 'enableDemographicWeighting',
+        label: 'Group Influence Weighting',
+        desc: 'Assign higher vote importance factors based on role, age, or department.',
+        val: enableDemographicWeighting,
+        setter: setEnableDemographicWeighting,
+        gateKey: 'enableCrossTabulation'
+      },
+      {
+        key: 'enableVpnBlocking',
+        label: 'Block VPNs & Proxies',
+        desc: 'Verify IPs and refuse votes coming from anonymous proxy lists or VPN servers.',
+        val: enableVpnBlocking,
+        setter: setEnableVpnBlocking,
+        gateKey: 'deviceFingerprinting'
+      },
+      {
+        key: 'enableWriteInOptions',
+        label: 'Allow Custom Write-In Choices',
+        desc: 'Permit voters to type and suggest a custom choice not in the original list.',
+        val: enableWriteInOptions,
+        setter: setEnableWriteInOptions,
+        gateKey: 'openPublicPolls'
+      },
+      {
+        key: 'enableSentimentChat',
+        label: 'Opinion Chat & Sentiment Sidebar',
+        desc: 'Include a sidebar chatbox where text is sorted by positive, neutral, or negative feelings.',
+        val: enableSentimentChat,
+        setter: setEnableSentimentChat,
+        gateKey: 'opinionChatbox'
+      },
+      {
+        key: 'enableSwingMap',
+        label: 'Opinion Trend Shift Map',
+        desc: 'Render a beautiful visual graph showing how public preferences shifted over the voting span.',
+        val: enableSwingMap,
+        setter: setEnableSwingMap,
+        gateKey: 'voteTimelineGraph'
+      }
+    ];
+  };
 
   // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
@@ -368,6 +588,7 @@ export default function CreatePoll() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.success && data.user) {
+          setUser(data.user);
           setUserPlan(data.user.plan);
         }
       })
@@ -1527,16 +1748,27 @@ export default function CreatePoll() {
                 {/* Single Choice */}
                 <div
                   onClick={() => {
+                    if (isSubtypeLocked('mcq')) {
+                      router.push('/plans');
+                      return;
+                    }
                     const updated = [...questions];
                     updated[0].type = 'SINGLE';
                     setQuestions(updated);
                   }}
-                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
+                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 relative overflow-hidden ${
                     questions[0].type === 'SINGLE'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
                 >
+                  {isSubtypeLocked('mcq') && (
+                    <div className="absolute inset-0 bg-[#030712]/80 backdrop-blur-[2px] flex flex-col items-center justify-center text-center p-4 z-20 transition-all rounded-3xl">
+                      <Lock className="w-5 h-5 text-purple-400 mb-1 animate-pulse" />
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Upgrade Required</span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Locked under "{userPlan?.name || 'Free'}"</p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
                       <Check className="w-6 h-6" />
@@ -1556,16 +1788,27 @@ export default function CreatePoll() {
                 {/* Ranked Choice Borda Count */}
                 <div
                   onClick={() => {
+                    if (isSubtypeLocked('ranked')) {
+                      router.push('/plans');
+                      return;
+                    }
                     const updated = [...questions];
                     updated[0].type = 'RANKED';
                     setQuestions(updated);
                   }}
-                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
+                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 relative overflow-hidden ${
                     questions[0].type === 'RANKED'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
                 >
+                  {isSubtypeLocked('ranked') && (
+                    <div className="absolute inset-0 bg-[#030712]/80 backdrop-blur-[2px] flex flex-col items-center justify-center text-center p-4 z-20 transition-all rounded-3xl">
+                      <Lock className="w-5 h-5 text-purple-400 mb-1 animate-pulse" />
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Upgrade Required</span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Locked under "{userPlan?.name || 'Free'}"</p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
                       <Award className="w-6 h-6" />
@@ -1585,16 +1828,27 @@ export default function CreatePoll() {
                 {/* Knockout Tournament */}
                 <div
                   onClick={() => {
+                    if (isSubtypeLocked('knockout')) {
+                      router.push('/plans');
+                      return;
+                    }
                     const updated = [...questions];
                     updated[0].type = 'KNOCKOUT';
                     setQuestions(updated);
                   }}
-                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 ${
+                  className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-48 relative overflow-hidden ${
                     questions[0].type === 'KNOCKOUT'
                       ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
                       : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                   }`}
                 >
+                  {isSubtypeLocked('knockout') && (
+                    <div className="absolute inset-0 bg-[#030712]/80 backdrop-blur-[2px] flex flex-col items-center justify-center text-center p-4 z-20 transition-all rounded-3xl">
+                      <Lock className="w-5 h-5 text-purple-400 mb-1 animate-pulse" />
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Upgrade Required</span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Locked under "{userPlan?.name || 'Free'}"</p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
                       <Trophy className="w-6 h-6" />
@@ -2723,38 +2977,52 @@ export default function CreatePoll() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        [enableShuffleQuestions, setEnableShuffleQuestions, 'Randomize Question Order', 'Show questions in a completely different, random order for each student to prevent copying.'],
-                        [enableShuffleOptions, setEnableShuffleOptions, 'Randomize Multiple Choice Options', 'Shuffle the choice options inside each question randomly for every student.'],
-                        [enableCopyPasteBlock, setEnableCopyPasteBlock, 'Disable Copying & Copy-Pasting', 'Block copy-pasting, right-clicking, and text highlighting to secure your test content.'],
-                        [enableInstantFeedback, setEnableInstantFeedback, 'Show Grades Instantly', 'Let students see their marks and correct answers immediately after they finish the test.'],
-                        [enableNegativeMarking, setEnableNegativeMarking, 'Penalty for Wrong Answers', 'Deduct marks for incorrect answers on multiple-choice questions.'],
-                        [enableCalculator, setEnableCalculator, 'Floating Scientific Calculator', 'Provide a helpful popup calculator on the screen during the exam.'],
-                        [enableOtpBypass, setEnableOtpBypass, 'Password Logins (Skip Email Code)', 'Allow registered students to enter instantly with a password instead of waiting for an email or phone code.'],
-                        [enableStrictTimeBuffer, setEnableStrictTimeBuffer, 'Strict Timer Cutoff', 'Forcefully submit the test the exact second the countdown timer hits zero.'],
-                        [enableProctorCamera, setEnableProctorCamera, 'Monitor via Webcam snap', 'Automatically check student presence and capture periodic screenshots through the camera to stop cheating.'],
-                        [enableTabDepartureSound, setEnableTabDepartureSound, 'Alert Sound on Switch Tab', 'Play a loud warning buzzer sound if the student switches tabs or exits the exam window.']
-                      ].map(([val, setter, label, desc], idx) => {
-                        const isVal = val as boolean;
-                        const labelStr = label as string;
-                        const descStr = desc as string;
+                        { key: 'enableShuffleQuestions', setter: setEnableShuffleQuestions, val: enableShuffleQuestions, label: 'Randomize Question Order', desc: 'Show questions in a completely different, random order for each student to prevent copying.', gateKey: 'questionRandomizationSurvey' },
+                        { key: 'enableShuffleOptions', setter: setEnableShuffleOptions, val: enableShuffleOptions, label: 'Randomize Multiple Choice Options', desc: 'Shuffle the choice options inside each question randomly for every student.', gateKey: 'dragAndDropQuestionOrderingExam' },
+                        { key: 'enableCopyPasteBlock', setter: setEnableCopyPasteBlock, val: enableCopyPasteBlock, label: 'Disable Copying & Copy-Pasting', desc: 'Block copy-pasting, right-clicking, and text highlighting to secure your test content.', gateKey: 'copyPastePrevention' },
+                        { key: 'enableInstantFeedback', setter: setEnableInstantFeedback, val: enableInstantFeedback, label: 'Show Grades Instantly', desc: 'Let students see their marks and correct answers immediately after they finish the test.', gateKey: 'autoGradingEngine' },
+                        { key: 'enableNegativeMarking', setter: setEnableNegativeMarking, val: enableNegativeMarking, label: 'Penalty for Wrong Answers', desc: 'Deduct marks for incorrect answers on multiple-choice questions.', gateKey: 'negativeMarking' },
+                        { key: 'enableCalculator', setter: setEnableCalculator, val: enableCalculator, label: 'Floating Scientific Calculator', desc: 'Provide a helpful popup calculator on the screen during the exam.', gateKey: 'inbuiltScientificCalculator' },
+                        { key: 'enableOtpBypass', setter: setEnableOtpBypass, val: enableOtpBypass, label: 'Password Logins (Skip Email Code)', desc: 'Allow registered students to enter instantly with a password instead of waiting for an email or phone code.', gateKey: 'studentRosterManagement' },
+                        { key: 'enableStrictTimeBuffer', setter: setEnableStrictTimeBuffer, val: enableStrictTimeBuffer, label: 'Strict Timer Cutoff', desc: 'Forcefully submit the test the exact second the countdown timer hits zero.', gateKey: 'timedExams' },
+                        { key: 'enableProctorCamera', setter: setEnableProctorCamera, val: enableProctorCamera, label: 'Monitor via Webcam snap', desc: 'Automatically check student presence and capture periodic screenshots through the camera to stop cheating.', gateKey: 'fullScreenLockdown' },
+                        { key: 'enableTabDepartureSound', setter: setEnableTabDepartureSound, val: enableTabDepartureSound, label: 'Alert Sound on Switch Tab', desc: 'Play a loud warning buzzer sound if the student switches tabs or exits the exam window.', gateKey: 'tabSwitchDetection' }
+                      ].map((item) => {
+                        const isVal = item.val;
+                        const isLocked = isFeatureLocked(item.gateKey);
                         return (
                           <button
-                            key={idx}
+                            key={item.key}
                             type="button"
-                            onClick={() => (setter as any)(!isVal)}
-                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                              isVal ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
+                            onClick={() => {
+                              if (isLocked) {
+                                router.push('/plans');
+                                return;
+                              }
+                              item.setter(!isVal);
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 relative overflow-hidden ${
+                              isLocked 
+                                ? 'border-white/5 bg-[#030712]/50 opacity-60 cursor-pointer hover:border-red-500/20 hover:bg-red-950/5' 
+                                : isVal 
+                                ? 'border-indigo-500/50 bg-indigo-500/10' 
+                                : 'border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/3'
                             }`}
                           >
                             <div className="flex items-center justify-between w-full gap-3">
-                              <span className="text-xs font-bold text-white">{labelStr}</span>
-                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                isVal ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isVal && <Check className="w-3 h-3" />}
+                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                {item.label}
+                                {isLocked && <span className="text-[9px] font-black text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded border border-indigo-400/25 flex items-center gap-1">🔒 PRO</span>}
                               </span>
+                              {!isLocked && (
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isVal ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {isVal && <Check className="w-3 h-3" />}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                            <span className="text-[10px] text-gray-400 leading-normal">{item.desc}</span>
                           </button>
                         );
                       })}
@@ -2762,49 +3030,66 @@ export default function CreatePoll() {
                   </div>
                 )}
 
-                {/* 10 Advanced Poll Controls */}
+                {/* Dynamic Advanced Poll Controls */}
                 {pollType === 'POLL' && (
                   <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm text-amber-400">Advanced Polling Extras</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm text-amber-400">
+                        {questions[0]?.type === 'RANKED' 
+                          ? 'Ranked Choice advanced Extras' 
+                          : questions[0]?.type === 'KNOCKOUT' 
+                          ? 'Knockout advanced Extras' 
+                          : 'Advanced Polling Extras'}
+                      </h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Enrich your audience poll with custom voting systems, live charts, and privacy rules.
+                        {questions[0]?.type === 'RANKED' 
+                          ? 'Enrich your ranked choice poll with custom ballots, simulations, and tie resolutions.' 
+                          : questions[0]?.type === 'KNOCKOUT' 
+                          ? 'Enrich your knockout tournament bracket with predictions, overtime, and factsheets.' 
+                          : 'Enrich your audience poll with custom voting systems, live charts, and predictions.'}
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        [enableQuadraticVoting, setEnableQuadraticVoting, 'Point-Based Voting (Quadratic)', 'Voters get points to split. Buying more votes for one option costs exponentially more.'],
-                        [enableLiveTicker, setEnableLiveTicker, 'Scrolling Live Ticker', 'Display a rolling real-time ticker bar of ongoing vote transitions.'],
-                        [enableDemographicWeighting, setEnableDemographicWeighting, 'Group Influence Weighting', 'Assign higher vote importance factors based on role, age, or department.'],
-                        [enableTieBreakerEngine, setEnableTieBreakerEngine, 'Automatic Tie Resolver', 'Instantly break close ties using customized priority or duel criteria.'],
-                        [enableHotStreaks, setEnableHotStreaks, 'Fast Surge Detector (Hot Streaks)', 'Highlight options that are receiving votes exceptionally fast in real time.'],
-                        [enableConsensusScore, setEnableConsensusScore, 'Consensus & Polarization Score', 'Measure and display community agreement rates or highly divided choices.'],
-                        [enableVpnBlocking, setEnableVpnBlocking, 'Block VPNs & Proxies', 'Verify IPs and refuse votes coming from anonymous proxy lists or VPN servers.'],
-                        [enableWriteInOptions, setEnableWriteInOptions, 'Allow Custom Write-In Choices', 'Permit voters to type and suggest a custom choice not in the original list.'],
-                        [enableSentimentChat, setEnableSentimentChat, 'Opinion Chat & Sentiment Sidebar', 'Include a sidebar chatbox where text is sorted by positive, neutral, or negative feelings.'],
-                        [enableSwingMap, setEnableSwingMap, 'Opinion Trend Shift Map', 'Render a beautiful visual graph showing how public preferences shifted over the voting span.']
-                      ].map(([val, setter, label, desc], idx) => {
-                        const isVal = val as boolean;
-                        const labelStr = label as string;
-                        const descStr = desc as string;
+                      {getDynamicPollExtras().map((item) => {
+                        const isVal = !!item.val;
+                        const isLocked = isFeatureLocked(item.gateKey);
                         return (
                           <button
-                            key={idx}
+                            key={item.key}
                             type="button"
-                            onClick={() => (setter as any)(!isVal)}
-                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                              isVal ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
+                            onClick={() => {
+                              if (isLocked) {
+                                router.push('/plans');
+                                return;
+                              }
+                              if (item.setter) {
+                                item.setter(!isVal);
+                              } else {
+                                toggleFeatureState(item.key, !isVal);
+                              }
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 relative overflow-hidden ${
+                              isLocked 
+                                ? 'border-white/5 bg-[#030712]/50 opacity-60 cursor-pointer hover:border-red-500/20 hover:bg-red-950/5' 
+                                : isVal 
+                                ? 'border-amber-500/50 bg-amber-500/10' 
+                                : 'border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/3'
                             }`}
                           >
                             <div className="flex items-center justify-between w-full gap-3">
-                              <span className="text-xs font-bold text-white">{labelStr}</span>
-                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                isVal ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isVal && <Check className="w-3 h-3" />}
+                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                {item.label}
+                                {isLocked && <span className="text-[9px] font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25 flex items-center gap-1">🔒 PRO</span>}
                               </span>
+                              {!isLocked && (
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isVal ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {isVal && <Check className="w-3 h-3" />}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                            <span className="text-[10px] text-gray-400 leading-normal">{item.desc}</span>
                           </button>
                         );
                       })}
@@ -2823,38 +3108,52 @@ export default function CreatePoll() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        [enableDropOffTracking, setEnableDropOffTracking, 'Respondent Leave-Page Analytics', 'Pinpoint exactly which survey page or question triggers respondents to quit early.'],
-                        [enableSemanticAnalysis, setEnableSemanticAnalysis, 'AI Text Sentiment & Keyword Finder', 'Analyze and group text box submissions by positive/negative feelings and find common words.'],
-                        [enableCrossTabulation, setEnableCrossTabulation, 'Demographic & Segment Pivoting', 'Compare response groups based on age brackets, regions, and professional categories.'],
-                        [enableTimeAnalytics, setEnableTimeAnalytics, 'Page-Level Completion Timers', 'Monitor the exact seconds spent on each page to find confusing sections.'],
-                        [enableCustomNavLabels, setEnableCustomNavLabels, 'Custom Button Text Labels', 'Write your own custom text for "Next Page", "Previous Page", and "Complete" buttons.'],
-                        [enablePreOnboarding, setEnablePreOnboarding, 'Demographic Pre-Survey Onboarding', 'Collect attendee age, gender, and workspace sector before starting the survey.'],
-                        [enableBranchingLogic, setEnableBranchingLogic, 'Dynamic Question Paths (Skip Logic)', 'Direct respondents to different survey pages depending on what they chose in earlier steps.'],
-                        [enableDomainRestriction, setEnableDomainRestriction, 'Authorized Email Domains Only', 'Permit entries strictly from specified corporate/organizational domains (e.g., @school.edu).'],
-                        [enableDirectInbox, setEnableDirectInbox, 'Direct Private Messenger', 'Provide a private feedback chatbox directly between the respondent and the author.'],
-                        [enableDraftSave, setEnableDraftSave, 'Save Progress & Resume Later', 'Allow users to save answers locally so they can return later to submit.']
-                      ].map(([val, setter, label, desc], idx) => {
-                        const isVal = val as boolean;
-                        const labelStr = label as string;
-                        const descStr = desc as string;
+                        { key: 'enableDropOffTracking', setter: setEnableDropOffTracking, val: enableDropOffTracking, label: 'Respondent Leave-Page Analytics', desc: 'Pinpoint exactly which survey page or question triggers respondents to quit early.', gateKey: 'enableDropOffTracking' },
+                        { key: 'enableSemanticAnalysis', setter: setEnableSemanticAnalysis, val: enableSemanticAnalysis, label: 'AI Text Sentiment & Keyword Finder', desc: 'Analyze and group text box submissions by positive/negative feelings and find common words.', gateKey: 'aiSentimentAnalysis' },
+                        { key: 'enableCrossTabulation', setter: setEnableCrossTabulation, val: enableCrossTabulation, label: 'Demographic & Segment Pivoting', desc: 'Compare response groups based on age brackets, regions, and professional categories.', gateKey: 'enableCrossTabulation' },
+                        { key: 'enableTimeAnalytics', setter: setEnableTimeAnalytics, val: enableTimeAnalytics, label: 'Page-Level Completion Timers', desc: 'Monitor the exact seconds spent on each page to find confusing sections.', gateKey: 'responseTimeLimits' },
+                        { key: 'enableCustomNavLabels', setter: setEnableCustomNavLabels, val: enableCustomNavLabels, label: 'Custom Button Text Labels', desc: 'Write your own custom text for "Next Page", "Previous Page", and "Complete" buttons.', gateKey: 'multiPageSurveys' },
+                        { key: 'enablePreOnboarding', setter: setEnablePreOnboarding, val: enablePreOnboarding, label: 'Demographic Pre-Survey Onboarding', desc: 'Collect attendee age, gender, and workspace sector before starting the survey.', gateKey: 'targetedDistribution' },
+                        { key: 'enableBranchingLogic', setter: setEnableBranchingLogic, val: enableBranchingLogic, label: 'Dynamic Question Paths (Skip Logic)', desc: 'Direct respondents to different survey pages depending on what they chose in earlier steps.', gateKey: 'conditionalLogicBranching' },
+                        { key: 'enableDomainRestriction', setter: setEnableDomainRestriction, val: enableDomainRestriction, label: 'Authorized Email Domains Only', desc: 'Permit entries strictly from specified corporate/organizational domains (e.g., @school.edu).', gateKey: 'enableDomainRestriction' },
+                        { key: 'enableDirectInbox', setter: setEnableDirectInbox, val: enableDirectInbox, label: 'Direct Private Messenger', desc: 'Provide a private feedback chatbox directly between the respondent and the author.', gateKey: 'enableDirectInbox' },
+                        { key: 'enableDraftSave', setter: setEnableDraftSave, val: enableDraftSave, label: 'Save Progress & Resume Later', desc: 'Allow users to save answers locally so they can return later to submit.', gateKey: 'saveResumeLater' }
+                      ].map((item) => {
+                        const isVal = item.val;
+                        const isLocked = isFeatureLocked(item.gateKey);
                         return (
                           <button
-                            key={idx}
+                            key={item.key}
                             type="button"
-                            onClick={() => (setter as any)(!isVal)}
-                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                              isVal ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
+                            onClick={() => {
+                              if (isLocked) {
+                                router.push('/plans');
+                                return;
+                              }
+                              item.setter(!isVal);
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 relative overflow-hidden ${
+                              isLocked 
+                                ? 'border-white/5 bg-[#030712]/50 opacity-60 cursor-pointer hover:border-red-500/20 hover:bg-red-950/5' 
+                                : isVal 
+                                ? 'border-purple-500/50 bg-purple-500/10' 
+                                : 'border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/3'
                             }`}
                           >
                             <div className="flex items-center justify-between w-full gap-3">
-                              <span className="text-xs font-bold text-white">{labelStr}</span>
-                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                isVal ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isVal && <Check className="w-3 h-3" />}
+                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                {item.label}
+                                {isLocked && <span className="text-[9px] font-black text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/25 flex items-center gap-1">🔒 PRO</span>}
                               </span>
+                              {!isLocked && (
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isVal ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {isVal && <Check className="w-3 h-3" />}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                            <span className="text-[10px] text-gray-400 leading-normal">{item.desc}</span>
                           </button>
                         );
                       })}
@@ -3017,7 +3316,7 @@ export default function CreatePoll() {
       <button
         type="button"
         onClick={() => setBrainBoardOpen(true)}
-        className="fixed bottom-6 right-6 z-40 p-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl transition-all border border-indigo-400/30 hover:scale-110 active:scale-95 group animate-pulse-glow"
+        className="fixed z-40 p-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl transition-all border border-indigo-400/30 hover:scale-110 active:scale-95 group animate-pulse-glow bottom-36 right-6 sm:bottom-6 sm:right-[335px]"
         title="Open Brain Board & Sketch Canvas"
       >
         <Brain className="w-6 h-6 animate-pulse" />

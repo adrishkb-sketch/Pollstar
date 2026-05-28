@@ -40,6 +40,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const { id: pollId } = await params;
     const user = await getAuthUser();
 
+    // Check if maintenance mode is active
+    const maintenanceConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'maintenance_mode_enabled' }
+    });
+    if (maintenanceConfig && maintenanceConfig.value === 'true' && user?.role !== 'ADMIN') {
+      return NextResponse.json(
+        { maintenance: true, error: 'Platform is currently undergoing scheduled maintenance.' },
+        { status: 503 }
+      );
+    }
+
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: {
@@ -50,6 +61,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             fullName: true,
             isVerifiedUser: true,
             avatar: true,
+            plan: true,
           }
         },
         questions: {

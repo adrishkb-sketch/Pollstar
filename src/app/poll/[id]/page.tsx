@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { 
   Vote as VoteIcon, Loader2, AlertCircle, CheckCircle, 
   HelpCircle, ShieldAlert, Award, ArrowRight, ArrowLeft, RefreshCw, Check, Users,
-  MessageSquare, Send, MessageCircle, ClipboardList
+  MessageSquare, Send, MessageCircle, ClipboardList, Settings
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
 import confetti from 'canvas-confetti';
+import AdvertisementZone from '@/components/AdvertisementZone';
 
 interface StudentWhiteboardProps {
   questionId: string;
@@ -1790,6 +1791,30 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     );
   };
 
+  if (error === 'Platform is currently undergoing scheduled maintenance.') {
+    return (
+      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="glass-card rounded-3xl border border-white/10 p-8 max-w-md w-full bg-[#080d1a]/85 backdrop-blur-md relative shadow-2xl space-y-6 animate-pulse-glow">
+          <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20 text-purple-400 mx-auto w-fit">
+            <Settings className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
+          </div>
+          <div>
+            <h3 className="font-outfit text-2xl font-black text-white">Scheduled Maintenance</h3>
+            <p className="text-gray-400 text-xs mt-2.5 leading-relaxed">
+              Pollstar is currently undergoing database optimizations and structural upgrades to make your interactive sessions even faster and more secure. We will be back online shortly!
+            </p>
+          </div>
+          <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-xl text-[10px] text-purple-300 font-mono">
+            Status: System Gated Lockdown
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col justify-center items-center bg-[#030712]">
@@ -2245,6 +2270,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           </div>
         </div>
       </div>
+
+      <AdvertisementZone removeAdvertisements={poll?.creator?.plan?.features?.removeAdvertisements === true} />
 
       {/* Strict Anonymity big notice */}
       {poll.isAnonymous && (
