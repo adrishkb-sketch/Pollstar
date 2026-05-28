@@ -93,6 +93,7 @@ model User {
   referrals            User[]      @relation("Referrals")
   wallet               Wallet?
   payoutRequests       PayoutRequest[]
+  invoices             Invoice[]
 }
 
 model OTP {
@@ -347,6 +348,7 @@ model Plan {
   features        Json     // JSON object with feature boolean flags
   users           User[]
   emailDomainMappings EmailDomainMapping[]
+  invoices        Invoice[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -445,4 +447,20 @@ model EmailDomainMapping {
   planId    String
   plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+}
+
+model Invoice {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId         String
+  plan           Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  amountPaid     Float
+  couponCode     String?
+  billingName    String
+  billingAddress String
+  billingCity    String
+  billingZip     String
+  billingPhone   String?
+  createdAt      DateTime @default(now())
 }

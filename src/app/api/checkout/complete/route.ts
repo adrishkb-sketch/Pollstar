@@ -29,7 +29,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { planId, couponCode } = await req.json();
+    const { 
+      planId, 
+      couponCode, 
+      billingName, 
+      billingAddress, 
+      billingCity, 
+      billingZip, 
+      billingPhone 
+    } = await req.json();
 
     if (!planId) {
       return NextResponse.json({ error: 'Missing Plan ID' }, { status: 400 });
@@ -89,6 +97,21 @@ export async function POST(req: Request) {
     await prisma.user.update({
       where: { id: user.id },
       data: { planId: plan.id }
+    });
+
+    // Create Invoice
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId: user.id,
+        planId: plan.id,
+        amountPaid: finalPrice,
+        couponCode: couponCode || null,
+        billingName: billingName || user.fullName || 'Valued Creator',
+        billingAddress: billingAddress || 'N/A',
+        billingCity: billingCity || 'N/A',
+        billingZip: billingZip || 'N/A',
+        billingPhone: billingPhone || null
+      }
     });
 
     // Process MLM Referral commission splits

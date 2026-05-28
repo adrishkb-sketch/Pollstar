@@ -114,7 +114,9 @@ const PLATFORM_FEATURES = [
   { key: 'enableDomainRestriction', label: 'Domain and Email Lock Lists' },
   { key: 'collaborations', label: 'Real-time Creator Collaboration' },
   { key: 'enableDirectInbox', label: 'Voter Inbox Direct Messages' },
-  { key: 'removeAdvertisements', label: 'Ad-Free Experience (No Ads on Platform)' }
+  { key: 'removeAdvertisements', label: 'Ad-Free Experience (No Ads on Platform)' },
+  { key: 'embedCode', label: 'Embed Voting Widget Option' },
+  { key: 'linkShortener', label: 'Link Shortener Option' }
 ];
 
 const FEATURES_KEYS = [

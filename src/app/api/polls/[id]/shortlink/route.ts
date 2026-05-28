@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+import { checkFeatureAccess } from '@/lib/featureGate';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -38,6 +39,15 @@ export async function POST(
     const { id: pollId } = await params;
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Validate feature gate for custom link shortening
+    const featureGate = await checkFeatureAccess(user.id, 'linkShortener');
+    if (!featureGate.allowed) {
+      return NextResponse.json(
+        { error: featureGate.reason || 'Your active plan does not support custom link shortening. Please upgrade.' },
+        { status: 403 }
+      );
+    }
 
     const poll = await prisma.poll.findUnique({ where: { id: pollId } });
     if (!poll) return NextResponse.json({ error: 'Poll not found' }, { status: 404 });

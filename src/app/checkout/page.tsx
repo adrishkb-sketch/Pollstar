@@ -116,6 +116,8 @@ function CheckoutContent() {
     loadCheckoutData();
   }, [planId]);
 
+  const [generatedInvoice, setGeneratedInvoice] = useState<any | null>(null);
+
   // Apply Promo Discount
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,22 +174,34 @@ function CheckoutContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           planId,
-          couponCode: couponApplied ? couponApplied.code : undefined
+          couponCode: couponApplied ? couponApplied.code : undefined,
+          billingName: fullName,
+          billingAddress: address || 'N/A',
+          billingCity: city || 'N/A',
+          billingZip: zipCode || 'N/A',
+          billingPhone: phone || null
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        setGeneratedInvoice({
+          id: `inv_${Math.random().toString(36).substring(2, 9)}`,
+          receiptRef: `PST-${Math.floor(Math.random()*900000+100000)}`,
+          billingName: fullName,
+          billingAddress: address || 'N/A',
+          billingCity: city || 'N/A',
+          billingZip: zipCode || 'N/A',
+          billingPhone: phone || 'N/A',
+          planName: plan?.name,
+          amountPaid: finalPrice,
+          createdAt: new Date().toLocaleDateString()
+        });
         setSuccess(true);
         canvasConfetti({
           particleCount: 150,
           spread: 80,
           origin: { y: 0.6 }
         });
-        
-        // Auto-redirect to dashboard after 4 seconds
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 4000);
       } else {
         setError(data.error || 'Simulated transaction declined by gateway.');
       }
@@ -207,6 +221,17 @@ function CheckoutContent() {
     );
   }
 
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
+        <p className="text-gray-400 font-medium text-sm animate-pulse">Establishing secure gateway connection...</p>
+      </div>
+    );
+  }
+
   if (success && plan) {
     return (
       <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center p-4">
@@ -216,7 +241,7 @@ function CheckoutContent() {
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Payment Completed!
+              Order Completed!
             </h1>
             <p className="text-purple-300 font-semibold text-lg">
               Welcome to the {plan.name} Tier
@@ -229,7 +254,7 @@ function CheckoutContent() {
           <div className="border border-white/5 rounded-2xl bg-white/[0.02] p-5 max-w-md mx-auto space-y-3 text-left">
             <div className="flex justify-between text-xs text-gray-500">
               <span>Receipt Ref</span>
-              <span className="font-mono text-gray-400">PST-{Math.floor(Math.random()*900000+100000)}</span>
+              <span className="font-mono text-gray-400">{generatedInvoice?.receiptRef || 'N/A'}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Amount Paid</span>
@@ -241,18 +266,140 @@ function CheckoutContent() {
             </div>
           </div>
 
-          <div className="pt-2 text-xs text-gray-500 flex items-center justify-center gap-1.5 animate-pulse">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>Redirecting to workspace dashboard shortly...</span>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center w-full max-w-sm mx-auto">
+            <button 
+              type="button"
+              onClick={() => setShowInvoiceModal(true)}
+              className="w-full sm:w-1/2 py-3 px-6 rounded-xl font-bold bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 transition-all active:scale-95 text-xs"
+            >
+              View Invoice
+            </button>
+            <button 
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              className="w-full sm:w-1/2 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-xl shadow-purple-600/20 transition-all border border-purple-400/20 active:scale-95 text-xs"
+            >
+              Dashboard
+            </button>
           </div>
-
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="w-full max-w-xs py-3.5 px-6 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-xl shadow-purple-600/20 transition-all border border-purple-400/20 active:scale-95"
-          >
-            Launch Dashboard
-          </button>
         </div>
+
+        {/* PRINTABLE INVOICE MODAL OVERLAY */}
+        {showInvoiceModal && generatedInvoice && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+            <div className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 max-w-2xl w-full relative shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:p-0 print:shadow-none print:max-h-full">
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(false)}
+                className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 transition-all p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 print:hidden"
+              >
+                ✕
+              </button>
+
+              {/* Invoice Layout */}
+              <div className="space-y-6 text-left">
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-gray-100 pb-5">
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-black tracking-tight text-indigo-600">POLLSTAR</h2>
+                    <p className="text-xs text-gray-500 font-semibold uppercase">Simulated Tax Invoice</p>
+                  </div>
+                  <div className="text-right text-xs text-gray-500 space-y-0.5 font-semibold">
+                    <div><strong>Invoice No:</strong> {generatedInvoice.id.toUpperCase()}</div>
+                    <div><strong>Date:</strong> {generatedInvoice.createdAt}</div>
+                    <div><strong>Receipt Ref:</strong> {generatedInvoice.receiptRef}</div>
+                  </div>
+                </div>
+
+                {/* Company & Client Addresses */}
+                <div className="grid grid-cols-2 gap-6 text-xs leading-relaxed">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Detail</span>
+                    <div className="font-bold text-gray-800">Pollstar Inc.</div>
+                    <div className="text-gray-500">100 Tech Venture Way</div>
+                    <div className="text-gray-500">Silicon Valley, CA 94025</div>
+                    <div className="text-gray-500">billing@pollstar.com</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Bill To</span>
+                    <div className="font-bold text-gray-800">{generatedInvoice.billingName}</div>
+                    <div className="text-gray-500">{generatedInvoice.billingAddress}</div>
+                    <div className="text-gray-500">{generatedInvoice.billingCity}, {generatedInvoice.billingZip}</div>
+                    <div className="text-gray-500">Phone: {generatedInvoice.billingPhone}</div>
+                  </div>
+                </div>
+
+                {/* Purchase Items Table */}
+                <div className="border border-gray-100 rounded-2xl overflow-hidden text-xs">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="p-3">Subscription Description</th>
+                        <th className="p-3">Billing Cycle</th>
+                        <th className="p-3 text-right">Unit Price</th>
+                        <th className="p-3 text-right">Total Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-800">{generatedInvoice.planName} Tier Upgrade</td>
+                        <td className="p-3 text-gray-500">{plan.billingCycle}</td>
+                        <td className="p-3 text-right text-gray-500">${plan.price.toFixed(2)}</td>
+                        <td className="p-3 text-right font-bold text-gray-800">${generatedInvoice.amountPaid.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals Section */}
+                <div className="border-t border-gray-100 pt-4 flex flex-col items-end text-xs space-y-2">
+                  <div className="flex w-64 justify-between text-gray-500">
+                    <span>Base Amount</span>
+                    <span>${plan.price.toFixed(2)}</span>
+                  </div>
+                  {discountAmount > 0 && (
+                    <div className="flex w-64 justify-between text-emerald-600 font-semibold">
+                      <span>Promo Coupon Discount</span>
+                      <span>-${discountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex w-64 justify-between text-gray-500">
+                    <span>GST/VAT Estimate (0%)</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex w-64 justify-between font-black text-gray-900 border-t border-gray-100 pt-2 text-sm">
+                    <span>Total Amount Paid</span>
+                    <span>${generatedInvoice.amountPaid.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Disclaimer */}
+                <div className="text-[10px] text-gray-400 leading-relaxed text-center border-t border-gray-100 pt-4">
+                  Thank you for your purchase! This is a simulated transaction receipt generated in the Pollstar Sandbox. No physical funds have been processed or moved.
+                </div>
+
+                {/* Action Row */}
+                <div className="flex gap-3 pt-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >
+                    Print or Save as PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowInvoiceModal(false)}
+                    className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 text-gray-500 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >
+                    Close Invoice
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -354,164 +501,166 @@ function CheckoutContent() {
               </div>
 
               {/* Payment Methods */}
-              <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 bg-white/[0.01]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                    <Coins className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Secure Simulated Payment</h2>
-                    <p className="text-xs text-gray-500">Choose one of the simulated gateways below</p>
-                  </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/[0.02] p-1.5 rounded-2xl border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('card')}
-                    className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                      paymentMethod === 'card' 
-                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                        : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Cards</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('upi')}
-                    className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                      paymentMethod === 'upi' 
-                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                        : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <Smartphone className="w-4 h-4" />
-                    <span>UPI ID / QR</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('netbanking')}
-                    className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                      paymentMethod === 'netbanking' 
-                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                        : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <Building className="w-4 h-4" />
-                    <span>Netbanking</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('paypal')}
-                    className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                      paymentMethod === 'paypal' 
-                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                        : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>PayPal / Pay</span>
-                  </button>
-                </div>
-
-                {/* Card Fields */}
-                {paymentMethod === 'card' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Card Number</label>
-                      <input 
-                        type="text" 
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').substring(0, 16))}
-                        placeholder="4111 2222 3333 4444"
-                        className="w-full glass-input text-sm px-4 py-3"
-                      />
+              {finalPrice > 0 && (
+                <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 bg-white/[0.01]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <Coins className="w-5 h-5" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold">Secure Simulated Payment</h2>
+                      <p className="text-xs text-gray-500">Choose one of the simulated gateways below</p>
+                    </div>
+                  </div>
+
+                  {/* Tabs */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/[0.02] p-1.5 rounded-2xl border border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
+                        paymentMethod === 'card' 
+                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
+                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Cards</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('upi')}
+                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
+                        paymentMethod === 'upi' 
+                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
+                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      <span>UPI ID / QR</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('netbanking')}
+                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
+                        paymentMethod === 'netbanking' 
+                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
+                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <Building className="w-4 h-4" />
+                      <span>Netbanking</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('paypal')}
+                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
+                        paymentMethod === 'paypal' 
+                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
+                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>PayPal / Pay</span>
+                    </button>
+                  </div>
+
+                  {/* Card Fields */}
+                  {paymentMethod === 'card' && (
+                    <div className="space-y-4 animate-fade-in">
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Expiry Date</label>
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Card Number</label>
                         <input 
                           type="text" 
-                          value={cardExpiry}
-                          onChange={(e) => setCardExpiry(e.target.value.substring(0, 5))}
-                          placeholder="MM/YY"
-                          className="w-full glass-input text-sm px-4 py-3 text-center"
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').substring(0, 16))}
+                          placeholder="4111 2222 3333 4444"
+                          className="w-full glass-input text-sm px-4 py-3"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Security CVV</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Expiry Date</label>
+                          <input 
+                            type="text" 
+                            value={cardExpiry}
+                            onChange={(e) => setCardExpiry(e.target.value.substring(0, 5))}
+                            placeholder="MM/YY"
+                            className="w-full glass-input text-sm px-4 py-3 text-center"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Security CVV</label>
+                          <input 
+                            type="password" 
+                            value={cardCvv}
+                            onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').substring(0, 3))}
+                            placeholder="•••"
+                            className="w-full glass-input text-sm px-4 py-3 text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* UPI Fields */}
+                  {paymentMethod === 'upi' && (
+                    <div className="space-y-5 animate-fade-in text-center">
+                      <div className="space-y-2 text-left">
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">UPI Address VPA</label>
                         <input 
-                          type="password" 
-                          value={cardCvv}
-                          onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').substring(0, 3))}
-                          placeholder="•••"
-                          className="w-full glass-input text-sm px-4 py-3 text-center"
+                          type="text" 
+                          value={upiId}
+                          onChange={(e) => setUpiId(e.target.value)}
+                          placeholder="e.g. user@ybl or user@okhdfc"
+                          className="w-full glass-input text-sm px-4 py-3"
                         />
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* UPI Fields */}
-                {paymentMethod === 'upi' && (
-                  <div className="space-y-5 animate-fade-in text-center">
-                    <div className="space-y-2 text-left">
-                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">UPI Address VPA</label>
-                      <input 
-                        type="text" 
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        placeholder="e.g. user@ybl or user@okhdfc"
-                        className="w-full glass-input text-sm px-4 py-3"
-                      />
-                    </div>
-                    <div className="border border-white/5 rounded-2xl bg-white/[0.01] p-6 max-w-sm mx-auto flex flex-col items-center gap-4">
-                      <div className="p-3 bg-white rounded-2xl shadow-xl shadow-purple-500/5">
-                        <QrCode className="w-36 h-36 text-gray-900" />
+                      <div className="border border-white/5 rounded-2xl bg-white/[0.01] p-6 max-w-sm mx-auto flex flex-col items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-xl shadow-purple-500/5">
+                          <QrCode className="w-36 h-36 text-gray-900" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Scan this code using any UPI enabled app (GPay, PhonePe, Paytm, BHIM) to simulate clearance instantly.</p>
+                        </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Netbanking Fields */}
+                  {paymentMethod === 'netbanking' && (
+                    <div className="space-y-4 animate-fade-in">
+                      <div className="space-y-2">
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Select Bank</label>
+                        <select 
+                          value={selectedBank}
+                          onChange={(e) => setSelectedBank(e.target.value)}
+                          className="w-full glass-input text-sm px-4 py-3 bg-[#030712]"
+                        >
+                          <option value="">-- Choose Your Institution --</option>
+                          <option value="sbi">State Bank of India</option>
+                          <option value="hdfc">HDFC Bank</option>
+                          <option value="icici">ICICI Bank</option>
+                          <option value="axis">Axis Bank</option>
+                          <option value="kotak">Kotak Mahindra Bank</option>
+                          <option value="pnb">Punjab National Bank</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PayPal Fields */}
+                  {paymentMethod === 'paypal' && (
+                    <div className="animate-fade-in text-center py-6 space-y-4">
+                      <Sparkles className="w-12 h-12 text-yellow-400 mx-auto animate-pulse" />
                       <div>
-                        <p className="text-xs text-gray-400">Scan this code using any UPI enabled app (GPay, PhonePe, Paytm, BHIM) to simulate clearance instantly.</p>
+                        <p className="text-sm font-semibold">Simulate One-Tap PayPal / Apple Pay clearance</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">No login required. The gateway will bypass prompt challenges and simulate standard authorization tokens.</p>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Netbanking Fields */}
-                {paymentMethod === 'netbanking' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Select Bank</label>
-                      <select 
-                        value={selectedBank}
-                        onChange={(e) => setSelectedBank(e.target.value)}
-                        className="w-full glass-input text-sm px-4 py-3 bg-[#030712]"
-                      >
-                        <option value="">-- Choose Your Institution --</option>
-                        <option value="sbi">State Bank of India</option>
-                        <option value="hdfc">HDFC Bank</option>
-                        <option value="icici">ICICI Bank</option>
-                        <option value="axis">Axis Bank</option>
-                        <option value="kotak">Kotak Mahindra Bank</option>
-                        <option value="pnb">Punjab National Bank</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* PayPal Fields */}
-                {paymentMethod === 'paypal' && (
-                  <div className="animate-fade-in text-center py-6 space-y-4">
-                    <Sparkles className="w-12 h-12 text-yellow-400 mx-auto animate-pulse" />
-                    <div>
-                      <p className="text-sm font-semibold">Simulate One-Tap PayPal / Apple Pay clearance</p>
-                      <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">No login required. The gateway will bypass prompt challenges and simulate standard authorization tokens.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Button */}
               <button
@@ -522,12 +671,20 @@ function CheckoutContent() {
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Processing Secure Gateway Authentication...</span>
+                    <span>
+                      {finalPrice > 0 
+                        ? 'Processing Secure Gateway Authentication...' 
+                        : 'Activating Free Plan Upgrade...'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <span>Secure simulated checkout (${finalPrice.toFixed(2)})</span>
+                    <span>
+                      {finalPrice > 0 
+                        ? `Secure simulated checkout ($${finalPrice.toFixed(2)})` 
+                        : 'Activate Free Plan Upgrade'}
+                    </span>
                   </>
                 )}
               </button>
