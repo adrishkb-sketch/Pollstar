@@ -71,6 +71,7 @@ function CheckoutContent() {
   const [cardCvv, setCardCvv] = useState('');
   const [upiId, setUpiId] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   // Fetch plan details
   useEffect(() => {
@@ -217,17 +218,6 @@ function CheckoutContent() {
       setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
-        <p className="text-gray-400 font-medium text-sm animate-pulse">Establishing secure gateway connection...</p>
-      </div>
-    );
-  }
-
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   if (loading) {
     return (
