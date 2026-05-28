@@ -277,7 +277,7 @@ export default function Onboarding() {
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="John Doe"
+                      placeholder="Adrish Banerjee"
                       className="w-full !pl-12 glass-input text-sm"
                     />
                   </div>
