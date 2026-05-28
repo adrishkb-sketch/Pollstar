@@ -136,6 +136,7 @@ model Question {
   marks              Float?       @default(0.0) // Assigned marks (allow multiples of 0.5)
   inputConstraint    String?      @default("NONE") // NONE, NUMBERS, CHARACTERS
   fileUploadDriveUrl String?      // Drive folder to upload student files
+  enableWhiteboard   Boolean      @default(false)
 }
 
 model Option {
@@ -193,6 +194,7 @@ model PollCollaborator {
   poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("CO_EDITOR") // CO_EDITOR, AUDITOR
   createdAt DateTime @default(now())
 
   @@unique([pollId, userId])
@@ -297,6 +299,11 @@ model PollSettings {
   enableDomainRestriction      Boolean @default(false)
   enableDirectInbox            Boolean @default(false)
   enableDraftSave              Boolean @default(false)
+  
+  // Custom themes & scientific capabilities
+  customTheme                  String  @default("MIDNIGHT") // MIDNIGHT, SUNSET, JADE, OCEAN, ALABASTER
+  enableSaveAndResumeLater     Boolean @default(false)
+  studentWhiteboardDriveUrl    String?
 }
 
 model AuditLog {

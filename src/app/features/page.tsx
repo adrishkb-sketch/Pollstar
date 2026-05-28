@@ -81,6 +81,8 @@ export default function FeaturesPage() {
         { icon: Fingerprint, title: 'Device Fingerprinting', description: 'Advanced browser fingerprinting detects duplicate votes from the same device — even across different browsers or incognito windows.', tag: 'Security' },
         { icon: Download, title: 'Export Results', description: 'Download complete poll results as CSV, PDF, or Excel. Includes timestamps, voter metadata, and statistical summaries.', tag: 'Export' },
         { icon: RefreshCw, title: 'Revote / Change Vote', description: 'Optionally allow voters to change their vote within a time window. Toggle on/off per poll.', tag: 'Settings' },
+        { icon: ListOrdered, title: 'Drag-and-Drop Ballot Podium', description: 'Enable visual podium 1st/2nd/3rd slots where voters rank choices interactively. Fully touch-responsive.', tag: 'Voting Method' },
+        { icon: Brain, title: 'Creator Brain Scribble Canvas', description: 'Translucent drawer scribble canvas (pen, eraser, color picker, clear tools) and markdown planner to map redirections.', tag: 'Builder' },
       ],
     },
 
@@ -124,6 +126,8 @@ export default function FeaturesPage() {
         { icon: Code2, title: 'Embed in Websites', description: 'Embed surveys directly into your website with responsive iframe code. Seamless user experience.', tag: 'Integration' },
         { icon: ListOrdered, title: 'Drag-and-Drop Question Ordering', description: 'Reorder questions with drag-and-drop. Rearrange pages and sections with intuitive controls.', tag: 'Builder' },
         { icon: Fingerprint, title: 'Duplicate Response Prevention', description: 'Prevent the same person from submitting multiple responses using email verification or device fingerprinting.', tag: 'Security' },
+        { icon: Bookmark, title: 'Save & Resume Later (Survey)', description: 'Let respondents securely save their current inputs and progress to continue answering their survey later.', tag: 'UX' },
+        { icon: Brain, title: 'Creator Brain Scribble Canvas', description: 'Floating scribble canvas to sketch layout flows and attach reference link cards for reference.', tag: 'Builder' },
       ],
     },
 
@@ -172,6 +176,9 @@ export default function FeaturesPage() {
         { icon: Settings, title: 'Negative Marking', description: 'Enable negative marks for wrong answers on MCQ questions. Configurable penalty per question.', tag: 'Grading' },
         { icon: Users, title: 'Student Roster Management', description: 'Upload student lists via CSV. Track who attempted, who passed, and who hasn\'t started yet.', tag: 'Management' },
         { icon: Activity, title: 'Time-per-Question Analytics', description: 'See how long each student spent on each question. Identify questions that were too hard or too easy.', tag: 'Analytics' },
+        { icon: Calculator, title: 'Inbuilt Scientific Calculator', description: 'Draggable, on-screen mathematical pad featuring Trigonometric, power, log, ln, e, and pi operators for quick evaluation.', tag: 'Tools' },
+        { icon: Palette, title: 'Student Drawing Whiteboard', description: 'Whiteboard drawing question type enabling students to sketch answers. Integrates with GDrive storage list.', tag: 'Question Type' },
+        { icon: Bookmark, title: 'Save & Resume Later (Exam)', description: 'Allow exam-takers to securely save their progress (if permitted by educator) and resume securely on reload.', tag: 'UX' },
       ],
     },
 

@@ -10,9 +10,7 @@ import {
   ExternalLink, User, HelpCircle
 } from 'lucide-react';
 
-const FEATURES_KEYS = [
-  { key: 'otpVoterVerification', label: 'OTP Voter Verification' },
-  { key: 'closedVoterLists', label: 'Closed Voter Lists' },
+const POLL_FEATURES = [
   { key: 'openPublicPolls', label: 'Open Public Polls' },
   { key: 'realTimeLiveResults', label: 'Real-Time Live Results' },
   { key: 'liveGeolocationMap', label: 'Live Geolocation Map' },
@@ -21,26 +19,17 @@ const FEATURES_KEYS = [
   { key: 'rankedChoiceBordaCount', label: 'Ranked Choice / Borda Count' },
   { key: 'quadraticVoting', label: 'Quadratic Voting' },
   { key: 'singleChoiceMultiSelect', label: 'Single Choice / Multi-Select' },
-  { key: 'aiResultSummary', label: 'AI Result Summary' },
-  { key: 'timedPolls', label: 'Timed Polls' },
-  { key: 'resultVisibilityControl', label: 'Result Visibility Control' },
-  { key: 'optionRandomization', label: 'Option Randomization' },
-  { key: 'customBranding', label: 'Custom Branding' },
-  { key: 'mobileFirstDesign', label: 'Mobile-First Design' },
-  { key: 'shareableLinksQrCodes', label: 'Shareable Links & QR Codes' },
-  { key: 'embeddableWidget', label: 'Embeddable Widget' },
+  { key: 'enableDragAndDropPodium', label: 'Drag-and-Drop Ballot Podium' },
   { key: 'opinionChatbox', label: 'Opinion Chatbox' },
   { key: 'sentimentReactions', label: 'Sentiment Reactions' },
   { key: 'voterLeaderboard', label: 'Voter Leaderboard' },
-  { key: 'richMediaOptions', label: 'Rich Media Options' },
   { key: 'multipleChartTypes', label: 'Multiple Chart Types' },
   { key: 'voteTimelineGraph', label: 'Vote Timeline Graph' },
   { key: 'multiRoundPolls', label: 'Multi-Round Polls' },
-  { key: 'notificationAlerts', label: 'Notification Alerts' },
-  { key: 'liveBroadcastMode', label: 'Live Broadcast Mode' },
-  { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
-  { key: 'exportResults', label: 'Export Results' },
-  { key: 'revoteChangeVote', label: 'Revote / Change Vote' },
+  { key: 'revoteChangeVote', label: 'Revote / Change Vote' }
+];
+
+const SURVEY_FEATURES = [
   { key: 'multipleQuestionTypes', label: 'Multiple Question Types' },
   { key: 'longFormTextResponses', label: 'Long-Form Text Responses' },
   { key: 'starEmojiRatings', label: 'Star & Emoji Ratings' },
@@ -61,25 +50,11 @@ const FEATURES_KEYS = [
   { key: 'completionRateTracking', label: 'Completion Rate Tracking' },
   { key: 'anonymousResponses', label: 'Anonymous Responses' },
   { key: 'targetedDistribution', label: 'Targeted Distribution' },
-  { key: 'scheduledLaunchClose', label: 'Scheduled Launch & Close' },
-  { key: 'mobileOptimizedSurveys', label: 'Mobile-Optimized Surveys' },
-  { key: 'saveResumeLater', label: 'Save & Resume Later' },
   { key: 'responseFilteringSegmentation', label: 'Response Filtering & Segmentation' },
-  { key: 'exportToCsvpdfexcel', label: 'Export to CSV/PDF/Excel' },
-  { key: 'customBrandingThemes', label: 'Custom Branding & Themes' },
-  { key: 'shareableLinksQrCodesSurvey', label: 'Shareable Links & QR Codes (Survey)' },
-  { key: 'embedInWebsites', label: 'Embed in Websites' },
-  { key: 'dragAndDropQuestionOrdering', label: 'Drag-and-Drop Question Ordering' },
-  { key: 'duplicateResponsePrevention', label: 'Duplicate Response Prevention' },
-  { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
-  { key: 'mcqMultipleCorrect', label: 'MCQ (Multiple Correct)' },
-  { key: 'shortAnswerQuestionsSaq', label: 'Short Answer Questions (SAQ)' },
-  { key: 'longAnswerQuestionsLaq', label: 'Long Answer Questions (LAQ)' },
-  { key: 'trueOrFalse', label: 'True or False' },
-  { key: 'fillInTheBlanks', label: 'Fill in the Blanks' },
-  { key: 'matchTheFollowing', label: 'Match the Following' },
-  { key: 'numericalInput', label: 'Numerical Input' },
-  { key: 'fileUploadAnswers', label: 'File Upload Answers' },
+  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey)' }
+];
+
+const EXAM_FEATURES = [
   { key: 'timedExams', label: 'Timed Exams' },
   { key: 'fullScreenLockdown', label: 'Full-Screen Lockdown' },
   { key: 'tabSwitchDetection', label: 'Tab-Switch Detection' },
@@ -89,7 +64,7 @@ const FEATURES_KEYS = [
   { key: 'autoGradingEngine', label: 'Auto-Grading Engine' },
   { key: 'manualGradingInterface', label: 'Manual Grading Interface' },
   { key: 'pageBreaksSections', label: 'Page Breaks / Sections' },
-  { key: 'dragAndDropQuestionOrderingExam', label: 'Drag-and-Drop Question Ordering (Exam)' },
+  { key: 'dragAndDropQuestionOrderingExam', label: 'Drag-and-Drop Question Ordering' },
   { key: 'detailedScoreReports', label: 'Detailed Score Reports' },
   { key: 'classPerformanceAnalytics', label: 'Class Performance Analytics' },
   { key: 'weaknessAnalysis', label: 'Weakness Analysis' },
@@ -98,25 +73,47 @@ const FEATURES_KEYS = [
   { key: 'bulkResultsExport', label: 'Bulk Results Export' },
   { key: 'emailResultsToStudents', label: 'Email Results to Students' },
   { key: 'teacherGradebook', label: 'Teacher Gradebook' },
-  { key: 'accessCodeProtection', label: 'Access Code Protection' },
   { key: 'scheduledStartEnd', label: 'Scheduled Start & End' },
   { key: 'questionHints', label: 'Question Hints' },
-  { key: 'customBrandingExam', label: 'Custom Branding (Exam)' },
   { key: 'negativeMarking', label: 'Negative Marking' },
   { key: 'studentRosterManagement', label: 'Student Roster Management' },
   { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
+  { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
+  { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' }
+];
+
+const EXAM_QUESTION_TYPES = [
+  { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
+  { key: 'mcqMultipleCorrect', label: 'MCQ (Multiple Correct)' },
+  { key: 'shortAnswerQuestionsSaq', label: 'Short Answer Questions (SAQ)' },
+  { key: 'longAnswerQuestionsLaq', label: 'Long Answer Questions (LAQ)' },
+  { key: 'trueOrFalse', label: 'True or False' },
+  { key: 'fillInTheBlanks', label: 'Fill in the Blanks' },
+  { key: 'matchTheFollowing', label: 'Match the Following' },
+  { key: 'numericalInput', label: 'Numerical Input' },
+  { key: 'fileUploadAnswers', label: 'File Upload Answers' },
+  { key: 'studentWhiteboardQuestion', label: 'Student Drawing Whiteboard' }
+];
+
+const PLATFORM_FEATURES = [
+  { key: 'otpVoterVerification', label: 'OTP Voter Verification' },
+  { key: 'closedVoterLists', label: 'Closed Voter Lists' },
+  { key: 'customBranding', label: 'Custom Logo Branding' },
+  { key: 'customBrandingThemes', label: 'Custom Branding & Premium Themes' },
+  { key: 'creatorScribbleCanvas', label: 'Creator Brain Scribble Canvas' },
   { key: 'premiumDarkMode', label: 'Premium Dark Mode' },
-  { key: 'fullyResponsive', label: 'Fully Responsive' },
-  { key: 'realTimeUpdates', label: 'Real-Time Updates' },
-  { key: 'adminDashboard', label: 'Admin Dashboard' },
-  { key: 'secureAuthentication', label: 'Secure Authentication' },
-  { key: 'antiFraudEngine', label: 'Anti-Fraud Engine' },
   { key: 'organizationAccounts', label: 'Organization Accounts' },
-  { key: 'accessibilityA11y', label: 'Accessibility (A11y)' },
-  { key: 'globalSearch', label: 'Global Search' },
-  { key: 'raiseAnIssueButton', label: 'Raise an Issue Button' },
   { key: 'apiWebhooks', label: 'API & Webhooks' },
-  { key: 'cdnOptimizedAssets', label: 'CDN-Optimized Assets' }
+  { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
+  { key: 'exportResults', label: 'Export Results' }
+];
+
+const FEATURES_KEYS = [
+  ...POLL_FEATURES,
+  ...SURVEY_FEATURES,
+  ...EXAM_FEATURES,
+  ...EXAM_QUESTION_TYPES,
+  ...PLATFORM_FEATURES
 ];
 
 export default function AdminPortal() {
@@ -504,6 +501,30 @@ export default function AdminPortal() {
     } finally {
       setRejectionLoading(false);
     }
+  };
+
+  const isFeatureVisible = (featKey: string) => {
+    if (planType === 'POLL_PACK') {
+      const isPoll = POLL_FEATURES.some(f => f.key === featKey);
+      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
+      if (!isPoll && !isPlatform) return false;
+
+      // subtype conditional overlaps
+      if (featKey === 'rankedChoiceBordaCount' && !planPollSubtypes.ranked) return false;
+      if (featKey === 'quadraticVoting' && !planPollSubtypes.mcq) return false;
+      if (featKey === 'singleChoiceMultiSelect' && !planPollSubtypes.mcq && !planPollSubtypes.multi) return false;
+      if (featKey === 'enableDragAndDropPodium' && !planPollSubtypes.ranked) return false;
+    } else if (planType === 'SURVEY_PACK') {
+      const isSurvey = SURVEY_FEATURES.some(f => f.key === featKey);
+      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
+      if (!isSurvey && !isPlatform) return false;
+    } else if (planType === 'EXAM_PACK') {
+      const isExam = EXAM_FEATURES.some(f => f.key === featKey);
+      const isQType = EXAM_QUESTION_TYPES.some(f => f.key === featKey);
+      const isPlatform = PLATFORM_FEATURES.some(f => f.key === featKey);
+      if (!isExam && !isQType && !isPlatform) return false;
+    }
+    return true;
   };
 
   // Plans CRUD logic
@@ -2612,14 +2633,14 @@ export default function AdminPortal() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-white/5 pb-1">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
-                    Toggle Features Allowed ({FEATURES_KEYS.length} Features)
+                    Toggle Features Gated ({FEATURES_KEYS.filter(f => isFeatureVisible(f.key)).length} Active / {FEATURES_KEYS.length} Total)
                   </label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => {
-                        const allTrue: Record<string, boolean> = {};
-                        FEATURES_KEYS.forEach(f => { allTrue[f.key] = true; });
+                        const allTrue = { ...planFeatures };
+                        FEATURES_KEYS.forEach(f => { if (isFeatureVisible(f.key)) allTrue[f.key] = true; });
                         setPlanFeatures(allTrue);
                       }}
                       className="text-[9px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300"
@@ -2630,8 +2651,8 @@ export default function AdminPortal() {
                     <button
                       type="button"
                       onClick={() => {
-                        const allFalse: Record<string, boolean> = {};
-                        FEATURES_KEYS.forEach(f => { allFalse[f.key] = false; });
+                        const allFalse = { ...planFeatures };
+                        FEATURES_KEYS.forEach(f => { if (isFeatureVisible(f.key)) allFalse[f.key] = false; });
                         setPlanFeatures(allFalse);
                       }}
                       className="text-[9px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-400"
@@ -2641,26 +2662,161 @@ export default function AdminPortal() {
                   </div>
                 </div>
                 
-                <div className="max-h-[260px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pr-2">
-                  {FEATURES_KEYS.map((item) => {
-                    const isChecked = planFeatures[item.key] || false;
-                    return (
-                      <div
-                        key={item.key}
-                        onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                        className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-colors ${
-                          isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                        }`}
-                      >
-                        <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                        }`}>
-                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
+                <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2">
+                  {/* POLL FEATURES */}
+                  {POLL_FEATURES.some(f => isFeatureVisible(f.key)) && (
+                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
+                      <summary className="px-4 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-indigo-300 select-none">
+                        <span>🗳 Poll Features ({POLL_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {POLL_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
+                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
+                        {POLL_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
+                          const isChecked = planFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </details>
+                  )}
+
+                  {/* SURVEY FEATURES */}
+                  {SURVEY_FEATURES.some(f => isFeatureVisible(f.key)) && (
+                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
+                      <summary className="px-4 py-2.5 bg-violet-500/10 hover:bg-violet-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-violet-300 select-none">
+                        <span>📋 Survey Features ({SURVEY_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {SURVEY_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
+                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
+                        {SURVEY_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
+                          const isChecked = planFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* EXAM FEATURES */}
+                  {EXAM_FEATURES.some(f => isFeatureVisible(f.key)) && (
+                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
+                      <summary className="px-4 py-2.5 bg-pink-500/10 hover:bg-pink-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-pink-300 select-none">
+                        <span>🎓 Exam Capabilities ({EXAM_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {EXAM_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
+                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
+                        {EXAM_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
+                          const isChecked = planFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* EXAM QUESTION TYPES */}
+                  {EXAM_QUESTION_TYPES.some(f => isFeatureVisible(f.key)) && (
+                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
+                      <summary className="px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-amber-300 select-none">
+                        <span>❓ Question Types / Sub-Categories ({EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
+                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
+                        {EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key)).map((item) => {
+                          const isChecked = planFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* PLATFORM & SECURITY FEATURES */}
+                  {PLATFORM_FEATURES.some(f => isFeatureVisible(f.key)) && (
+                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
+                      <summary className="px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-blue-300 select-none">
+                        <span>🛡️ Platform & Anti-Fraud Features ({PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
+                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
+                        {PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
+                          const isChecked = planFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
                 </div>
               </div>
 

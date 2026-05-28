@@ -221,6 +221,7 @@ export async function POST(req: Request) {
             marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
             inputConstraint: q.inputConstraint || 'NONE',
             fileUploadDriveUrl: q.fileUploadDriveUrl || null,
+            enableWhiteboard: !!q.enableWhiteboard,
           },
         });
 
@@ -332,6 +333,9 @@ export async function POST(req: Request) {
           enableDomainRestriction: !!settings?.enableDomainRestriction,
           enableDirectInbox: !!settings?.enableDirectInbox,
           enableDraftSave: !!settings?.enableDraftSave,
+          customTheme: settings?.customTheme || "MIDNIGHT",
+          enableSaveAndResumeLater: !!settings?.enableSaveAndResumeLater,
+          studentWhiteboardDriveUrl: settings?.studentWhiteboardDriveUrl || null,
         },
       });
 

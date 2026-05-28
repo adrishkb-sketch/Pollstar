@@ -8,6 +8,7 @@ import {
   FlaskConical, HelpCircle, Check, AlertTriangle, ShieldCheck, FileText, 
   ExternalLink, Send, ArrowRight, Calendar, Edit2, X
 } from 'lucide-react';
+import DashboardHeader from '@/components/DashboardHeader';
 
 const AVATARS: Record<string, { name: string; src: string; bg: string }> = {
   'avatar-boy': { name: 'Joyful Boy', src: '/avatars/avatar-boy.png', bg: 'from-blue-500 to-indigo-600' },
@@ -241,78 +242,7 @@ export default function ProfilePage() {
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#030712]">
       {/* Header */}
-      <header className="w-full border-b border-white/5 bg-[#080d1a]/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <Link href="/dashboard" className="flex items-center space-x-2.5">
-              <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400">
-                <Vote className="w-6 h-6" />
-              </div>
-              <span className="font-outfit text-xl font-bold tracking-tight text-white">
-                Poll<span className="text-indigo-400">star</span>
-              </span>
-            </Link>
-
-            <nav className="hidden md:flex items-center space-x-1 bg-white/5 p-1 rounded-xl border border-white/5">
-              <Link
-                href="/dashboard"
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/dashboard/profile"
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-white bg-indigo-600/90 shadow"
-              >
-                My Profile
-              </Link>
-              <Link
-                href="/dashboard/gradebook"
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
-              >
-                📊 Gradebook
-              </Link>
-              <Link
-                href="/dashboard/plans"
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
-              >
-                Plans & Features
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center space-x-6">
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-sm font-semibold text-white flex items-center justify-end gap-1.5">
-                {user?.fullName || user?.email}
-                {user?.isVerifiedUser && (
-                  <span className="inline-flex items-center justify-center p-0.5 bg-blue-500 text-white rounded-full" title="Verified Creator">
-                    <Check className="w-2.5 h-2.5 stroke-[4]" />
-                  </span>
-                )}
-              </span>
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-                {user?.role === 'ADMIN' ? '👑 SYSTEM ADMIN' : 'CREATOR'}
-              </span>
-            </div>
-            {user?.role === 'ADMIN' && (
-              <Link
-                href="/admin"
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:text-white transition-all"
-              >
-                Admin Control
-              </Link>
-            )}
-            <button
-              onClick={handleLogout}
-              className="p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5 transition-all"
-              title="Sign Out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <DashboardHeader user={user} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-10 space-y-8 relative">

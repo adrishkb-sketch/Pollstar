@@ -317,7 +317,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       enableAutoSubmitOnLeave,
       verificationMethod, verificationType,
       // White label custom branding settings
-      enableCustomBranding, customLogoUrl, customBrandingText
+      enableCustomBranding, customLogoUrl, customBrandingText,
+      // Custom theme and save/resume fields
+      customTheme, enableSaveAndResumeLater, studentWhiteboardDriveUrl
     } = await req.json();
 
     const updateData: any = {};
@@ -422,6 +424,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (enableCustomBranding !== undefined) settingsPayload.enableCustomBranding = !!enableCustomBranding;
       if (customLogoUrl !== undefined) settingsPayload.customLogoUrl = customLogoUrl;
       if (customBrandingText !== undefined) settingsPayload.customBrandingText = customBrandingText;
+      if (customTheme !== undefined) settingsPayload.customTheme = customTheme;
+      if (enableSaveAndResumeLater !== undefined) settingsPayload.enableSaveAndResumeLater = !!enableSaveAndResumeLater;
+      if (studentWhiteboardDriveUrl !== undefined) settingsPayload.studentWhiteboardDriveUrl = studentWhiteboardDriveUrl;
 
       if (Object.keys(settingsPayload).length > 0) {
         await tx.pollSettings.upsert({
@@ -471,6 +476,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             enableCustomBranding: enableCustomBranding !== undefined ? !!enableCustomBranding : false,
             customLogoUrl: customLogoUrl || null,
             customBrandingText: customBrandingText || null,
+            customTheme: customTheme || "MIDNIGHT",
+            enableSaveAndResumeLater: enableSaveAndResumeLater !== undefined ? !!enableSaveAndResumeLater : false,
+            studentWhiteboardDriveUrl: studentWhiteboardDriveUrl || null,
           },
           update: settingsPayload,
         });

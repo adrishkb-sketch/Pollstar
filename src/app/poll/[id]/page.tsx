@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useRef } from 'react';
 import Link from 'next/link';
 import { 
   Vote as VoteIcon, Loader2, AlertCircle, CheckCircle, 
@@ -11,12 +11,545 @@ import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
 import confetti from 'canvas-confetti';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+interface StudentWhiteboardProps {
+  questionId: string;
+  value: string; // Base64 image
+  onChange: (base64: string) => void;
+  driveUrl?: string | null;
 }
 
-export default function VoterPortal({ params }: PageProps) {
+function StudentWhiteboard({ questionId, value, onChange, driveUrl }: StudentWhiteboardProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [strokeColor, setStrokeColor] = useState('#6366f1');
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [isEraser, setIsEraser] = useState(false);
+  const isDrawingRef = useRef(false);
+  const prevCoordsRef = useRef({ x: 0, y: 0 });
+
+  // Load existing drawing if it exists
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas dimensions
+    canvas.width = canvas.parentElement?.clientWidth || 600;
+    canvas.height = 280;
+
+    // Draw grid background for premium whiteboard look
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    const step = 20;
+    for (let x = 0; x < canvas.width; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    if (value) {
+      const img = new Image();
+      img.src = value;
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+      };
+    }
+  }, []);
+
+  const saveCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    onChange(canvas.toDataURL());
+  };
+
+  const getCoordinates = (e: any) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+
+    let clientX = 0;
+    let clientY = 0;
+
+    if (e.touches && e.touches[0]) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  };
+
+  const startDrawing = (e: any) => {
+    isDrawingRef.current = true;
+    prevCoordsRef.current = getCoordinates(e);
+  };
+
+  const draw = (e: any) => {
+    if (!isDrawingRef.current) return;
+    // Prevent default scrolling on mobile devices while sketching!
+    if (e.cancelable) e.preventDefault();
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const currentCoords = getCoordinates(e);
+
+    ctx.beginPath();
+    ctx.moveTo(prevCoordsRef.current.x, prevCoordsRef.current.y);
+    ctx.lineTo(currentCoords.x, currentCoords.y);
+
+    ctx.strokeStyle = isEraser ? '#030712' : strokeColor; // Eraser acts by matching background color
+    ctx.lineWidth = isEraser ? strokeWidth * 3 : strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    prevCoordsRef.current = currentCoords;
+  };
+
+  const stopDrawing = () => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      saveCanvas();
+    }
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw grid background again
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    const step = 20;
+    for (let x = 0; x < canvas.width; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    onChange('');
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-4 border border-white/10 bg-white/5 space-y-3 animate-fade-in-up mt-3">
+      <div className="flex items-center justify-between text-xs font-bold text-gray-300">
+        <span className="flex items-center space-x-1.5 text-indigo-400">
+          <span>🎨 Interactive Whiteboard Sketchpad</span>
+        </span>
+        <button
+          type="button"
+          onClick={clearCanvas}
+          className="px-2 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded transition-all text-[10px]"
+        >
+          Reset Board
+        </button>
+      </div>
+
+      {driveUrl && (
+        <div className="p-2.5 rounded-xl bg-purple-500/5 border border-purple-500/20 text-[10px] text-purple-300 leading-normal flex items-start space-x-1.5">
+          <span className="shrink-0 mt-0.5">📁</span>
+          <span>
+            <strong>Cloud Archiving Configured:</strong> Your sketches will be exported directly to your instructor's shared drive: <a href={driveUrl} target="_blank" rel="noopener noreferrer" className="underline font-bold text-white hover:text-purple-200">{driveUrl}</a>
+          </span>
+        </div>
+      )}
+
+      {/* Actual Drawing Area */}
+      <div className="rounded-xl overflow-hidden border border-white/10 bg-[#030712] relative cursor-crosshair">
+        <canvas
+          ref={canvasRef}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          className="block w-full touch-none"
+        />
+      </div>
+
+      {/* Toolbar controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="flex items-center space-x-2">
+          {/* Mode Switchers */}
+          <button
+            type="button"
+            onClick={() => setIsEraser(false)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+              !isEraser ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            ✏️ Pen
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEraser(true)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+              isEraser ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            🧽 Eraser
+          </button>
+        </div>
+
+        {/* Thickness selectors */}
+        <div className="flex items-center space-x-1">
+          {[2, 5, 10].map((size) => (
+            <button
+              key={size}
+              type="button"
+              onClick={() => setStrokeWidth(size)}
+              className={`px-2 py-1 rounded text-[9px] font-extrabold border transition-all ${
+                strokeWidth === size ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {size === 2 ? 'Thin' : size === 5 ? 'Med' : 'Thick'}
+            </button>
+          ))}
+        </div>
+
+        {/* Colors Swatches */}
+        <div className="flex items-center space-x-1.5">
+          {['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#ffffff'].map(color => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => {
+                setStrokeColor(color);
+                setIsEraser(false);
+              }}
+              className={`w-5 h-5 rounded-full border transition-all ${
+                strokeColor === color && !isEraser ? 'scale-125 border-white' : 'border-transparent'
+              }`}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScientificCalculator({ onClose }: { onClose: () => void }) {
+  const [expression, setExpression] = useState('');
+  const [result, setResult] = useState('');
+  const [position, setPosition] = useState({ x: 20, y: 150 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+  };
+
+  const handleMouseMove = (e: any) => {
+    if (!isDragging) return;
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
+    if (!clientX || !clientY) return;
+
+    setPosition({
+      x: clientX - dragStart.current.x,
+      y: clientY - dragStart.current.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleMouseMove);
+      window.addEventListener('touchend', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const appendToExpr = (str: string) => {
+    setExpression(prev => prev + str);
+  };
+
+  const clearAll = () => {
+    setExpression('');
+    setResult('');
+  };
+
+  const backspace = () => {
+    setExpression(prev => prev.slice(0, -1));
+  };
+
+  const evaluate = () => {
+    try {
+      let raw = expression;
+      // Replace symbols
+      raw = raw.replace(/π/g, 'Math.PI');
+      raw = raw.replace(/e/g, 'Math.E');
+      raw = raw.replace(/sin\(/g, 'Math.sin(');
+      raw = raw.replace(/cos\(/g, 'Math.cos(');
+      raw = raw.replace(/tan\(/g, 'Math.tan(');
+      raw = raw.replace(/log\(/g, 'Math.log10(');
+      raw = raw.replace(/ln\(/g, 'Math.log(');
+      raw = raw.replace(/sqrt\(/g, 'Math.sqrt(');
+      raw = raw.replace(/\^/g, '**');
+
+      // Simple safe evaluation via Function constructor
+      const evalResult = new Function(`return ${raw}`)();
+      if (evalResult === undefined || isNaN(evalResult)) {
+        setResult('Error');
+      } else {
+        setResult(Number(evalResult).toLocaleString('en-US', { maximumFractionDigits: 6 }));
+      }
+    } catch (e) {
+      setResult('Error');
+    }
+  };
+
+  return (
+    <div
+      style={{ top: `${position.y}px`, left: `${position.x}px` }}
+      className="fixed z-50 w-72 glass-card rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl p-4 select-none touch-none animate-fade-in-up backdrop-blur-md"
+    >
+      {/* Header bar (draggable handle) */}
+      <div
+        onMouseDown={handleMouseDown}
+        onTouchStart={(e) => {
+          setIsDragging(true);
+          const touch = e.touches[0];
+          dragStart.current = {
+            x: touch.clientX - position.x,
+            y: touch.clientY - position.y
+          };
+        }}
+        className="flex items-center justify-between cursor-move pb-2 border-b border-white/5 mb-3 select-none"
+      >
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center space-x-1">
+          <span>🧮 Math Pad (Exam mode)</span>
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-500 hover:text-white transition-colors text-xs font-bold font-mono px-1.5 py-0.5 rounded hover:bg-white/5"
+        >
+          Close
+        </button>
+      </div>
+
+      {/* Calculator Display Screen */}
+      <div className="bg-[#030712] rounded-xl p-3 border border-white/5 mb-4 text-right space-y-1">
+        <div className="text-xs text-gray-500 font-mono truncate h-4 leading-none">
+          {expression || '0'}
+        </div>
+        <div className="text-lg font-black text-white font-mono truncate h-7 leading-none pt-0.5">
+          {result || '0'}
+        </div>
+      </div>
+
+      {/* Buttons Pad grid layout */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {/* Trigonometric functions row */}
+        {['sin(', 'cos(', 'tan(', '^'].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn)}
+            className="py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-indigo-400 hover:bg-white/10 transition-colors"
+          >
+            {fn === '^' ? 'xʸ' : fn.replace('(', '')}
+          </button>
+        ))}
+
+        {/* Special math row */}
+        {['sqrt(', 'log(', 'ln(', '('].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn)}
+            className="py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-indigo-400 hover:bg-white/10 transition-colors"
+          >
+            {fn === 'sqrt(' ? '√' : fn.replace('(', '')}
+          </button>
+        ))}
+
+        {/* Third special row */}
+        {['π', 'e', ')', '/'].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn === '/' ? ' / ' : fn)}
+            className="py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            {fn}
+          </button>
+        ))}
+
+        {/* Numbers 7, 8, 9, * */}
+        {['7', '8', '9', '*'].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn === '*' ? ' * ' : fn)}
+            className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
+              fn === '*' ? 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10' : 'bg-[#030712]/50 border-white/5 text-white hover:bg-white/5'
+            }`}
+          >
+            {fn === '*' ? '×' : fn}
+          </button>
+        ))}
+
+        {/* Numbers 4, 5, 6, - */}
+        {['4', '5', '6', '-'].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn === '-' ? ' - ' : fn)}
+            className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
+              fn === '-' ? 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10' : 'bg-[#030712]/50 border-white/5 text-white hover:bg-white/5'
+            }`}
+          >
+            {fn === '-' ? '−' : fn}
+          </button>
+        ))}
+
+        {/* Numbers 1, 2, 3, + */}
+        {['1', '2', '3', '+'].map(fn => (
+          <button
+            key={fn}
+            type="button"
+            onClick={() => appendToExpr(fn === '+' ? ' + ' : fn)}
+            className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
+              fn === '+' ? 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10' : 'bg-[#030712]/50 border-white/5 text-white hover:bg-white/5'
+            }`}
+          >
+            {fn}
+          </button>
+        ))}
+
+        {/* Clear, 0, ., = */}
+        <button
+          type="button"
+          onClick={clearAll}
+          className="py-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-bold transition-colors"
+        >
+          C
+        </button>
+        <button
+          type="button"
+          onClick={() => appendToExpr('0')}
+          className="py-2 rounded-lg border border-white/5 bg-[#030712]/50 text-white hover:bg-white/5 text-xs font-bold transition-colors"
+        >
+          0
+        </button>
+        <button
+          type="button"
+          onClick={backspace}
+          className="py-2 rounded-lg border border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 text-xs font-bold transition-colors"
+        >
+          ⌫
+        </button>
+        <button
+          type="button"
+          onClick={evaluate}
+          className="py-2 rounded-lg border border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500 text-xs font-bold transition-colors shadow-lg shadow-indigo-600/20"
+        >
+          =
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function VoterPortal({ params }: { params: Promise<{ id: string }> }) {
   const { id: pollId } = use(params);
+
+  const getThemeClasses = () => {
+    const themeId = poll?.settings?.customTheme || "MIDNIGHT";
+    switch (themeId) {
+      case "SUNSET":
+        return {
+          id: "SUNSET",
+          bg: "bg-[#140b0c]",
+          sphere1: "bg-red-500/10",
+          sphere2: "bg-orange-500/10",
+          cardBorder: "border-red-500/20",
+          text: "text-white"
+        };
+      case "JADE":
+        return {
+          id: "JADE",
+          bg: "bg-[#08120d]",
+          sphere1: "bg-emerald-500/10",
+          sphere2: "bg-teal-500/10",
+          cardBorder: "border-emerald-500/20",
+          text: "text-white"
+        };
+      case "OCEAN":
+        return {
+          id: "OCEAN",
+          bg: "bg-[#08131a]",
+          sphere1: "bg-sky-500/10",
+          sphere2: "bg-cyan-500/10",
+          cardBorder: "border-sky-500/20",
+          text: "text-white"
+        };
+      case "ALABASTER":
+        return {
+          id: "ALABASTER",
+          bg: "bg-gray-50",
+          sphere1: "bg-indigo-200/40",
+          sphere2: "bg-purple-200/40",
+          cardBorder: "border-gray-200",
+          text: "text-gray-900"
+        };
+      case "MIDNIGHT":
+      default:
+        return {
+          id: "MIDNIGHT",
+          bg: "bg-[#030712]",
+          sphere1: "bg-indigo-500/10",
+          sphere2: "bg-purple-500/10",
+          cardBorder: "border-indigo-500/30",
+          text: "text-white"
+        };
+    }
+  };
 
   // Core loading & schema states
   const [loading, setLoading] = useState(true);
@@ -32,6 +565,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [introStep, setIntroStep] = useState(1);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timerActive, setTimerActive] = useState(false);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [verifiedVoter, setVerifiedVoter] = useState(false);
   const [voterToken, setVoterToken] = useState('');
   const [voterEmail, setVoterEmail] = useState('');
@@ -69,6 +603,7 @@ export default function VoterPortal({ params }: PageProps) {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, any>>({});
   const [rankedSelections, setRankedSelections] = useState<string[]>([]); // active array of ranks
   const [confirmVoteChecked, setConfirmVoteChecked] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   
   // Captcha states
   const [captchaNum1, setCaptchaNum1] = useState(0);
@@ -1016,6 +1551,48 @@ export default function VoterPortal({ params }: PageProps) {
     }
   };
 
+  // Load saved draft on mount / poll load
+  useEffect(() => {
+    if (!poll || !pollId) return;
+    const saved = localStorage.getItem(`pollstar_resume_${pollId}`);
+    if (saved && poll.settings?.enableSaveAndResumeLater) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.answers) {
+          setSelectedAnswers(parsed.answers);
+        }
+        if (parsed.currentPage !== undefined) {
+          setCurrentPage(parsed.currentPage);
+        }
+        if (parsed.pageHistory !== undefined) {
+          setPageHistory(parsed.pageHistory);
+        }
+        if (parsed.timeLeft !== undefined && parsed.timeLeft !== null) {
+          setTimeLeft(parsed.timeLeft);
+        }
+      } catch (e) {
+        console.error('Failed to parse saved resume state:', e);
+      }
+    }
+  }, [poll, pollId]);
+
+  const handleSaveDraft = () => {
+    try {
+      const payload = {
+        answers: selectedAnswers,
+        currentPage,
+        pageHistory,
+        timeLeft
+      };
+      localStorage.setItem(`pollstar_resume_${pollId}`, JSON.stringify(payload));
+      setSaveSuccessMsg('💾 Progress saved successfully! You can securely close this browser and return later.');
+      setTimeout(() => setSaveSuccessMsg(''), 5000);
+    } catch (e) {
+      console.error(e);
+      alert('Error saving draft. Please ensure localStorage is enabled in your browser settings.');
+    }
+  };
+
   // ────────────────────────────────────────────────────────
   // VOTE PLACEMENT ROUTINE
   // ────────────────────────────────────────────────────────
@@ -1145,6 +1722,7 @@ export default function VoterPortal({ params }: PageProps) {
       setVotedSuccessfully(true);
       setFlaggedSuspicious(data.flaggedSuspicious || false);
       localStorage.removeItem(`poll_start_time_${pollId}`);
+      localStorage.removeItem(`pollstar_resume_${pollId}`);
 
       // Add their geoposition marker if present
       if (data.geo && data.geo.lat !== 0) {
@@ -1537,8 +2115,45 @@ export default function VoterPortal({ params }: PageProps) {
     );
   }
 
+  const theme = getThemeClasses();
+
   return (
-    <div className="flex-1 w-full relative">
+    <div className={`flex-1 w-full relative min-h-screen ${theme.bg} ${theme.text} transition-colors duration-500`}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .gradient-btn {
+          background: ${
+            theme.id === 'SUNSET' ? 'linear-gradient(to right, #f97316, #ef4444) !important' :
+            theme.id === 'JADE' ? 'linear-gradient(to right, #10b981, #14b8a6) !important' :
+            theme.id === 'OCEAN' ? 'linear-gradient(to right, #0ea5e9, #06b6d4) !important' :
+            theme.id === 'ALABASTER' ? 'linear-gradient(to right, #4f46e5, #6366f1) !important' :
+            'linear-gradient(to right, #6366f1, #a855f7) !important'
+          };
+        }
+        ${theme.id === 'ALABASTER' ? `
+          .glass-card {
+            background-color: rgba(255, 255, 255, 0.8) !important;
+            color: #111827 !important;
+            border-color: #e5e7eb !important;
+          }
+          .glass-input {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            color: #111827 !important;
+            border-color: #d1d5db !important;
+          }
+          .text-white {
+            color: #111827 !important;
+          }
+          .text-gray-300 {
+            color: #374151 !important;
+          }
+          .text-gray-400 {
+            color: #4b5563 !important;
+          }
+          input, select, textarea {
+            color: #111827 !important;
+          }
+        ` : ''}
+      ` }} />
       {timeLeft !== null && (
         <div className="fixed top-6 right-6 z-50 animate-pulse-slow">
           <div className="glass-card rounded-2xl border border-red-500/30 bg-red-500/5 backdrop-blur-md py-2.5 px-4 shadow-xl flex items-center space-x-2.5 select-none">
@@ -2450,6 +3065,15 @@ export default function VoterPortal({ params }: PageProps) {
                         )}
                       </div>
                     )}
+
+                    {q.enableWhiteboard && (
+                      <StudentWhiteboard
+                        questionId={q.id}
+                        value={selectedAnswers[q.id + "_whiteboard"] || ""}
+                        onChange={(base64) => setSelectedAnswers(prev => ({ ...prev, [q.id + "_whiteboard"]: base64 }))}
+                        driveUrl={poll.settings?.studentWhiteboardDriveUrl}
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -2531,6 +3155,12 @@ export default function VoterPortal({ params }: PageProps) {
                     </p>
                   </label>
 
+                  {saveSuccessMsg && (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-fade-in">
+                      {saveSuccessMsg}
+                    </div>
+                  )}
+
                   {/* Navigation row: Back + Submit */}
                   <div className="flex items-center gap-3">
                     <button
@@ -2541,6 +3171,15 @@ export default function VoterPortal({ params }: PageProps) {
                       <ArrowLeft className="w-4 h-4" />
                       <span>Back</span>
                     </button>
+                    {poll.settings?.enableSaveAndResumeLater && (
+                      <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        className="px-4 py-3.5 rounded-xl font-bold bg-[#10b981]/10 border border-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/20 transition-all text-xs active:scale-95 shrink-0"
+                      >
+                        💾 Save Draft
+                      </button>
+                    )}
                     <button
                       type="submit"
                       disabled={voteLoading || !confirmVoteChecked}
@@ -2591,6 +3230,12 @@ export default function VoterPortal({ params }: PageProps) {
                     </div>
                   )}
 
+                   {saveSuccessMsg && (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-fade-in">
+                      {saveSuccessMsg}
+                    </div>
+                  )}
+
                   {/* Navigation Buttons */}
                   <div className="flex items-center gap-3">
                     {pageHistory.length > 1 && (
@@ -2601,6 +3246,15 @@ export default function VoterPortal({ params }: PageProps) {
                       >
                         <ArrowLeft className="w-4 h-4" />
                         <span className="hidden sm:inline">Back</span>
+                      </button>
+                    )}
+                    {poll.settings?.enableSaveAndResumeLater && (
+                      <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        className="px-4 py-3.5 rounded-xl font-bold bg-[#10b981]/10 border border-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/20 transition-all text-xs active:scale-95 shrink-0"
+                      >
+                        💾 Save Draft
                       </button>
                     )}
                     <button
@@ -2670,17 +3324,37 @@ export default function VoterPortal({ params }: PageProps) {
                 </label>
 
                 {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={voteLoading || !confirmVoteChecked}
-                  className="w-full py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
-                >
-                  {voteLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <span>Submit Secure Vote</span>
+                <div className="space-y-3">
+                  {saveSuccessMsg && (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs text-center animate-fade-in">
+                      {saveSuccessMsg}
+                    </div>
                   )}
-                </button>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="submit"
+                      disabled={voteLoading || !confirmVoteChecked}
+                      className="flex-1 py-4 rounded-xl font-bold gradient-btn text-white text-base shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+                    >
+                      {voteLoading ? (
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                      ) : (
+                        <span>Submit Secure Vote</span>
+                      )}
+                    </button>
+
+                    {poll.settings?.enableSaveAndResumeLater && (
+                      <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        className="py-4 px-6 rounded-xl font-bold bg-[#10b981]/10 border border-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/20 transition-all text-sm active:scale-95 shrink-0"
+                      >
+                        💾 Save Progress
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </form>
@@ -2986,6 +3660,27 @@ export default function VoterPortal({ params }: PageProps) {
           <MessageCircle className="w-6 h-6" />
         </button>
       </div>
+
+      {/* Floating Scientific Calculator Toggle Icon */}
+      {poll && poll.pollType === 'EXAM' && poll.settings?.enableCalculator && !votedSuccessfully && (
+        <div className="fixed bottom-6 left-6 z-40 flex flex-col items-start space-y-3">
+          {isCalculatorOpen && (
+            <ScientificCalculator onClose={() => setIsCalculatorOpen(false)} />
+          )}
+          <button
+            type="button"
+            onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
+            className="w-12 h-12 rounded-full bg-slate-900 border border-indigo-400/20 hover:border-indigo-400/40 shadow-2xl flex items-center justify-center text-white hover:scale-105 transition-all duration-300 relative group"
+            title="Open Scientific Calculator"
+          >
+            <span className="text-xl">🧮</span>
+            {/* Tooltip */}
+            <span className="absolute left-14 scale-0 group-hover:scale-100 transition-all rounded bg-slate-900 px-2 py-1 text-[10px] font-bold text-white whitespace-nowrap shadow-md uppercase tracking-wider border border-white/5">
+              Scientific Calculator
+            </span>
+          </button>
+        </div>
+      )}
     </div>
     </div>
   );
