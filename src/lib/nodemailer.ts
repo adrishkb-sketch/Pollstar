@@ -513,3 +513,83 @@ export async function sendPollCollaboratorInvitationEmail(
 
   return true;
 }
+
+/**
+ * Sends a notification to students when exam results are released, with marks, comments, and tutoring link.
+ */
+export async function sendExamResultsReleasedEmail({
+  email,
+  pollTitle,
+  scoreEarned,
+  scoreTotal,
+  analysisUrl,
+}: {
+  email: string;
+  pollTitle: string;
+  scoreEarned: number;
+  scoreTotal: number;
+  analysisUrl: string;
+}): Promise<boolean> {
+  const subject = `📝 Exam Results Released: "${pollTitle}"`;
+  const percentage = scoreTotal > 0 ? Math.round((scoreEarned / scoreTotal) * 100) : 0;
+  const passed = percentage >= 40;
+
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: ${passed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border: 1px solid ${passed ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: ${passed ? '#10b981' : '#ef4444'}; text-transform: uppercase; letter-spacing: 0.1em;">
+          📝 Score Report Released
+        </span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Your Exam Score is Ready</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        The results for the examination <strong style="color: #ffffff">"${pollTitle}"</strong> have been officially released.
+      </p>
+
+      <div style="text-align: center; margin-bottom: 24px; padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02);">
+        <span style="font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">Your Final Score</span>
+        <span style="font-size: 48px; font-weight: 900; color: ${passed ? '#10b981' : '#ef4444'}; display: block; margin-bottom: 4px; font-family: monospace;">${scoreEarned} / ${scoreTotal}</span>
+        <span style="font-size: 14px; color: #9ca3af; display: block; font-weight: 600;">Grade Percentage: ${percentage}%</span>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">
+          For a detailed concept-by-concept analysis, personalized AI tutoring explanations, and tips on where improvements are needed:
+        </p>
+        <a href="${analysisUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">
+          Open Detailed Concept Analysis
+        </a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px; margin-top: 32px;">
+        Pollstar Online Testing Engine. Personal Tutoring, Precise Diagnostics.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending results release:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Exam Results Released                         │`);
+  console.log(`│ Score:   ${(scoreEarned + ' / ' + scoreTotal).padEnd(46)} │`);
+  console.log(`│ Link:    ${analysisUrl.padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}

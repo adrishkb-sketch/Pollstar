@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Vote, Shield, BarChart3, Globe, Award, Sparkles, ArrowRight } from 'lucide-react';
+import Footer from '@/components/Footer';
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
@@ -144,20 +145,8 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-gray-500 text-sm z-10">
-        <span>
-          © 2026 Pollstar. Made with not so much love by Adrish ❤️
-        </span>
-        <div className="flex space-x-6 mt-4 sm:mt-0">
-          <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
-            Privacy Policy
-          </Link>
-          <Link href="/terms" className="hover:text-emerald-400 transition-colors">
-            Terms of Service
-          </Link>
-        </div>
-      </footer>
+      <Footer />
+
     </div>
   );
 }

@@ -22,6 +22,7 @@ enum PollStatus {
 enum PollType {
   POLL
   SURVEY
+  EXAM
 }
 
 enum QuestionType {
@@ -32,6 +33,8 @@ enum QuestionType {
   SHORT_TEXT
   LONG_TEXT
   RATING
+  MULTI_SELECT
+  FILE_UPLOAD
 }
 
 model User {
@@ -64,6 +67,7 @@ model User {
   otherDetail          String?
   bio                  String?
   gender               String?
+  primaryPurpose       String?
 
   verificationStatus   String      @default("UNAPPLIED") // UNAPPLIED, PENDING, VERIFIED, REJECTED
   verificationReason   String?
@@ -116,15 +120,20 @@ model Poll {
 }
 
 model Question {
-  id           String       @id @default(uuid())
-  pollId       String
-  poll         Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  questionText String
-  type         QuestionType @default(SINGLE)
-  pageNumber   Int          @default(1)
-  order        Int          @default(1)
-  logicRules   Json?        // Stores branching logic rules
-  options      Option[]
+  id                 String       @id @default(uuid())
+  pollId             String
+  poll               Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  questionText       String
+  type               QuestionType @default(SINGLE)
+  pageNumber         Int          @default(1)
+  order              Int          @default(1)
+  logicRules         Json?        // Stores branching logic rules
+  options            Option[]
+  correctAnswer      String?      // Stores correct option ID or exact short-text answer
+  correctAnswers     Json?        // Stores list of correct options for MULTI_SELECT/Multiple Correct MCQ
+  marks              Float?       @default(0.0) // Assigned marks (allow multiples of 0.5)
+  inputConstraint    String?      @default("NONE") // NONE, NUMBERS, CHARACTERS
+  fileUploadDriveUrl String?      // Drive folder to upload student files
 }
 
 model Option {
@@ -152,16 +161,18 @@ model Vote {
 }
 
 model AllowedVoter {
-  id             String    @id @default(uuid())
-  pollId         String
-  poll           Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  identifier     String    // e.g. "2021BCS003"
-  confirmer1     String    // e.g. "John Doe"
-  confirmer2     String?   // e.g. optional secondary confirmation text
-  email          String
-  voted          Boolean   @default(false)
-  bypassOtpUntil DateTime?
-  bypassRequested Boolean  @default(false)
+  id              String    @id @default(uuid())
+  pollId          String
+  poll            Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  identifier      String    // e.g. "2021BCS003"
+  confirmer1      String    // e.g. "John Doe"
+  confirmer2      String?   // e.g. optional secondary confirmation text
+  email           String
+  phone           String?   // Pre-defined phone number for phone validation
+  password        String?   // Pre-defined password assigned to the voter/examinee
+  voted           Boolean   @default(false)
+  bypassOtpUntil  DateTime?
+  bypassRequested Boolean   @default(false)
 }
 
 model DirectMessage {
@@ -243,6 +254,47 @@ model PollSettings {
   enableSemanticAnalysis  Boolean @default(false)
   enableCrossTabulation   Boolean @default(false)
   enableTimeAnalytics     Boolean @default(false)
+
+  // Verification Matrices
+  verificationMethod      String  @default("EMAIL") // EMAIL, PHONE
+  verificationType        String  @default("OTP")   // OTP, PASSWORD
+
+  // Online Testing / Exam Engine Toggles
+  examTimerDuration            Int?              // Exam duration in minutes
+  enableProctorCamera          Boolean @default(false)
+  enableProctorMicrophone      Boolean @default(false)
+  proctorDriveFolderUrl        String?           // Drive folder to save video/audio snapshots
+  enableAutoSubmitOnTabLeave   Boolean @default(false)
+  enableAutoSubmitOnCacheClear Boolean @default(false)
+  enableAutoSubmitOnLeave      Boolean @default(false)
+  resultsReleased              Boolean @default(false) // Toggle whether results are visible to examinees
+
+  // Custom White-Label Branding
+  enableCustomBranding    Boolean @default(false)
+  customLogoUrl           String? // base64 logo string
+  customBrandingText      String? // custom header brand text
+
+  // Additional 30 Advanced Features suite toggles
+  enableShuffleQuestions       Boolean @default(false)
+  enableShuffleOptions         Boolean @default(false)
+  enableCopyPasteBlock         Boolean @default(false)
+  enableInstantFeedback        Boolean @default(false)
+  enableNegativeMarking        Boolean @default(false)
+  enableCalculator             Boolean @default(false)
+  enableOtpBypass              Boolean @default(false)
+  enableStrictTimeBuffer       Boolean @default(false)
+  enableTabDepartureSound      Boolean @default(false)
+
+  enableDemographicWeighting   Boolean @default(false)
+  enableVpnBlocking            Boolean @default(false)
+  enableWriteInOptions         Boolean @default(false)
+
+  enableCustomNavLabels        Boolean @default(false)
+  enablePreOnboarding          Boolean @default(false)
+  enableBranchingLogic         Boolean @default(false)
+  enableDomainRestriction      Boolean @default(false)
+  enableDirectInbox            Boolean @default(false)
+  enableDraftSave              Boolean @default(false)
 }
 
 model AuditLog {
@@ -266,4 +318,14 @@ model Plan {
   users        User[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model SupportIssue {
+  id          String   @id @default(uuid())
+  email       String
+  description String
+  pageUrl     String?
+  status      String   @default("PENDING") // PENDING, RESOLVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

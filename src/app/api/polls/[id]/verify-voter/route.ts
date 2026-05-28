@@ -54,16 +54,18 @@ export async function POST(
 
       if (!allowedVoter) {
         return NextResponse.json({ 
-          error: `${poll.pollType === 'SURVEY' ? 'Respondent' : 'Voter'} record not found. Please double-check your unique identifier value.` 
+          error: `${poll.pollType === 'SURVEY' ? 'Respondent' : poll.pollType === 'EXAM' ? 'Examinee' : 'Voter'} record not found. Please double-check your unique identifier value.` 
         }, { status: 404 });
       }
 
       if (allowedVoter.voted && poll.settings?.limitOneVotePerUser) {
         if (!poll.isResultPublic) {
           return NextResponse.json({ 
-            error: poll.pollType === 'SURVEY' 
-              ? 'Your unique identifier has already submitted a response in this survey. Results are private.' 
-              : 'Your unique identifier has already cast a vote in this poll. Results are private.' 
+            error: poll.pollType === 'EXAM'
+              ? 'Your unique identifier has already submitted this exam. Results are private.'
+              : poll.pollType === 'SURVEY' 
+                ? 'Your unique identifier has already submitted a response in this survey. Results are private.' 
+                : 'Your unique identifier has already cast a vote in this poll. Results are private.' 
           }, { status: 403 });
         }
       }
@@ -74,6 +76,9 @@ export async function POST(
         confirmer1Value: allowedVoter.confirmer1,
         confirmer2Value: allowedVoter.confirmer2 || '',
         emailValue: allowedVoter.email,
+        phoneValue: allowedVoter.phone || '',
+        verificationMethod: poll.settings?.verificationMethod || 'EMAIL',
+        verificationType: poll.settings?.verificationType || 'OTP',
         labels: {
           identifierLabel: poll.settings?.identifierLabel || 'Roll Number',
           confirmer1Label: poll.settings?.confirmer1Label || 'Student Name',
@@ -84,11 +89,14 @@ export async function POST(
 
     // Step 1: Check identifier/confirmers and request OTP
     if (step === 'REQUEST_OTP') {
-      const { identifier, confirmer1, confirmer2, email, voterId } = body;
+      const { identifier, confirmer1, confirmer2, email, phone, password, voterId } = body;
+      const verificationMethod = poll.settings?.verificationMethod || 'EMAIL';
+      const verificationType = poll.settings?.verificationType || 'OTP';
+      const isPhoneMethod = verificationMethod === 'PHONE';
 
-      if (!identifier || !confirmer1 || !email) {
+      if (!identifier || !confirmer1 || (isPhoneMethod ? !phone : !email)) {
         return NextResponse.json(
-          { error: 'Identifier, Confirmer 1, and Email are compulsory fields' },
+          { error: `Identifier, Confirmer 1, and ${isPhoneMethod ? 'Phone Number' : 'Email'} are compulsory fields` },
           { status: 400 }
         );
       }
@@ -100,13 +108,16 @@ export async function POST(
           ...(voterId ? { id: voterId } : {}),
           identifier: { equals: identifier.trim(), mode: 'insensitive' },
           confirmer1: { equals: confirmer1.trim(), mode: 'insensitive' },
-          email: { equals: email.trim(), mode: 'insensitive' },
+          ...(isPhoneMethod 
+            ? { phone: { equals: phone.trim(), mode: 'insensitive' } }
+            : { email: { equals: email.trim(), mode: 'insensitive' } }
+          ),
         },
       });
 
       if (!allowedVoter) {
         return NextResponse.json(
-          { error: 'Credentials do not match the authorized voter list for this poll.' },
+          { error: `Credentials do not match the authorized ${poll.pollType === 'EXAM' ? 'examinee' : 'voter'} list for this ${poll.pollType === 'EXAM' ? 'exam' : poll.pollType === 'SURVEY' ? 'survey' : 'poll'}.` },
           { status: 401 }
         );
       }
@@ -124,17 +135,55 @@ export async function POST(
         if (!poll.isResultPublic) {
           return NextResponse.json(
             { 
-              error: poll.pollType === 'SURVEY' 
-                ? 'You have already submitted your response in this survey. Results are private.' 
-                : 'You have already cast your vote in this poll. Results are private.' 
+              error: poll.pollType === 'EXAM'
+                ? 'You have already submitted this exam. Results are private.'
+                : poll.pollType === 'SURVEY' 
+                  ? 'You have already submitted your response in this survey. Results are private.' 
+                  : 'You have already cast your vote in this poll. Results are private.' 
             },
             { status: 403 }
           );
         }
       }
 
+      // PASSWORD-BASED ACCESS OVERRIDE
+      if (verificationType === 'PASSWORD') {
+        if (!password || (allowedVoter.password && allowedVoter.password.trim() !== password.trim())) {
+          return NextResponse.json(
+            { error: 'Incorrect access password. Access denied.' },
+            { status: 401 }
+          );
+        }
+
+        // Correct password! Issue voter Token instantly, bypass OTP delivery
+        const voterToken = jwt.sign(
+          {
+            voterId: allowedVoter.id,
+            identifier: allowedVoter.identifier,
+            email: allowedVoter.email,
+            phone: allowedVoter.phone,
+            pollId,
+          },
+          JWT_SECRET,
+          { expiresIn: '30m' } // 30 mins for exams
+        );
+
+        return NextResponse.json({
+          success: true,
+          isPasswordVerify: true,
+          message: poll.pollType === 'EXAM'
+            ? 'Identity verified! Redirecting to examinee portal...'
+            : poll.pollType === 'SURVEY'
+              ? 'Identity verified! Redirecting to survey portal...'
+              : 'Identity verified! Redirecting to ballot...',
+          voterToken,
+          hasVotedAlready: allowedVoter.voted,
+        });
+      }
+
       // Check if Creator granted a temporary 30-second OTP bypass
       if (
+        verificationType === 'OTP' &&
         allowedVoter.bypassOtpUntil &&
         allowedVoter.bypassOtpUntil > new Date() &&
         !allowedVoter.bypassRequested

@@ -169,7 +169,7 @@ export async function POST(req: Request) {
           startTime: new Date(startTime),
           endTime: new Date(endTime),
           status: status === 'ACTIVE' ? 'ACTIVE' : 'DRAFT',
-          pollType: pollType === 'SURVEY' ? 'SURVEY' : 'POLL',
+          pollType: pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL',
         },
       });
 
@@ -179,12 +179,17 @@ export async function POST(req: Request) {
           data: {
             pollId: poll.id,
             questionText: q.questionText,
-            type: ['RANKED', 'KNOCKOUT', 'MULTIPLE_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type)
+            type: ['RANKED', 'KNOCKOUT', 'MULTIPLE_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'RATING', 'MULTI_SELECT', 'FILE_UPLOAD'].includes(q.type)
               ? q.type
               : 'SINGLE',
             pageNumber: q.pageNumber || 1,
             order: q.order || 1,
             logicRules: q.logicRules ? q.logicRules : null,
+            correctAnswer: q.correctAnswer || null,
+            correctAnswers: q.correctAnswers ? q.correctAnswers : null,
+            marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+            inputConstraint: q.inputConstraint || 'NONE',
+            fileUploadDriveUrl: q.fileUploadDriveUrl || null,
           },
         });
 
@@ -255,6 +260,47 @@ export async function POST(req: Request) {
           enableUnderdogTracker: !!settings?.enableUnderdogTracker,
           enableOptionStatsCards: !!settings?.enableOptionStatsCards,
           enableSuddenDeath: !!settings?.enableSuddenDeath,
+
+          // Verification Matrices
+          verificationMethod: settings?.verificationMethod || 'EMAIL',
+          verificationType: settings?.verificationType || 'OTP',
+
+          // Online Testing / Exam Engine Toggles
+          examTimerDuration: settings?.examTimerDuration ? parseInt(settings.examTimerDuration, 10) : null,
+          enableProctorCamera: !!settings?.enableProctorCamera,
+          enableProctorMicrophone: !!settings?.enableProctorMicrophone,
+          proctorDriveFolderUrl: settings?.proctorDriveFolderUrl || null,
+          enableAutoSubmitOnTabLeave: !!settings?.enableAutoSubmitOnTabLeave,
+          enableAutoSubmitOnCacheClear: !!settings?.enableAutoSubmitOnCacheClear,
+          enableAutoSubmitOnLeave: !!settings?.enableAutoSubmitOnLeave,
+          resultsReleased: !!settings?.resultsReleased,
+
+          // Custom White-Label Branding
+          enableCustomBranding: !!settings?.enableCustomBranding,
+          customLogoUrl: settings?.customLogoUrl || null,
+          customBrandingText: settings?.customBrandingText || null,
+
+          // Additional 30 Advanced Features suite toggles
+          enableShuffleQuestions: !!settings?.enableShuffleQuestions,
+          enableShuffleOptions: !!settings?.enableShuffleOptions,
+          enableCopyPasteBlock: !!settings?.enableCopyPasteBlock,
+          enableInstantFeedback: !!settings?.enableInstantFeedback,
+          enableNegativeMarking: !!settings?.enableNegativeMarking,
+          enableCalculator: !!settings?.enableCalculator,
+          enableOtpBypass: !!settings?.enableOtpBypass,
+          enableStrictTimeBuffer: !!settings?.enableStrictTimeBuffer,
+          enableTabDepartureSound: !!settings?.enableTabDepartureSound,
+
+          enableDemographicWeighting: !!settings?.enableDemographicWeighting,
+          enableVpnBlocking: !!settings?.enableVpnBlocking,
+          enableWriteInOptions: !!settings?.enableWriteInOptions,
+
+          enableCustomNavLabels: !!settings?.enableCustomNavLabels,
+          enablePreOnboarding: !!settings?.enablePreOnboarding,
+          enableBranchingLogic: !!settings?.enableBranchingLogic,
+          enableDomainRestriction: !!settings?.enableDomainRestriction,
+          enableDirectInbox: !!settings?.enableDirectInbox,
+          enableDraftSave: !!settings?.enableDraftSave,
         },
       });
 
@@ -267,6 +313,8 @@ export async function POST(req: Request) {
             confirmer1: voter.confirmer1,
             confirmer2: voter.confirmer2 || null,
             email: voter.email,
+            phone: voter.phone || null,
+            password: voter.password || null,
           })),
         });
       }

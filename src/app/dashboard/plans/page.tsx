@@ -93,6 +93,12 @@ export default function PlansPage() {
                 My Profile
               </Link>
               <Link
+                href="/dashboard/gradebook"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
+              >
+                📊 Gradebook
+              </Link>
+              <Link
                 href="/dashboard/plans"
                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-white bg-indigo-600/90 shadow"
               >

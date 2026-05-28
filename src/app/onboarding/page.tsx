@@ -60,6 +60,7 @@ export default function Onboarding() {
   const [gender, setGender] = useState('');
   const [occupation, setOccupation] = useState('');
   const [bio, setBio] = useState('');
+  const [primaryPurpose, setPrimaryPurpose] = useState('');
 
   // Occupation-specific fields
   const [institution, setInstitution] = useState('');
@@ -120,6 +121,10 @@ export default function Onboarding() {
     }
     if (!gender) {
       setError('Please select your gender');
+      return;
+    }
+    if (!primaryPurpose) {
+      setError('Please select what you will primarily use Pollstar for');
       return;
     }
 
@@ -188,6 +193,7 @@ export default function Onboarding() {
       researchPos,
       otherDetail,
       bio,
+      primaryPurpose,
     };
 
     try {
@@ -324,6 +330,24 @@ export default function Onboarding() {
 
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                    Primary Usage Purpose
+                  </label>
+                  <select
+                    value={primaryPurpose}
+                    onChange={(e) => setPrimaryPurpose(e.target.value)}
+                    required
+                    className="w-full bg-[#080c16] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    <option value="" disabled>-- What will you primarily use Pollstar for? --</option>
+                    <option value="POLLS">🗳️ Creating interactive real-time polls</option>
+                    <option value="SURVEYS">📋 Deploying demographic multi-page surveys</option>
+                    <option value="EXAMS">📝 Conducting dynamic exams with AI grading</option>
+                    <option value="OTHER">🏢 Personal, organizational, or academic other uses</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
                     Choose Your Avatar
                   </label>
                   <div className="grid grid-cols-4 gap-3 pt-1">
@@ -404,7 +428,7 @@ export default function Onboarding() {
                         required
                         value={institution}
                         onChange={(e) => setInstitution(e.target.value)}
-                        placeholder="e.g. Stanford University"
+                        placeholder="e.g. IIT Beleghata"
                         className="w-full glass-input text-xs"
                       />
                     </div>
@@ -565,7 +589,7 @@ export default function Onboarding() {
                         required
                         value={institution}
                         onChange={(e) => setInstitution(e.target.value)}
-                        placeholder="e.g. CERN or Stanford Research Institute"
+                        placeholder="e.g. CERN or IIT Beleghata Research Institute"
                         className="w-full glass-input text-xs"
                       />
                     </div>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
-import { sendPollInvitationEmail, sendPollClosedEmail, sendPollScheduleUpdatedEmail } from '@/lib/nodemailer';
+import { sendPollInvitationEmail, sendPollClosedEmail, sendPollScheduleUpdatedEmail, sendExamResultsReleasedEmail } from '@/lib/nodemailer';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -271,7 +271,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      include: { allowedVoters: true, votes: true },
+      include: { allowedVoters: true, votes: true, settings: true },
     });
 
     if (!poll) {
@@ -310,6 +310,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       // Knockout features
       enableBracketPredictions, enableDoubleElimination, enableUnderdogTracker,
       enableOptionStatsCards, enableSuddenDeath,
+      // Exam-specific settings
+      resultsReleased, examTimerDuration, enableProctorCamera,
+      enableProctorMicrophone, proctorDriveFolderUrl,
+      enableAutoSubmitOnTabLeave, enableAutoSubmitOnCacheClear,
+      enableAutoSubmitOnLeave,
+      verificationMethod, verificationType,
+      // White label custom branding settings
+      enableCustomBranding, customLogoUrl, customBrandingText
     } = await req.json();
 
     const updateData: any = {};
@@ -399,6 +407,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (enableUnderdogTracker !== undefined) settingsPayload.enableUnderdogTracker = !!enableUnderdogTracker;
       if (enableOptionStatsCards !== undefined) settingsPayload.enableOptionStatsCards = !!enableOptionStatsCards;
       if (enableSuddenDeath !== undefined) settingsPayload.enableSuddenDeath = !!enableSuddenDeath;
+      // Exam features
+      if (resultsReleased !== undefined) settingsPayload.resultsReleased = !!resultsReleased;
+      if (examTimerDuration !== undefined) settingsPayload.examTimerDuration = examTimerDuration ? parseInt(String(examTimerDuration), 10) : null;
+      if (enableProctorCamera !== undefined) settingsPayload.enableProctorCamera = !!enableProctorCamera;
+      if (enableProctorMicrophone !== undefined) settingsPayload.enableProctorMicrophone = !!enableProctorMicrophone;
+      if (proctorDriveFolderUrl !== undefined) settingsPayload.proctorDriveFolderUrl = proctorDriveFolderUrl;
+      if (enableAutoSubmitOnTabLeave !== undefined) settingsPayload.enableAutoSubmitOnTabLeave = !!enableAutoSubmitOnTabLeave;
+      if (enableAutoSubmitOnCacheClear !== undefined) settingsPayload.enableAutoSubmitOnCacheClear = !!enableAutoSubmitOnCacheClear;
+      if (enableAutoSubmitOnLeave !== undefined) settingsPayload.enableAutoSubmitOnLeave = !!enableAutoSubmitOnLeave;
+      if (verificationMethod !== undefined) settingsPayload.verificationMethod = verificationMethod;
+      if (verificationType !== undefined) settingsPayload.verificationType = verificationType;
+      // White label custom branding settings
+      if (enableCustomBranding !== undefined) settingsPayload.enableCustomBranding = !!enableCustomBranding;
+      if (customLogoUrl !== undefined) settingsPayload.customLogoUrl = customLogoUrl;
+      if (customBrandingText !== undefined) settingsPayload.customBrandingText = customBrandingText;
 
       if (Object.keys(settingsPayload).length > 0) {
         await tx.pollSettings.upsert({
@@ -433,6 +456,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             enableCoalitionFinder: enableCoalitionFinder !== undefined ? !!enableCoalitionFinder : false,
             enableMinorityProtection: enableMinorityProtection !== undefined ? !!enableMinorityProtection : false,
             enableAuditReplay: enableAuditReplay !== undefined ? !!enableAuditReplay : false,
+            // Exam settings
+            resultsReleased: resultsReleased !== undefined ? !!resultsReleased : false,
+            examTimerDuration: examTimerDuration ? parseInt(String(examTimerDuration), 10) : null,
+            enableProctorCamera: enableProctorCamera !== undefined ? !!enableProctorCamera : false,
+            enableProctorMicrophone: enableProctorMicrophone !== undefined ? !!enableProctorMicrophone : false,
+            proctorDriveFolderUrl: proctorDriveFolderUrl || null,
+            enableAutoSubmitOnTabLeave: enableAutoSubmitOnTabLeave !== undefined ? !!enableAutoSubmitOnTabLeave : false,
+            enableAutoSubmitOnCacheClear: enableAutoSubmitOnCacheClear !== undefined ? !!enableAutoSubmitOnCacheClear : false,
+            enableAutoSubmitOnLeave: enableAutoSubmitOnLeave !== undefined ? !!enableAutoSubmitOnLeave : false,
+            verificationMethod: verificationMethod || "EMAIL",
+            verificationType: verificationType || "OTP",
+            // White label custom branding settings
+            enableCustomBranding: enableCustomBranding !== undefined ? !!enableCustomBranding : false,
+            customLogoUrl: customLogoUrl || null,
+            customBrandingText: customBrandingText || null,
           },
           update: settingsPayload,
         });
@@ -555,6 +593,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           });
         }
       }
+    }
+
+    const shouldSendReleaseEmails = resultsReleased === true && (!poll.settings || !poll.settings.resultsReleased);
+    if (shouldSendReleaseEmails) {
+      const host = req.headers.get('host') || 'localhost:3000';
+      const protocol = req.headers.get('x-forwarded-proto') || 'http';
+      
+      poll.votes.forEach((vote) => {
+        if (!vote.email) return;
+        
+        try {
+          const answersObj = typeof vote.answers === 'string' ? JSON.parse(vote.answers) : vote.answers;
+          const examScore = answersObj?.__examScore || { earned: 0.0, total: 0.0 };
+          
+          const analysisUrl = `${protocol}://${host}/poll/${pollId}/analysis?email=${encodeURIComponent(vote.email)}`;
+          
+          sendExamResultsReleasedEmail({
+            email: vote.email,
+            pollTitle: poll.title,
+            scoreEarned: examScore.earned || 0.0,
+            scoreTotal: examScore.total || 0.0,
+            analysisUrl,
+          }).catch(err => console.error(`Failed to send result release email to ${vote.email}:`, err));
+        } catch (e) {
+          console.error(`Failed to parse vote answers for email to ${vote.email}:`, e);
+        }
+      });
     }
 
     // Trigger dynamic socket update to all connected poll dashboard clients

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, LogOut, Loader2, User, Phone, Briefcase, GraduationCap, School, 
   FlaskConical, HelpCircle, Check, AlertTriangle, ShieldCheck, FileText, 
-  ExternalLink, Send, ArrowRight, Calendar
+  ExternalLink, Send, ArrowRight, Calendar, Edit2, X
 } from 'lucide-react';
 
 const AVATARS: Record<string, { name: string; src: string; bg: string }> = {
@@ -24,6 +24,151 @@ export default function ProfilePage() {
   const [docUrl, setDocUrl] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Edit Profile States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Edit fields
+  const [fullName, setFullName] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [gender, setGender] = useState('');
+  const [primaryPurpose, setPrimaryPurpose] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [bio, setBio] = useState('');
+  const [institution, setInstitution] = useState('');
+  const [studyField, setStudyField] = useState('');
+  const [gradYear, setGradYear] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [educatorSubject, setEducatorSubject] = useState('');
+  const [educatorDept, setEducatorDept] = useState('');
+  const [researchDomain, setResearchDomain] = useState('');
+  const [researchPos, setResearchPos] = useState('');
+  const [otherDetail, setOtherDetail] = useState('');
+
+  const handleOpenEditProfile = () => {
+    if (!user) return;
+    setFullName(user.fullName || '');
+    setSelectedAvatar(user.avatar || 'avatar-boy');
+    setPhoneNumber(user.phoneNumber || '');
+    setGender(user.gender || '');
+    setPrimaryPurpose(user.primaryPurpose || '');
+    setOccupation(user.occupation || '');
+    setBio(user.bio || '');
+    setInstitution(user.institution || '');
+    setStudyField(user.studyField || '');
+    setGradYear(user.gradYear ? user.gradYear.toString() : '');
+    setJobTitle(user.jobTitle || '');
+    setIndustry(user.industry || '');
+    setEducatorSubject(user.educatorSubject || '');
+    setEducatorDept(user.educatorDept || '');
+    setResearchDomain(user.researchDomain || '');
+    setResearchPos(user.researchPos || '');
+    setOtherDetail(user.otherDetail || '');
+    
+    setEditError('');
+    setEditSuccess('');
+    setShowEditModal(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError('');
+    setEditSuccess('');
+    
+    if (!fullName.trim()) {
+      setEditError('Please enter your full name');
+      return;
+    }
+    if (!selectedAvatar) {
+      setEditError('Please choose a profile avatar');
+      return;
+    }
+    if (!phoneNumber.trim()) {
+      setEditError('Please enter a valid phone number');
+      return;
+    }
+    if (!gender) {
+      setEditError('Please select your gender');
+      return;
+    }
+    if (!primaryPurpose) {
+      setEditError('Please select your primary usage purpose');
+      return;
+    }
+    if (!occupation) {
+      setEditError('Please select your occupation role');
+      return;
+    }
+
+    // Verify occupation specific inputs
+    if (occupation === 'STUDENT' && (!institution.trim() || !studyField.trim() || !gradYear)) {
+      setEditError('Please complete all student credential fields');
+      return;
+    }
+    if (occupation === 'PROFESSIONAL' && (!institution.trim() || !jobTitle.trim() || !industry.trim())) {
+      setEditError('Please complete all professional details');
+      return;
+    }
+    if (occupation === 'EDUCATOR' && (!institution.trim() || !educatorDept.trim() || !educatorSubject.trim())) {
+      setEditError('Please complete all school & subject credentials');
+      return;
+    }
+    if (occupation === 'RESEARCHER' && (!institution.trim() || !researchDomain.trim() || !researchPos.trim())) {
+      setEditError('Please complete all researcher details');
+      return;
+    }
+    if (occupation === 'OTHER' && !otherDetail.trim()) {
+      setEditError('Please specify your current occupation/role details');
+      return;
+    }
+
+    setEditLoading(true);
+    try {
+      const res = await fetch('/api/auth/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName,
+          avatar: selectedAvatar,
+          phoneNumber,
+          gender,
+          primaryPurpose,
+          occupation,
+          bio,
+          institution: ['STUDENT', 'PROFESSIONAL', 'EDUCATOR', 'RESEARCHER'].includes(occupation) ? institution : null,
+          studyField: occupation === 'STUDENT' ? studyField : null,
+          gradYear: occupation === 'STUDENT' ? gradYear : null,
+          jobTitle: occupation === 'PROFESSIONAL' ? jobTitle : null,
+          industry: occupation === 'PROFESSIONAL' ? industry : null,
+          educatorSubject: occupation === 'EDUCATOR' ? educatorSubject : null,
+          educatorDept: occupation === 'EDUCATOR' ? educatorDept : null,
+          researchDomain: occupation === 'RESEARCHER' ? researchDomain : null,
+          researchPos: occupation === 'RESEARCHER' ? researchPos : null,
+          otherDetail: occupation === 'OTHER' ? otherDetail : null,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update profile details.');
+      }
+
+      setEditSuccess('Profile details successfully updated.');
+      await loadProfile(); // Refresh profile details
+      setTimeout(() => {
+        setShowEditModal(false);
+      }, 800);
+    } catch (err: any) {
+      setEditError(err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -122,6 +267,12 @@ export default function ProfilePage() {
                 My Profile
               </Link>
               <Link
+                href="/dashboard/gradebook"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
+              >
+                📊 Gradebook
+              </Link>
+              <Link
                 href="/dashboard/plans"
                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-400 hover:text-white"
               >
@@ -167,9 +318,18 @@ export default function ProfilePage() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-10 space-y-8 relative">
         <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
         
-        <div>
-          <h2 className="font-outfit text-2xl font-bold text-white">Creator Settings</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Manage your credentials, verify your identity, and inspect account statuses.</p>
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+          <div>
+            <h2 className="font-outfit text-2xl font-bold text-white">Creator Settings</h2>
+            <p className="text-gray-400 text-sm mt-0.5">Manage your credentials, verify your identity, and inspect account statuses.</p>
+          </div>
+          <button
+            onClick={handleOpenEditProfile}
+            className="px-4 py-2.5 rounded-xl gradient-btn text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 self-start sm:self-auto"
+          >
+            <Edit2 className="w-4 h-4 text-indigo-200" />
+            <span>Edit Profile Details</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -521,6 +681,316 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* ── EDIT PROFILE MODAL ─────────────────────────────────────────── */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-[#020612]/95 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in animate-duration-300">
+            <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-2xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="absolute top-6 right-6 text-gray-400 hover:text-white transition-all p-1 bg-white/5 rounded-lg border border-white/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div>
+                <span className="text-[10px] text-indigo-400 font-extrabold uppercase tracking-widest block">Account Settings</span>
+                <h4 className="text-white text-lg font-bold mt-1">Edit Creator Profile</h4>
+                <p className="text-gray-400 text-xs mt-0.5">Modify your demographic credentials, avatar illustrations, and biography details.</p>
+              </div>
+
+              {editError && (
+                <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              {editSuccess && (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{editSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {/* Avatar Selector */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Choose Cartoon Avatar Illustration</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {Object.entries(AVATARS).map(([id, info]) => {
+                      const isSelected = selectedAvatar === id;
+                      return (
+                        <div
+                          key={id}
+                          onClick={() => setSelectedAvatar(id)}
+                          className={`p-2 rounded-2xl border cursor-pointer transition-all flex flex-col items-center gap-2 ${
+                            isSelected 
+                              ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/5' 
+                              : 'border-white/5 bg-white/2 hover:border-white/10'
+                          }`}
+                        >
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${info.bg} p-0.5 flex items-center justify-center`}>
+                            <img src={info.src} alt={info.name} className="w-full h-full object-cover rounded-lg" />
+                          </div>
+                          <span className="text-[10px] text-gray-300 font-semibold">{info.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Legal Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. John Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. +1 555-0199"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Gender Selection</label>
+                    <select
+                      value={gender}
+                      required
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-indigo-500/60 transition-all"
+                    >
+                      <option value="" disabled>-- Select Gender --</option>
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="OTHER">Other</option>
+                      <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Primary Usage Intended</label>
+                    <select
+                      value={primaryPurpose}
+                      required
+                      onChange={(e) => setPrimaryPurpose(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-indigo-500/60 transition-all"
+                    >
+                      <option value="" disabled>-- Select Intended Primary Usage --</option>
+                      <option value="POLLS">Creating interactive real-time polls</option>
+                      <option value="SURVEYS">Deploying demographic multi-page surveys</option>
+                      <option value="EXAMS">Conducting dynamic exams with AI grading</option>
+                      <option value="OTHER">Personal or academic other uses</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Occupation Category</label>
+                    <select
+                      value={occupation}
+                      required
+                      onChange={(e) => setOccupation(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-indigo-500/60 transition-all"
+                    >
+                      <option value="" disabled>-- Select Occupation --</option>
+                      <option value="STUDENT">Student</option>
+                      <option value="PROFESSIONAL">Industry Professional</option>
+                      <option value="EDUCATOR">Educator / Academician</option>
+                      <option value="RESEARCHER">Scientific Researcher</option>
+                      <option value="OTHER">Other Role</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Occupation Specific Fields */}
+                {occupation && occupation !== 'OTHER' && (
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest block">Occupation Credentials</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          {occupation === 'STUDENT' ? 'University / School' : 'Institution / Company Name'}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Stanford University, Google"
+                          value={institution}
+                          onChange={(e) => setInstitution(e.target.value)}
+                          className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                        />
+                      </div>
+
+                      {occupation === 'STUDENT' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Field of Study</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Computer Science"
+                              value={studyField}
+                              onChange={(e) => setStudyField(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Graduation Year</label>
+                            <input
+                              type="number"
+                              required
+                              placeholder="e.g. 2027"
+                              value={gradYear}
+                              onChange={(e) => setGradYear(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {occupation === 'PROFESSIONAL' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Job Title</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Senior Software Engineer"
+                              value={jobTitle}
+                              onChange={(e) => setJobTitle(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Industry Sector</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Technology, Healthcare"
+                              value={industry}
+                              onChange={(e) => setIndustry(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {occupation === 'EDUCATOR' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject Taught</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Calculus, Physics"
+                              value={educatorSubject}
+                              onChange={(e) => setEducatorSubject(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Department Name</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. School of Engineering"
+                              value={educatorDept}
+                              onChange={(e) => setEducatorDept(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {occupation === 'RESEARCHER' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Research Domain</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Machine Learning, BioTech"
+                              value={researchDomain}
+                              onChange={(e) => setResearchDomain(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Research Position</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Postdoctoral Fellow"
+                              value={researchPos}
+                              onChange={(e) => setResearchPos(e.target.value)}
+                              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {occupation === 'OTHER' && (
+                  <div className="space-y-1.5 pt-4 border-t border-white/5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Specify Occupation Details</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Freelance Creator, Hobbyist"
+                      value={otherDetail}
+                      onChange={(e) => setOtherDetail(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500/60 transition-all"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1.5 pt-4 border-t border-white/5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Short Creator Biography</label>
+                  <textarea
+                    placeholder="Tell us a little bit about yourself, your survey goals, or your specialized field..."
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    rows={3}
+                    className="w-full bg-white/3 border border-white/10 text-white placeholder-gray-500 text-xs rounded-xl p-3 focus:outline-none focus:border-indigo-500/60 resize-none transition-all"
+                  />
+                </div>
+
+                <div className="flex gap-4 pt-4 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 py-3 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editLoading}
+                    className="flex-1 py-3 gradient-btn text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow"
+                  >
+                    {editLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>Save Changes</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

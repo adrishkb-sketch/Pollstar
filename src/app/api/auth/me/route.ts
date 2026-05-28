@@ -111,6 +111,7 @@ export async function GET() {
         otherDetail: user.otherDetail,
         bio: user.bio,
         gender: user.gender,
+        primaryPurpose: user.primaryPurpose,
         verificationStatus: user.verificationStatus,
         verificationReason: user.verificationReason,
         verificationDocUrl: user.verificationDocUrl,

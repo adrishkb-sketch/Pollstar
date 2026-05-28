@@ -42,12 +42,23 @@ export default function PollInsights({ params }: PageProps) {
   const [tickerFlashState, setTickerFlashState] = useState<Record<string, 'UP' | 'DOWN' | null>>({});
 
   // Analytics Inbox & Messaging states
-  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades'>('analytics');
   const [inboxMessages, setInboxMessages] = useState<any[]>([]);
   const [selectedVoter, setSelectedVoter] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   const [inboxSearch, setInboxSearch] = useState('');
+
+  // Exam Grades Panel & Inspector states
+  const [gradeInspectorVote, setGradeInspectorVote] = useState<any | null>(null);
+  const [manualMarks, setManualMarks] = useState<Record<string, number>>({});
+  const [manualFeedback, setManualFeedback] = useState<Record<string, string>>({});
+  const [isSavingOverride, setIsSavingOverride] = useState(false);
+  const [releasingResults, setReleasingResults] = useState(false);
+  const [gradesSearchQuery, setGradesSearchQuery] = useState('');
+  const [gradesFilterStatus, setGradesFilterStatus] = useState<'ALL' | 'VOTED' | 'PENDING'>('ALL');
+  const [gradesFilterIntegrity, setGradesFilterIntegrity] = useState<'ALL' | 'FLAGGED' | 'CLEAN'>('ALL');
+  const [gradesSubTab, setGradesSubTab] = useState<'roster' | 'ai-insights' | 'questions' | 'proctor-logs'>('roster');
 
   // Fetch direct messages on mount and poll when active
   useEffect(() => {
@@ -704,6 +715,932 @@ export default function PollInsights({ params }: PageProps) {
     t.lastMessage.text.toLowerCase().includes(inboxSearch.toLowerCase())
   );
 
+  const handleToggleReleaseResults = async () => {
+    if (!poll) return;
+    setReleasingResults(true);
+    const targetState = !poll.settings?.resultsReleased;
+
+    try {
+      const res = await fetch(`/api/polls/${poll.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resultsReleased: targetState })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update results release status');
+      }
+
+      setPoll((prev: any) => ({
+        ...prev,
+        settings: {
+          ...prev.settings,
+          resultsReleased: targetState
+        }
+      }));
+      alert(`Exam results are now successfully ${targetState ? 'released' : 'withheld'}!`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setReleasingResults(false);
+    }
+  };
+
+  const handleSaveGradeOverride = async (questionId: string) => {
+    if (!poll || !gradeInspectorVote) return;
+    setIsSavingOverride(true);
+
+    const marksVal = manualMarks[questionId];
+    const feedbackVal = manualFeedback[questionId] || '';
+
+    try {
+      const res = await fetch(`/api/polls/${poll.id}/override-grade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voteId: gradeInspectorVote.id,
+          questionId,
+          marksAwarded: Number(marksVal),
+          feedback: feedbackVal
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save grade override');
+      }
+
+      setPoll((prev: any) => {
+        const updatedVotes = prev.votes.map((v: any) => {
+          if (v.id === data.vote.id) {
+            return { ...v, answers: data.vote.answers };
+          }
+          return v;
+        });
+        return { ...prev, votes: updatedVotes };
+      });
+
+      setLiveVotesList((prev: any) => {
+        return prev.map((v: any) => {
+          if (v.id === data.vote.id) {
+            return { ...v, answers: data.vote.answers };
+          }
+          return v;
+        });
+      });
+
+      setGradeInspectorVote((prev: any) => {
+        if (prev.id === data.vote.id) {
+          return { ...prev, answers: data.vote.answers };
+        }
+        return prev;
+      });
+
+      alert('Grade override applied successfully!');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
+  const renderGradesPanel = () => {
+    if (!poll) return null;
+
+    const isClosed = !poll.isOpenVoting;
+    const examinees: any[] = [];
+
+    if (isClosed) {
+      poll.allowedVoters.forEach((av: any) => {
+        const matchingVote = liveVotesList.find(v => 
+          (v.email && v.email.toLowerCase() === av.email.toLowerCase()) ||
+          (v.userIdentifier && v.userIdentifier.toLowerCase() === av.identifier.toLowerCase())
+        );
+        examinees.push({
+          id: av.id,
+          identifier: av.identifier,
+          name: av.confirmer1,
+          email: av.email,
+          voted: !!matchingVote,
+          vote: matchingVote || null,
+        });
+      });
+    } else {
+      liveVotesList.forEach((v: any) => {
+        examinees.push({
+          id: v.id,
+          identifier: v.userIdentifier || 'Open Examinee',
+          name: v.userIdentifier || 'Guest Voter',
+          email: v.email || 'N/A',
+          voted: true,
+          vote: v,
+        });
+      });
+    }
+
+    const filteredExaminees = examinees.filter(ex => {
+      const matchesSearch = 
+        ex.identifier.toLowerCase().includes(gradesSearchQuery.toLowerCase()) ||
+        ex.name.toLowerCase().includes(gradesSearchQuery.toLowerCase()) ||
+        ex.email.toLowerCase().includes(gradesSearchQuery.toLowerCase());
+
+      let matchesStatus = true;
+      if (gradesFilterStatus === 'VOTED') matchesStatus = ex.voted;
+      if (gradesFilterStatus === 'PENDING') matchesStatus = !ex.voted;
+
+      let matchesIntegrity = true;
+      if (gradesFilterIntegrity === 'FLAGGED') {
+        matchesIntegrity = ex.voted && ex.vote?.flaggedSuspicious;
+      }
+      if (gradesFilterIntegrity === 'CLEAN') {
+        matchesIntegrity = !ex.voted || !ex.vote?.flaggedSuspicious;
+      }
+
+      return matchesSearch && matchesStatus && matchesIntegrity;
+    });
+
+    const totalExaminees = examinees.length;
+    const totalVoted = examinees.filter(e => e.voted).length;
+    const turnoutRate = totalExaminees > 0 ? (totalVoted / totalExaminees) * 100 : 0;
+
+    let averageScore = 0.0;
+    let highestScore = 0.0;
+    let votesWithScores = 0;
+
+    examinees.forEach(e => {
+      if (e.voted && e.vote) {
+        try {
+          const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+          const examScore = answersObj?.__examScore;
+          if (examScore) {
+            averageScore += examScore.earned || 0;
+            if ((examScore.earned || 0) > highestScore) {
+              highestScore = examScore.earned;
+            }
+            votesWithScores++;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+
+    averageScore = votesWithScores > 0 ? averageScore / votesWithScores : 0.0;
+
+    // AI Cohort Strengths & Weaknesses Calculations
+    const strengthsList: any[] = [];
+    const lackingList: any[] = [];
+    const misconceptionsList: any[] = [];
+
+    poll.questions.forEach((q: any) => {
+      let totalMaxMarks = 0;
+      let totalEarnedMarks = 0;
+      let attemptsCount = 0;
+      const optionCounts: Record<string, number> = {};
+
+      liveVotesList.forEach((v: any) => {
+        try {
+          const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+          const qb = parsed?.__examBreakdown?.[q.id];
+          if (qb) {
+            totalMaxMarks += qb.maxMarks || 0;
+            totalEarnedMarks += qb.marksAwarded || 0;
+            attemptsCount++;
+          }
+          const userSelection = parsed?.[q.id];
+          if (userSelection && typeof userSelection === 'string') {
+            optionCounts[userSelection] = (optionCounts[userSelection] || 0) + 1;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      const avgRatio = totalMaxMarks > 0 ? totalEarnedMarks / totalMaxMarks : 0;
+      if (attemptsCount > 0) {
+        if (avgRatio >= 0.75) {
+          strengthsList.push({
+            id: q.id,
+            text: q.questionText,
+            ratio: avgRatio,
+          });
+        } else if (avgRatio < 0.5) {
+          lackingList.push({
+            id: q.id,
+            text: q.questionText,
+            ratio: avgRatio,
+          });
+        }
+
+        if (q.type === 'SINGLE') {
+          let popularWrongId = '';
+          let popularWrongCount = 0;
+          Object.entries(optionCounts).forEach(([optId, count]) => {
+            if (optId !== q.correctAnswer && count > popularWrongCount) {
+              popularWrongCount = count;
+              popularWrongId = optId;
+            }
+          });
+          const wrongRatio = popularWrongCount / attemptsCount;
+          if (wrongRatio >= 0.3) {
+            const wrongText = q.options.find((o: any) => o.id === popularWrongId)?.text || 'Option ID ' + popularWrongId;
+            misconceptionsList.push({
+              id: q.id,
+              question: q.questionText,
+              wrongOption: wrongText,
+              ratio: wrongRatio,
+            });
+          }
+        }
+      }
+    });
+
+    const getKeywordFrequency = (qId: string) => {
+      const frequencies: Record<string, number> = {};
+      liveVotesList.forEach((v: any) => {
+        try {
+          const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+          const text = parsed?.__examBreakdown?.[qId]?.answer || parsed?.[qId];
+          if (text && typeof text === 'string') {
+            const cleanWords = text.toLowerCase()
+              .replace(/[^\w\s]/g, '')
+              .split(/\s+/)
+              .filter(w => w.length > 3 && !['with', 'from', 'that', 'this', 'have', 'your', 'about', 'correct', 'answer'].includes(w));
+            cleanWords.forEach(w => {
+              frequencies[w] = (frequencies[w] || 0) + 1;
+            });
+          }
+        } catch (e) {}
+      });
+      return Object.entries(frequencies)
+        .sort((a: any, b: any) => b[1] - a[1])
+        .slice(0, 5);
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in print:hidden">
+        {/* Results Release Settings & Stats Cards */}
+        <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h3 className="font-outfit text-base font-bold text-white flex items-center space-x-2">
+              <Award className="w-5 h-5 text-indigo-400" />
+              <span>Results Release Settings</span>
+            </h3>
+            <p className="text-gray-400 text-xs leading-relaxed max-w-xl">
+              Releasing results emails examinees a comprehensive report of their score, direct concept analysis links, and tutoring resources.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0">
+            <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${
+              poll.settings?.resultsReleased 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            }`}>
+              {poll.settings?.resultsReleased ? '✅ Results Released' : '🔒 Results Withheld'}
+            </div>
+
+            <button
+              onClick={handleToggleReleaseResults}
+              disabled={releasingResults}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                poll.settings?.resultsReleased
+                  ? 'bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600 hover:text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20'
+              } disabled:opacity-50 flex items-center gap-2`}
+            >
+              {releasingResults && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {poll.settings?.resultsReleased ? 'Retract Score Reports' : 'Release Score Reports'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-6 flex flex-col space-y-2">
+            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Exam Turnout</span>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-2xl font-black font-mono text-white">{totalVoted}</span>
+              <span className="text-xs text-gray-500">/ {totalExaminees} candidates ({turnoutRate.toFixed(1)}%)</span>
+            </div>
+          </div>
+          <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-6 flex flex-col space-y-2">
+            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Average Earned Score</span>
+            <span className="text-2xl font-black font-mono text-indigo-400">{averageScore.toFixed(1)} points</span>
+          </div>
+          <div className="glass-card rounded-2xl border border-white/5 bg-slate-950/40 p-6 flex flex-col space-y-2">
+            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Highest Score</span>
+            <span className="text-2xl font-black font-mono text-emerald-400">{highestScore.toFixed(1)} points</span>
+          </div>
+        </div>
+
+        {/* Sub Tabs Navigation Bar */}
+        <div className="flex border-b border-white/5 pb-1 gap-6">
+          <button
+            onClick={() => setGradesSubTab('roster')}
+            className={`pb-3 text-xs font-bold transition-all relative ${
+              gradesSubTab === 'roster' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>📋 Candidates Roster</span>
+            {gradesSubTab === 'roster' && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />}
+          </button>
+          <button
+            onClick={() => setGradesSubTab('ai-insights')}
+            className={`pb-3 text-xs font-bold transition-all relative ${
+              gradesSubTab === 'ai-insights' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>🎓 AI Teacher Assistant</span>
+            {gradesSubTab === 'ai-insights' && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />}
+          </button>
+          <button
+            onClick={() => setGradesSubTab('questions')}
+            className={`pb-3 text-xs font-bold transition-all relative ${
+              gradesSubTab === 'questions' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>📊 Question-Wise Diagnostics</span>
+            {gradesSubTab === 'questions' && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />}
+          </button>
+          <button
+            onClick={() => setGradesSubTab('proctor-logs')}
+            className={`pb-3 text-xs font-bold transition-all relative flex items-center space-x-1.5 ${
+              gradesSubTab === 'proctor-logs' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>🛡️ Proctor & Cheating Logs</span>
+            {liveVotesList.some(v => v.flaggedSuspicious) && (
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            )}
+            {gradesSubTab === 'proctor-logs' && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />}
+          </button>
+        </div>
+
+        {/* Dynamic Panels */}
+        {gradesSubTab === 'roster' && (
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  placeholder="Search candidates by name, email, identifier..."
+                  value={gradesSearchQuery}
+                  onChange={(e) => setGradesSearchQuery(e.target.value)}
+                  className="w-full bg-[#030712] border border-white/10 hover:border-white/15 focus:border-indigo-500/60 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none transition-all"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </div>
+
+              <div className="flex gap-4">
+                <select
+                  value={gradesFilterStatus}
+                  onChange={(e: any) => setGradesFilterStatus(e.target.value)}
+                  className="bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">All Attendance</option>
+                  <option value="VOTED">Submitted</option>
+                  <option value="PENDING">Absent / Pending</option>
+                </select>
+
+                <select
+                  value={gradesFilterIntegrity}
+                  onChange={(e: any) => setGradesFilterIntegrity(e.target.value)}
+                  className="bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">All Integrity States</option>
+                  <option value="FLAGGED">Flagged Suspicious</option>
+                  <option value="CLEAN">Clear Attempts</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/5 text-gray-500 font-bold uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Candidate Details</th>
+                    <th className="pb-3 px-4">Attendance</th>
+                    <th className="pb-3 px-4">Integrity Status</th>
+                    <th className="pb-3 px-4">Time Spent</th>
+                    <th className="pb-3 px-4">Evaluated Score</th>
+                    <th className="pb-3 pl-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredExaminees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                        No candidates match your active search and filter constraints.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredExaminees.map((ex) => {
+                      let timeSpentStr = '-';
+                      let scoreStr = '-';
+                      let isFlagged = false;
+                      let parsedAnswers: any = null;
+
+                      if (ex.vote) {
+                        isFlagged = ex.vote.flaggedSuspicious;
+                        if (ex.vote.timeSpent) {
+                          const m = Math.floor(ex.vote.timeSpent / 60);
+                          const s = ex.vote.timeSpent % 60;
+                          timeSpentStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+                        } else {
+                          timeSpentStr = 'Under 1m';
+                        }
+
+                        try {
+                          parsedAnswers = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+                          const score = parsedAnswers?.__examScore;
+                          if (score) {
+                            scoreStr = `${score.earned} / ${score.total}`;
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }
+
+                      return (
+                        <tr key={ex.id} className="hover:bg-white/2 transition-colors">
+                          <td className="py-4 pr-4">
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="font-bold text-white text-sm">{ex.name || 'Anonymous Student'}</span>
+                              <span className="text-gray-500 text-[10px] font-mono">{ex.identifier} • {ex.email}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
+                              ex.voted 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                            }`}>
+                              {ex.voted ? 'Submitted' : 'Absent'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            {ex.voted ? (
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center w-fit gap-1 ${
+                                isFlagged 
+                                  ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' 
+                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              }`}>
+                                {isFlagged ? (
+                                  <>
+                                    <ShieldAlert className="w-3.5 h-3.5" />
+                                    <span>Suspicious Tab Switched</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                    <span>No Proctor Alerts</span>
+                                  </>
+                                )}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-4 px-4 font-mono text-gray-300">{timeSpentStr}</td>
+                          <td className="py-4 px-4 font-mono font-bold text-indigo-300">{scoreStr}</td>
+                          <td className="py-4 pl-4 text-right">
+                            {ex.voted && ex.vote ? (
+                              <button
+                                onClick={() => {
+                                  setGradeInspectorVote(ex.vote);
+                                  try {
+                                    const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+                                    const breakdown = parsed?.__examBreakdown || {};
+                                    const marksInit: Record<string, number> = {};
+                                    const feedbackInit: Record<string, string> = {};
+                                    Object.keys(breakdown).forEach(qId => {
+                                      marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
+                                      feedbackInit[qId] = breakdown[qId].feedback || '';
+                                    });
+                                    setManualMarks(marksInit);
+                                    setManualFeedback(feedbackInit);
+                                  } catch (e) {
+                                    console.error(e);
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px]"
+                              >
+                                Inspect Answers
+                              </button>
+                            ) : (
+                              <span className="text-gray-600 text-xs italic">Not submitted</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {gradesSubTab === 'ai-insights' && (
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
+            <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+              <Brain className="w-5 h-5 text-indigo-400" />
+              <span>AI Teacher Assistant: Cohort Performance Diagnostics</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Concept Mastered Strengths */}
+              <div className="p-5 rounded-2xl border border-emerald-500/15 bg-emerald-500/5 space-y-3.5">
+                <span className="text-[10px] uppercase font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Conceptual Strengths</span>
+                <h4 className="font-bold text-white text-xs">Exemplary Mastery Areas ({strengthsList.length} Topics)</h4>
+                {strengthsList.length === 0 ? (
+                  <p className="text-gray-400 text-xs italic">No topics achieved &gt; 75% average score yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {strengthsList.map((s) => (
+                      <li key={s.id} className="text-xs text-gray-300 flex justify-between items-center bg-[#030712]/40 p-2.5 rounded-xl border border-white/5">
+                        <span className="truncate max-w-[240px]">{s.text}</span>
+                        <span className="font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">{(s.ratio * 100).toFixed(0)}% Mastery</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Concepts Needing Revision Lacking */}
+              <div className="p-5 rounded-2xl border border-amber-500/15 bg-amber-500/5 space-y-3.5">
+                <span className="text-[10px] uppercase font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">Revision Gaps</span>
+                <h4 className="font-bold text-white text-xs">Conceptual Weaknesses ({lackingList.length} Topics)</h4>
+                {lackingList.length === 0 ? (
+                  <p className="text-gray-400 text-xs italic">All topics are above the 50% threshold!</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {lackingList.map((l) => (
+                      <li key={l.id} className="text-xs text-gray-300 flex justify-between items-center bg-[#030712]/40 p-2.5 rounded-xl border border-white/5">
+                        <span className="truncate max-w-[240px]">{l.text}</span>
+                        <span className="font-mono text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded">{(l.ratio * 100).toFixed(0)}% Average</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Misconception detector */}
+            <div className="p-5 rounded-2xl border border-red-500/15 bg-red-500/5 space-y-3.5">
+              <span className="text-[10px] uppercase font-mono font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded">Misconception Detector</span>
+              <h4 className="font-bold text-white text-xs">Identified Class Misconceptions</h4>
+              {misconceptionsList.length === 0 ? (
+                <p className="text-gray-400 text-xs italic">No systemic misconceptions detected in student answers.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {misconceptionsList.map((m) => (
+                    <div key={m.id} className="p-4 rounded-xl bg-[#030712]/40 border border-white/5 space-y-1">
+                      <span className="block text-[9px] uppercase font-mono text-red-400">Class Question Warning</span>
+                      <p className="font-bold text-white text-xs leading-snug">{m.question}</p>
+                      <p className="text-gray-400 text-[11px] leading-relaxed">
+                        ⚠️ Over <span className="font-mono font-bold text-red-400">{(m.ratio * 100).toFixed(0)}%</span> of students mistakenly selected: <strong className="text-white font-medium">"{m.wrongOption}"</strong>. Suggesting targeted revision.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Question Wise Diagnostics Tab */}
+        {gradesSubTab === 'questions' && (
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
+            <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-400" />
+              <span>In-Depth Question-Wise Performance Analytics</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {poll.questions.map((q: any, idx: number) => {
+                // Success rate calculation
+                let totalCorrect = 0;
+                let totalAttempts = 0;
+                liveVotesList.forEach((v: any) => {
+                  try {
+                    const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                    const qb = parsed?.__examBreakdown?.[q.id];
+                    if (qb) {
+                      if (qb.marksAwarded >= qb.maxMarks * 0.8) totalCorrect++;
+                      totalAttempts++;
+                    }
+                  } catch (e) {}
+                });
+
+                const successRate = totalAttempts > 0 ? (totalCorrect / totalAttempts) * 100 : 0;
+                const keywords = q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT' ? getKeywordFrequency(q.id) : [];
+
+                return (
+                  <div key={q.id} className="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-0.5 text-left">
+                        <span className="text-[9px] uppercase font-mono font-bold text-gray-500">Question #{idx + 1}</span>
+                        <h4 className="font-bold text-white text-xs leading-snug">{q.questionText}</h4>
+                      </div>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold shrink-0">{q.marks} Marks</span>
+                    </div>
+
+                    {/* Progress Bar Success */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        <span>Cohort Success Rate</span>
+                        <span className="font-mono text-indigo-400">{successRate.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+                        <div 
+                          style={{ width: `${successRate}%` }} 
+                          className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${
+                            successRate >= 75 ? 'from-emerald-500 to-teal-400' : (successRate >= 45 ? 'from-indigo-500 to-purple-400' : 'from-red-500 to-amber-400')
+                          }`} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Keyword clouds or distributions */}
+                    {(q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') && keywords.length > 0 && (
+                      <div className="pt-2 border-t border-white/5">
+                        <span className="block text-[9px] uppercase font-mono text-gray-500 mb-2">Top Response Keywords (Word Cloud)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {keywords.map(([word, freq]) => (
+                            <span key={word} className="px-2.5 py-1 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold font-mono">
+                              {word} ({freq})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Proctoring Cheating logs tab */}
+        {gradesSubTab === 'proctor-logs' && (
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-white/5 pb-4">
+              <div>
+                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
+                  <span>Proctor Integrity Monitoring Console</span>
+                </h3>
+                <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                  Real-time anti-cheat logs detecting focus blurs, page switches, and devtools departures.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Active Monitoring</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/5 text-gray-500 font-bold uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Examinee Details</th>
+                    <th className="pb-3 px-4 text-center">Focus Violations</th>
+                    <th className="pb-3 px-4">Integrity State</th>
+                    <th className="pb-3 px-4">IP Subnet & ISP</th>
+                    <th className="pb-3 px-4">Browser & Device</th>
+                    <th className="pb-3 pl-4 text-right">Review Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {liveVotesList.filter(v => v.flaggedSuspicious).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-500 font-medium text-xs italic">
+                        ✅ No proctoring violations or suspicious activities flagged for this examination.
+                      </td>
+                    </tr>
+                  ) : (
+                    liveVotesList.filter(v => v.flaggedSuspicious).map((v) => {
+                      return (
+                        <tr key={v.id} className="hover:bg-white/2 transition-colors">
+                          <td className="py-4 pr-4">
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="font-bold text-white text-sm">{v.userIdentifier || 'Anonymous Student'}</span>
+                              <span className="text-gray-500 text-[10px] font-mono">{v.email || 'Guest Email'}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center font-mono font-bold text-red-400 bg-red-500/5 border border-red-500/10 rounded-xl">
+                            1+ Blur Event Flagged
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse">
+                              ⚠️ Tab Switch Triggered
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-gray-300">{v.ipAddress} <span className="text-gray-500">({v.isp || 'N/A'})</span></td>
+                          <td className="py-4 px-4 text-gray-400 font-medium">{v.device || 'Desktop'}</td>
+                          <td className="py-4 pl-4 text-right">
+                            <button
+                              onClick={() => {
+                                setGradeInspectorVote(v);
+                                try {
+                                  const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                                  const breakdown = parsed?.__examBreakdown || {};
+                                  const marksInit: Record<string, number> = {};
+                                  const feedbackInit: Record<string, string> = {};
+                                  Object.keys(breakdown).forEach(qId => {
+                                    marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
+                                    feedbackInit[qId] = breakdown[qId].feedback || '';
+                                  });
+                                  setManualMarks(marksInit);
+                                  setManualFeedback(feedbackInit);
+                                } catch (e) {
+                                  console.error(e);
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-600 hover:text-white transition-all font-bold text-[11px]"
+                            >
+                              Inspect Failure
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* AI GRADING INSPECTOR MODAL */}
+        {gradeInspectorVote && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
+            <div className="glass-card rounded-3xl border border-white/8 bg-[#070c18] w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="border-b border-white/5 p-6 flex items-center justify-between">
+                <div>
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-indigo-400 animate-pulse" />
+                    <span>AI Grade Inspector & Overrider</span>
+                  </h3>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Inspecting Attempt ID: <span className="font-mono text-gray-400">{gradeInspectorVote.id}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setGradeInspectorVote(null)}
+                  className="text-gray-400 hover:text-white text-xs border border-white/5 hover:border-white/10 px-3 py-1.5 rounded-xl bg-white/2"
+                >
+                  Close Inspector
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5 text-[10px] text-gray-400 font-medium">
+                  <div>
+                    <span className="block text-gray-500 uppercase tracking-wider font-extrabold mb-1">Email / Identifier</span>
+                    <span className="text-white font-semibold text-xs truncate block">{gradeInspectorVote.email || 'Guest'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 uppercase tracking-wider font-extrabold mb-1">IP Address & ISP</span>
+                    <span className="text-white font-semibold text-xs truncate block">{gradeInspectorVote.ipAddress} • {gradeInspectorVote.isp || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 uppercase tracking-wider font-extrabold mb-1">Attempt Device</span>
+                    <span className="text-white font-semibold text-xs truncate block">{gradeInspectorVote.device || 'Desktop'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 uppercase tracking-wider font-extrabold mb-1">Proctor Status</span>
+                    <span className={`text-xs font-bold truncate block ${gradeInspectorVote.flaggedSuspicious ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                      {gradeInspectorVote.flaggedSuspicious ? '⚠️ Suspicious tab switch' : '✅ Integrity Clean'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-outfit text-xs uppercase tracking-widest font-extrabold text-gray-500">Question Evaluations</h4>
+                  
+                  {(() => {
+                    let parsed: any = {};
+                    try {
+                      parsed = typeof gradeInspectorVote.answers === 'string' ? JSON.parse(gradeInspectorVote.answers) : gradeInspectorVote.answers;
+                    } catch (e) {
+                      console.error(e);
+                    }
+                    const breakdown = parsed?.__examBreakdown || {};
+
+                    return poll.questions.map((q: any) => {
+                      const qb = breakdown[q.id] || {};
+                      const maxMarks = q.marks || 0.0;
+                      const awardedMarks = qb.marksAwarded ?? 0.0;
+                      const userAns = qb.answer ?? "";
+
+                      return (
+                        <div key={q.id} className="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-4">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-1">
+                              <h5 className="font-bold text-white text-xs">{q.questionText}</h5>
+                              <span className="inline-block text-[9px] uppercase tracking-wider font-extrabold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">
+                                {q.type}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="block text-[10px] text-gray-500 font-bold uppercase">Weight</span>
+                              <span className="font-mono text-white text-sm font-bold">{maxMarks} Marks</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-white/5 space-y-1">
+                              <span className="block text-[9px] text-gray-500 uppercase tracking-widest font-bold">Candidate Response</span>
+                              <p className="text-white font-medium break-words">
+                                {typeof userAns === 'object' ? JSON.stringify(userAns) : String(userAns || 'No Answer')}
+                              </p>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-1">
+                              <span className="block text-[9px] text-indigo-400 uppercase tracking-widest font-bold">Reference Answer</span>
+                              <p className="text-gray-300 font-medium break-words">
+                                {q.type === 'SINGLE' ? (q.options.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer) : (q.correctAnswer || 'N/A')}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-xl bg-white/1 border border-white/5 space-y-3.5">
+                            <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                                  qb.isAIGraded ? 'bg-indigo-500/10 text-indigo-400' : 'bg-amber-500/10 text-amber-400'
+                                }`}>
+                                  {qb.isAIGraded ? '⚡ AI Auto-Graded' : '👤 Manually Graded'}
+                                </span>
+                              </div>
+                              <div className="font-bold text-white text-xs">
+                                Evaluated Marks: <span className="font-mono text-indigo-400">{awardedMarks} / {maxMarks}</span>
+                              </div>
+                            </div>
+
+                            <p className="text-gray-400 text-xs leading-relaxed italic">
+                              <strong>AI Diagnostics Comment:</strong> {qb.feedback || 'No feedback calculated.'}
+                            </p>
+
+                            <div className="pt-2 flex flex-col sm:flex-row items-end gap-4 border-t border-white/5 mt-2.5">
+                              <div className="flex-1 w-full space-y-1">
+                                <label className="block text-[10px] text-gray-500 uppercase tracking-widest font-bold font-mono">Override Score (0 to {maxMarks})</label>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  max={maxMarks}
+                                  value={manualMarks[q.id] ?? awardedMarks}
+                                  onChange={(e) => setManualMarks(prev => ({ ...prev, [q.id]: parseFloat(e.target.value) }))}
+                                  className="w-full bg-[#030712] border border-white/10 hover:border-white/15 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                                />
+                              </div>
+
+                              <div className="flex-[2] w-full space-y-1">
+                                <label className="block text-[10px] text-gray-500 uppercase tracking-widest font-bold font-mono">Override Commentary / Feedback</label>
+                                <textarea
+                                  rows={1}
+                                  value={manualFeedback[q.id] ?? qb.feedback ?? ''}
+                                  onChange={(e) => setManualFeedback(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                  placeholder="Provide custom grading comments..."
+                                  className="w-full bg-[#030712] border border-white/10 hover:border-white/15 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none resize-none"
+                                />
+                              </div>
+
+                              <button
+                                onClick={() => handleSaveGradeOverride(q.id)}
+                                disabled={isSavingOverride}
+                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs disabled:opacity-50 h-9 flex items-center justify-center gap-1.5 shrink-0"
+                              >
+                                {isSavingOverride && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                Save Override
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+
+              <div className="border-t border-white/5 p-6 flex justify-end">
+                <button
+                  onClick={() => setGradeInspectorVote(null)}
+                  className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs border border-white/5"
+                >
+                  Close & Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 space-y-8 print:p-0 print:m-0">
       
@@ -803,7 +1740,7 @@ export default function PollInsights({ params }: PageProps) {
             activeTab === 'analytics' ? 'text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
-          <span>{poll.pollType === 'SURVEY' ? '📊 Analytics & Insights' : '🗳️ Analytics & Insights'}</span>
+          <span>{poll.pollType === 'SURVEY' ? '📊 Analytics & Insights' : (poll.pollType === 'EXAM' ? '📝 Exam Analytics' : '🗳️ Analytics & Insights')}</span>
           {activeTab === 'analytics' && (
             <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
           )}
@@ -822,6 +1759,19 @@ export default function PollInsights({ params }: PageProps) {
             <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
           )}
         </button>
+        {poll?.pollType === 'EXAM' && (
+          <button
+            onClick={() => setActiveTab('grades')}
+            className={`pb-4 text-sm font-bold transition-all relative ${
+              activeTab === 'grades' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>📝 Grades & Evaluations</span>
+            {activeTab === 'grades' && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Analytics Inbox (Conditional early return) */}
@@ -979,6 +1929,8 @@ export default function PollInsights({ params }: PageProps) {
             )}
           </div>
         </div>
+      ) : activeTab === 'grades' ? (
+        renderGradesPanel()
       ) : (
         <>
           {/* Wall Street Live Ticker */}

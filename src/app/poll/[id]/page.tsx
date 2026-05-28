@@ -39,6 +39,10 @@ export default function VoterPortal({ params }: PageProps) {
   const [voterIdentifier, setVoterIdentifier] = useState('');
   const [confirmer1, setConfirmer1] = useState('');
   const [confirmer2, setConfirmer2] = useState('');
+  const [verificationMethod, setVerificationMethod] = useState('EMAIL');
+  const [verificationType, setVerificationType] = useState('OTP');
+  const [voterPhone, setVoterPhone] = useState('');
+  const [voterPassword, setVoterPassword] = useState('');
 
   // Closed voter lookup states
   const [lookupPassed, setLookupPassed] = useState(false);
@@ -80,6 +84,9 @@ export default function VoterPortal({ params }: PageProps) {
 
   // Confidence slider state: { [questionId]: number (1-100) }
   const [confidenceValues, setConfidenceValues] = useState<Record<string, number>>({});
+
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState(false);
 
   // Chat Sidebar states
   const [chatMessages, setChatMessages] = useState<any[]>([
@@ -312,6 +319,9 @@ export default function VoterPortal({ params }: PageProps) {
   };
 
   const getSessionDuration = () => {
+    if (poll?.pollType === 'EXAM' && poll?.settings?.examTimerDuration) {
+      return poll.settings.examTimerDuration * 60;
+    }
     if (!poll || !poll.questions || !poll.questions[0]) return 90;
     const type = poll.questions[0].type;
     if (type === 'KNOCKOUT') return 300;
@@ -325,22 +335,36 @@ export default function VoterPortal({ params }: PageProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 1. Session Active detection & persistent start timestamp binding
   useEffect(() => {
     const isVotingActive = (!loading && poll) && (
       (!poll.isOpenVoting && verifiedVoter && !votedSuccessfully) || 
       (poll.isOpenVoting && !showIntro && !votedSuccessfully)
-    ) && poll.pollType !== 'SURVEY';
+    );
 
     if (isVotingActive) {
       const duration = getSessionDuration();
-      setTimeLeft(duration);
+      const storageKey = `poll_start_time_${pollId}`;
+      let startTimeStampStr = localStorage.getItem(storageKey);
+      let remaining = duration;
+      
+      if (startTimeStampStr) {
+        const startTimeStamp = parseInt(startTimeStampStr, 10);
+        const elapsed = Math.floor((Date.now() - startTimeStamp) / 1000);
+        remaining = duration - elapsed;
+      } else {
+        localStorage.setItem(storageKey, Date.now().toString());
+      }
+      
+      setTimeLeft(remaining > 0 ? remaining : 0);
       setTimerActive(true);
     } else {
       setTimerActive(false);
       setTimeLeft(null);
     }
-  }, [verifiedVoter, votedSuccessfully, poll, showIntro, loading]);
+  }, [verifiedVoter, votedSuccessfully, poll, showIntro, loading, pollId]);
 
+  // 2. Countdown decrement timer effect
   useEffect(() => {
     if (!timerActive || timeLeft === null) return;
 
@@ -354,7 +378,15 @@ export default function VoterPortal({ params }: PageProps) {
       setVoterEmail('');
       setTimerActive(false);
       setTimeLeft(null);
-      alert(`⏱️ Session Expired! You did not submit your ${poll?.pollType === 'SURVEY' ? 'responses' : 'ballot'} in time or the ${poll?.pollType === 'SURVEY' ? 'survey' : 'poll'} has officially ended.`);
+      localStorage.removeItem(`poll_start_time_${pollId}`);
+      
+      // Auto submit paper on timeout
+      const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+      if (submitBtn) {
+        submitBtn.click();
+      }
+      
+      alert(`⏱️ Session Expired! Your exam has been automatically submitted.`);
       return;
     }
 
@@ -367,7 +399,108 @@ export default function VoterPortal({ params }: PageProps) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timerActive, timeLeft]);
+  }, [timerActive, timeLeft, pollId, poll]);
+
+  // 3. Tab change / leave / blur detection and Auto-submit
+  useEffect(() => {
+    if (!timerActive || !poll?.settings) return;
+
+    const settings = poll.settings;
+    const shouldTabLeaveSubmit = settings.enableAutoSubmitOnTabLeave;
+    const shouldLeaveSubmit = settings.enableAutoSubmitOnLeave;
+
+    const triggerAutoSubmit = () => {
+      console.log("Triggering exam auto-submit due to safeguard policy");
+      const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+      if (submitBtn) {
+        submitBtn.click();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && shouldTabLeaveSubmit) {
+        alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
+        triggerAutoSubmit();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (shouldTabLeaveSubmit) {
+        alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
+        triggerAutoSubmit();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (shouldLeaveSubmit) {
+        // Trigger auto submit in background via navigator.sendBeacon
+        const host = window.location.host;
+        const protocol = window.location.protocol;
+        const detectedDevice = 'Desktop'; 
+        const bodyStr = JSON.stringify({
+          answers: selectedAnswers,
+          voterToken: poll.isOpenVoting ? undefined : voterToken,
+          email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
+          latitude: 22.5726, 
+          longitude: 88.3639,
+          device: detectedDevice,
+          isAutoSubmitted: true,
+        });
+        
+        navigator.sendBeacon(`/api/polls/${pollId}/vote`, bodyStr);
+      }
+    };
+
+    if (shouldTabLeaveSubmit) {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('blur', handleWindowBlur);
+    }
+
+    if (shouldLeaveSubmit) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [timerActive, poll, selectedAnswers, voterToken, openEmail, pollId]);
+
+  // 4. Webcam camera / microphone proctoring tracking
+  useEffect(() => {
+    const isProctorActive = timerActive && poll?.settings?.enableProctorCamera;
+    if (isProctorActive) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: !!poll.settings.enableProctorMicrophone })
+        .then((stream) => {
+          setCameraStream(stream);
+          setCameraError(false);
+          
+          const videoElement = document.getElementById('proctor-facecam') as HTMLVideoElement;
+          if (videoElement) {
+            videoElement.srcObject = stream;
+          }
+        })
+        .catch((err) => {
+          console.error("Camera proctoring permission denied:", err);
+          setCameraError(true);
+        });
+    }
+
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [timerActive, poll]);
+
+  // Bind stream if camera element updates
+  useEffect(() => {
+    const videoElement = document.getElementById('proctor-facecam') as HTMLVideoElement;
+    if (videoElement && cameraStream) {
+      videoElement.srcObject = cameraStream;
+    }
+  }, [cameraStream, verifiedVoter, showIntro]);
 
   // 1. Fetch Poll Metadata on Mount
   useEffect(() => {
@@ -500,6 +633,9 @@ export default function VoterPortal({ params }: PageProps) {
       setConfirmer1(data.confirmer1Value);
       setConfirmer2(data.confirmer2Value);
       setVoterEmail(data.emailValue);
+      setVoterPhone(data.phoneValue || '');
+      setVerificationMethod(data.verificationMethod || 'EMAIL');
+      setVerificationType(data.verificationType || 'OTP');
       setVoterId(data.voterId || '');
       
       // Update custom labels returned from backend if any
@@ -522,12 +658,20 @@ export default function VoterPortal({ params }: PageProps) {
     if (e) e.preventDefault();
     setError('');
 
-    if (!voterIdentifier || !confirmer1 || !voterEmail) {
-      setError('Compulsory verification credentials are empty.');
+    const isPhoneMethod = verificationMethod === 'PHONE';
+    const isPasswordType = verificationType === 'PASSWORD';
+
+    if (!voterIdentifier || !confirmer1 || (isPhoneMethod ? !voterPhone : !voterEmail)) {
+      setError(`Compulsory verification credentials (${identifierLabel}, ${confirmer1Label}, and ${isPhoneMethod ? 'Phone' : 'Email'}) are empty.`);
       return;
     }
 
-    if (otpCooldown > 0) {
+    if (isPasswordType && !voterPassword) {
+      setError('Access password is required.');
+      return;
+    }
+
+    if (otpCooldown > 0 && !isPasswordType) {
       setOtpSendLoading(true);
       try {
         const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
@@ -575,12 +719,28 @@ export default function VoterPortal({ params }: PageProps) {
           confirmer1,
           confirmer2,
           email: voterEmail,
+          phone: voterPhone,
+          password: voterPassword,
         }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to confirm credentials');
+      }
+
+      // Handle password direct verification bypass
+      if (data.isPasswordVerify && data.voterToken) {
+        setVoterToken(data.voterToken);
+        setVerifiedVoter(true);
+        if (data.hasVotedAlready) {
+          setVotedSuccessfully(true);
+        }
+        setShowOtpPopup(false);
+        setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+        setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+        setCaptchaAnswer('');
+        return;
       }
 
       // Handle creator-granted OTP bypass (30s window)
@@ -984,6 +1144,7 @@ export default function VoterPortal({ params }: PageProps) {
 
       setVotedSuccessfully(true);
       setFlaggedSuspicious(data.flaggedSuspicious || false);
+      localStorage.removeItem(`poll_start_time_${pollId}`);
 
       // Add their geoposition marker if present
       if (data.geo && data.geo.lat !== 0) {
@@ -1013,6 +1174,42 @@ export default function VoterPortal({ params }: PageProps) {
     } finally {
       setVoteLoading(false);
     }
+  };
+
+  const renderBranding = (customClass = "font-outfit text-lg font-bold tracking-tight text-white", iconSize = "w-5 h-5") => {
+    const settings = poll?.settings;
+    if (settings?.enableCustomBranding) {
+      return (
+        <div className="flex items-center space-x-2.5">
+          {settings.customLogoUrl && (
+            <img src={settings.customLogoUrl} alt="Custom Logo" className="h-8 object-contain rounded" />
+          )}
+          {settings.customBrandingText && (
+            <span className={customClass}>{settings.customBrandingText}</span>
+          )}
+        </div>
+      );
+    }
+
+    // Default branding
+    const typeLabel = poll?.pollType === 'EXAM' ? 'Testing' : poll?.pollType === 'SURVEY' ? 'Survey' : 'Secure';
+    const colorClass = poll?.pollType === 'EXAM' ? 'text-violet-400' : poll?.pollType === 'SURVEY' ? 'text-purple-400' : 'text-indigo-400';
+    const gradient = poll?.pollType === 'EXAM' ? 'from-violet-500 to-purple-500 shadow-violet-500/20' : poll?.pollType === 'SURVEY' ? 'from-purple-500 to-indigo-500 shadow-purple-500/20' : 'from-indigo-500 to-purple-500 shadow-indigo-500/20';
+
+    return (
+      <div className="flex items-center space-x-2.5">
+        <div className={`p-2.5 bg-gradient-to-tr ${gradient} rounded-xl shadow-lg`}>
+          {poll?.pollType === 'SURVEY' ? (
+            <ClipboardList className={`${iconSize} text-white`} />
+          ) : (
+            <VoteIcon className={`${iconSize} text-white`} />
+          )}
+        </div>
+        <span className={customClass}>
+          Poll<span className={colorClass}>star</span> {typeLabel}
+        </span>
+      </div>
+    );
   };
 
   if (loading) {
@@ -1046,12 +1243,7 @@ export default function VoterPortal({ params }: PageProps) {
         <div className="max-w-lg w-full space-y-8">
           {/* Brand */}
           <div className="flex items-center justify-center space-x-2.5 mb-4">
-            <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
-              <VoteIcon className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-outfit text-lg font-bold tracking-tight text-white">
-              Poll<span className="text-indigo-400">star</span>
-            </span>
+            {renderBranding("font-outfit text-lg font-bold tracking-tight text-white")}
           </div>
 
           {/* Closed Badge */}
@@ -1125,12 +1317,7 @@ export default function VoterPortal({ params }: PageProps) {
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
           <div className="flex items-center justify-center space-x-2.5 mb-2">
-            <div className="p-2.5 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-xl shadow-lg shadow-purple-500/20">
-              <ClipboardList className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-outfit text-xl font-bold tracking-tight text-white">
-              Poll<span className="text-purple-400">star</span> Survey
-            </span>
+            {renderBranding("font-outfit text-xl font-bold tracking-tight text-white")}
           </div>
 
           <div className="glass-card rounded-3xl p-8 border border-purple-500/30 bg-[#080d1a] shadow-2xl space-y-6 animate-fade-in-up relative overflow-hidden">
@@ -1193,12 +1380,7 @@ export default function VoterPortal({ params }: PageProps) {
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex items-center justify-center space-x-2.5 mb-2">
-          <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/20">
-            <VoteIcon className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-outfit text-xl font-bold tracking-tight text-white">
-            Poll<span className="text-indigo-400">star</span> Secure
-          </span>
+          {renderBranding("font-outfit text-xl font-bold tracking-tight text-white")}
         </div>
 
         {introStep === 1 ? (
@@ -1358,23 +1540,47 @@ export default function VoterPortal({ params }: PageProps) {
   return (
     <div className="flex-1 w-full relative">
       {timeLeft !== null && (
-        <div className="w-full bg-[#080d1a]/95 sticky top-0 z-30 border-b border-red-500/20 py-3 px-6 animate-pulse-slow backdrop-blur-md">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              <span className="text-[10px] font-extrabold tracking-widest text-red-400 uppercase">{poll.pollType === 'SURVEY' ? 'Survey Session Time Limit' : 'Voting Session Time Limit'}</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <span className="font-mono text-xs font-extrabold text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg">
+        <div className="fixed top-6 right-6 z-50 animate-pulse-slow">
+          <div className="glass-card rounded-2xl border border-red-500/30 bg-red-500/5 backdrop-blur-md py-2.5 px-4 shadow-xl flex items-center space-x-2.5 select-none">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
+            <div className="flex flex-col text-right">
+              <span className="text-[8px] font-black tracking-widest text-red-400 uppercase">
+                {poll?.pollType === 'EXAM' ? 'EXAM COUNTDOWN' : 'SESSION COUNTDOWN'}
+              </span>
+              <span className="font-mono text-sm font-extrabold text-white leading-tight font-bold">
                 {formatTime(timeLeft)}
               </span>
             </div>
           </div>
-          <div className="max-w-4xl mx-auto mt-2.5 h-1 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-red-500 transition-all duration-1000"
-              style={{ width: `${(timeLeft / getSessionDuration()) * 100}%` }}
-            />
+        </div>
+      )}
+
+      {poll?.settings?.enableProctorCamera && verifiedVoter && !votedSuccessfully && (
+        <div className="fixed bottom-24 right-6 z-40 transition-all duration-300">
+          <div className="glass-card rounded-full border border-indigo-500/40 p-1 bg-[#080d1a] shadow-2xl relative overflow-hidden w-28 h-28 flex items-center justify-center group hover:scale-105">
+            {cameraError ? (
+              <div className="text-[8px] text-red-400 font-extrabold text-center px-2 select-none uppercase tracking-wider">
+                ⚠️ Cam Blocked
+              </div>
+            ) : cameraStream ? (
+              <video
+                id="proctor-facecam"
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover rounded-full pointer-events-none scale-x-[-1]"
+              />
+            ) : (
+              <div className="text-[8px] text-indigo-400 font-extrabold text-center select-none uppercase tracking-wider animate-pulse">
+                📷 Loading Cam...
+              </div>
+            )}
+            <div className="absolute bottom-1 bg-black/60 px-2 py-0.5 rounded-full border border-red-500/20">
+              <span className="text-[7px] font-black text-red-400 uppercase tracking-widest flex items-center space-x-1 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-ping mr-0.5" />
+                Proctored
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -1391,12 +1597,7 @@ export default function VoterPortal({ params }: PageProps) {
 
       {/* Brand Icon */}
       <div className="flex items-center space-x-2.5">
-        <div className={`p-2.5 bg-gradient-to-tr ${poll.pollType === 'SURVEY' ? 'from-purple-500 to-indigo-500 shadow-purple-500/20' : 'from-indigo-500 to-purple-500 shadow-indigo-500/20'} rounded-xl shadow-lg`}>
-          {poll.pollType === 'SURVEY' ? <ClipboardList className="w-5 h-5 text-white" /> : <VoteIcon className="w-5 h-5 text-white" />}
-        </div>
-        <span className="font-outfit text-lg font-bold tracking-tight text-white">
-          Poll<span className={poll.pollType === 'SURVEY' ? 'text-purple-400' : 'text-indigo-400'}>star</span> {poll.pollType === 'SURVEY' ? 'Survey' : 'Secure'}
-        </span>
+        {renderBranding("font-outfit text-lg font-bold tracking-tight text-white")}
       </div>
 
       {/* Poll/Survey Details Header Card */}
@@ -1537,20 +1738,45 @@ export default function VoterPortal({ params }: PageProps) {
                       <span className="text-white font-bold">{confirmer2}</span>
                     </div>
                   )}
-                  <div className="sm:col-span-2">
-                    <span className="text-gray-500 block mb-0.5">Registered Email (OTP Destination)</span>
-                    <span className="text-indigo-300 font-semibold">{voterEmail}</span>
-                  </div>
+                  {verificationMethod === 'PHONE' ? (
+                    <div className="sm:col-span-2">
+                      <span className="text-gray-500 block mb-0.5">Registered Phone Number</span>
+                      <span className="text-indigo-300 font-semibold">{voterPhone || 'N/A'}</span>
+                    </div>
+                  ) : (
+                    <div className="sm:col-span-2">
+                      <span className="text-gray-500 block mb-0.5">Registered Email (OTP Destination)</span>
+                      <span className="text-indigo-300 font-semibold">{voterEmail}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {verificationType === 'PASSWORD' && (
+                <div className="space-y-2 animate-fade-in-up">
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                    Access Password <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={voterPassword}
+                    onChange={(e) => setVoterPassword(e.target.value)}
+                    placeholder="Enter your assigned access password"
+                    className="w-full glass-input text-sm py-2.5"
+                  />
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={otpSendLoading || otpCooldown > 0}
+                disabled={otpSendLoading || (verificationType === 'OTP' && otpCooldown > 0)}
                 className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-sm flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {otpSendLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : verificationType === 'PASSWORD' ? (
+                  <span>Verify Password & Access Session</span>
                 ) : otpCooldown > 0 ? (
                   <span>Resend OTP in {otpCooldown}s</span>
                 ) : (poll.description && /\[priority:\s*LOW\]/i.test(poll.description)) ? (

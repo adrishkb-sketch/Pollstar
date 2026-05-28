@@ -53,6 +53,7 @@ export async function POST(req: Request) {
       otherDetail,
       bio,
       gender,
+      primaryPurpose,
     } = body;
 
     if (!fullName || !avatar || !phoneNumber || !occupation || !gender) {
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
         researchPos: researchPos || null,
         otherDetail: otherDetail || null,
         bio: bio || null,
+        primaryPurpose: primaryPurpose || null,
         profileCompleted: true,
       },
     });

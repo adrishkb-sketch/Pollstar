@@ -7,7 +7,7 @@ import {
   Vote, ArrowLeft, Loader2, Users, FileText, CheckCircle, 
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
   Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
-  ExternalLink, User
+  ExternalLink, User, HelpCircle
 } from 'lucide-react';
 
 const FEATURES_KEYS = [
@@ -38,7 +38,9 @@ export default function AdminPortal() {
   const [logs, setLogs] = useState<any[]>([]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues'>('users');
+  const [issues, setIssues] = useState<any[]>([]);
+  const [issueLoadingId, setIssueLoadingId] = useState<string | null>(null);
 
   // Inspector States
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -123,6 +125,13 @@ export default function AdminPortal() {
       if (logsRes.ok) {
         const logsData = await logsRes.json();
         setLogs(logsData.logs || []);
+      }
+
+      // 4. Fetch Support Issues
+      const issuesRes = await fetch('/api/support/issues');
+      if (issuesRes.ok) {
+        const issuesData = await issuesRes.json();
+        setIssues(issuesData.issues || []);
       }
 
     } catch (err) {
@@ -528,6 +537,27 @@ export default function AdminPortal() {
     }
   };
 
+  const handleToggleIssueStatus = async (issueId: string, currentStatus: string) => {
+    setIssueLoadingId(issueId);
+    try {
+      const newStatus = currentStatus === 'PENDING' ? 'RESOLVED' : 'PENDING';
+      const res = await fetch('/api/support/issues', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issueId, status: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update issue status.');
+
+      setIssues(prev => prev.map(issue => issue.id === issueId ? { ...issue, status: newStatus } : issue));
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIssueLoadingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col justify-center items-center bg-[#030712] min-h-screen">
@@ -634,6 +664,22 @@ export default function AdminPortal() {
           >
             Audit Ledgers
             {activeTab === 'logs' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('issues')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 ${
+              activeTab === 'issues' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Platform Issues
+            {issues.filter(i => i.status === 'PENDING').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full">
+                {issues.filter(i => i.status === 'PENDING').length}
+              </span>
+            )}
+            {activeTab === 'issues' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
           </button>
@@ -898,6 +944,124 @@ export default function AdminPortal() {
           </div>
         )}
 
+        {/* TAB 5: PLATFORM ISSUES */}
+        {activeTab === 'issues' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-white/5">
+              <div className="flex items-center space-x-2.5">
+                <HelpCircle className="w-5 h-5 text-purple-400" />
+                <div>
+                  <h3 className="font-outfit text-lg font-bold text-white">Platform Support & Issues Log</h3>
+                  <p className="text-gray-500 text-xs mt-0.5">Inspect user reported bugs and toggle their resolution status.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                  {issues.filter(i => i.status === 'PENDING').length} Pending
+                </span>
+                <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                  {issues.filter(i => i.status === 'RESOLVED').length} Resolved
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {issues.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-500 italic">
+                  No issues have been reported yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/1">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                        <th className="p-4">Contact Email</th>
+                        <th className="p-4">Description</th>
+                        <th className="p-4">Reported On Page</th>
+                        <th className="p-4">Timestamp</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-gray-300">
+                      {issues.map((item) => {
+                        const isPending = item.status === 'PENDING';
+                        return (
+                          <tr key={item.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-4 font-semibold text-white">
+                              <a href={`mailto:${item.email}`} className="text-indigo-400 hover:underline flex items-center gap-1 font-mono">
+                                {item.email}
+                              </a>
+                            </td>
+                            <td className="p-4">
+                              <p className="whitespace-pre-wrap max-w-md leading-relaxed text-gray-300">
+                                {item.description}
+                              </p>
+                            </td>
+                            <td className="p-4">
+                              {item.pageUrl ? (
+                                <a 
+                                  href={item.pageUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 hover:border-indigo-500/20 text-indigo-400 text-[10px] font-medium inline-flex items-center gap-1 max-w-[200px] truncate"
+                                  title={item.pageUrl}
+                                >
+                                  <span className="truncate">{item.pageUrl.replace(/https?:\/\/[^\/]+/, '') || '/'}</span>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                </a>
+                              ) : (
+                                <span className="text-gray-500 italic">Not available</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-[10px] text-gray-500 font-mono">
+                              {new Date(item.createdAt).toLocaleString()}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase ${
+                                isPending 
+                                  ? 'bg-red-500/10 border border-red-500/20 text-red-400' 
+                                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                              }`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => handleToggleIssueStatus(item.id, item.status)}
+                                disabled={issueLoadingId === item.id}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ml-auto ${
+                                  isPending
+                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow shadow-emerald-500/10'
+                                    : 'bg-white/5 border border-white/8 hover:border-white/15 hover:bg-white/10 text-gray-400 hover:text-white'
+                                }`}
+                              >
+                                {issueLoadingId === item.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : isPending ? (
+                                  <>
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>Mark Resolved</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    <span>Reopen Issue</span>
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* ── USER INSPECTOR MODAL ────────────────────────────────────────── */}
@@ -1049,7 +1213,12 @@ export default function AdminPortal() {
 
                 {/* Subscription Switcher Dropdown */}
                 <div className="space-y-2 pt-4 border-t border-white/5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Manage Subscription Plan</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block flex items-center gap-1">
+                    👑 Manual Administrative Plan Switcher
+                  </label>
+                  <p className="text-[9px] text-gray-500 leading-normal">
+                    Directly grant plan access and upgrade the creator tier without payment or billing checks. Only admins have this bypass privilege.
+                  </p>
                   <select
                     value={selectedUser.planId || ''}
                     onChange={(e) => handlePlanChange(selectedUser.id, e.target.value)}
@@ -1058,7 +1227,7 @@ export default function AdminPortal() {
                   >
                     <option value="" disabled>-- Select Subscription --</option>
                     {plans.map((pl) => (
-                      <option key={pl.id} value={pl.id}>{pl.name} (${pl.price.toFixed(2)})</option>
+                      <option key={pl.id} value={pl.id}>{pl.name} (${pl.price.toFixed(2)}) - Admin Bypass</option>
                     ))}
                   </select>
                 </div>

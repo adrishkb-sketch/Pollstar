@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy,
-  Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search
+  Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search, GripVertical
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -20,10 +20,61 @@ export default function CreatePoll() {
   // ────────────────────────────────────────────────────────
   
   // Step 1: Core details
-  const [pollType, setPollType] = useState<'POLL' | 'SURVEY'>('POLL');
+  const [pollType, setPollType] = useState<'POLL' | 'SURVEY' | 'EXAM'>('POLL');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [posterUrl, setPosterUrl] = useState(''); // holds base64 string
+
+  // Verification & Access Settings
+  const [verificationMethod, setVerificationMethod] = useState('EMAIL'); // EMAIL, PHONE
+  const [verificationType, setVerificationType] = useState('OTP'); // OTP, PASSWORD
+
+  // Exam Safeguards & Proctors Settings
+  const [examTimerDuration, setExamTimerDuration] = useState<number>(60);
+  const [enableProctorCamera, setEnableProctorCamera] = useState(false);
+  const [enableProctorMicrophone, setEnableProctorMicrophone] = useState(false);
+  const [proctorDriveFolderUrl, setProctorDriveFolderUrl] = useState('');
+  const [enableAutoSubmitOnTabLeave, setEnableAutoSubmitOnTabLeave] = useState(false);
+  const [enableAutoSubmitOnCacheClear, setEnableAutoSubmitOnCacheClear] = useState(false);
+  const [enableAutoSubmitOnLeave, setEnableAutoSubmitOnLeave] = useState(false);
+
+  // White-Label Custom Branding Settings
+  const [enableCustomBranding, setEnableCustomBranding] = useState(false);
+  const [customLogoUrl, setCustomLogoUrl] = useState('');
+  const [customBrandingText, setCustomBrandingText] = useState('');
+
+  // Additional 30 Advanced Features Toggles
+  const [enableShuffleQuestions, setEnableShuffleQuestions] = useState(false);
+  const [enableShuffleOptions, setEnableShuffleOptions] = useState(false);
+  const [enableCopyPasteBlock, setEnableCopyPasteBlock] = useState(false);
+  const [enableInstantFeedback, setEnableInstantFeedback] = useState(false);
+  const [enableNegativeMarking, setEnableNegativeMarking] = useState(false);
+  const [enableCalculator, setEnableCalculator] = useState(false);
+  const [enableOtpBypass, setEnableOtpBypass] = useState(false);
+  const [enableStrictTimeBuffer, setEnableStrictTimeBuffer] = useState(false);
+  const [enableTabDepartureSound, setEnableTabDepartureSound] = useState(false);
+
+  const [enableDemographicWeighting, setEnableDemographicWeighting] = useState(false);
+  const [enableVpnBlocking, setEnableVpnBlocking] = useState(false);
+  const [enableWriteInOptions, setEnableWriteInOptions] = useState(false);
+
+  const [enableCustomNavLabels, setEnableCustomNavLabels] = useState(false);
+  const [enablePreOnboarding, setEnablePreOnboarding] = useState(false);
+  const [enableBranchingLogic, setEnableBranchingLogic] = useState(false);
+  const [enableDomainRestriction, setEnableDomainRestriction] = useState(false);
+  const [enableDirectInbox, setEnableDirectInbox] = useState(false);
+  const [enableDraftSave, setEnableDraftSave] = useState(false);
+
+  // Poll extra states that were previously inside singleFeatures or rankedFeatures
+  const [enableQuadraticVoting, setEnableQuadraticVoting] = useState(false);
+  const [enableTieBreakerEngine, setEnableTieBreakerEngine] = useState(false);
+  const [enableConsensusScore, setEnableConsensusScore] = useState(false);
+  const [enableSentimentChat, setEnableSentimentChat] = useState(false);
+  const [enableSwingMap, setEnableSwingMap] = useState(false);
+
+  // Drag & Drop / Warnings States
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [showLogicWarningModal, setShowLogicWarningModal] = useState(false);
 
   // Step 2 & 3: Questions & Types
   const [questions, setQuestions] = useState<any[]>([
@@ -115,6 +166,32 @@ export default function CreatePoll() {
 
   const toggleRankedFeature = (key: string) => {
     setRankedFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleDropQuestion = (targetIndex: number) => {
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const reorderedQuestions = [...questions];
+    const [draggedItem] = reorderedQuestions.splice(draggedIndex, 1);
+    reorderedQuestions.splice(targetIndex, 0, draggedItem);
+
+    // Dynamic warning evaluation for logic rules:
+    // If pollType is SURVEY, check if any skip logic rules exist and if they point to affected question IDs
+    let hasLogicAffected = false;
+    if (pollType === 'SURVEY') {
+      reorderedQuestions.forEach((q) => {
+        if (q.logicRules && q.logicRules.length > 0) {
+          hasLogicAffected = true;
+        }
+      });
+    }
+
+    setQuestions(reorderedQuestions);
+    setDraggedIndex(null);
+
+    if (hasLogicAffected) {
+      setShowLogicWarningModal(true);
+    }
   };
 
   // Single Choice advanced features
@@ -451,9 +528,17 @@ export default function CreatePoll() {
       startFieldKey = activeEl.getAttribute('data-field-key') || 'identifier';
     }
 
-    const fieldOrder = useConfirmer2
-      ? ['identifier', 'confirmer1', 'confirmer2', 'email']
-      : ['identifier', 'confirmer1', 'email'];
+    const fieldOrder = ['identifier', 'confirmer1'];
+    if (useConfirmer2) {
+      fieldOrder.push('confirmer2');
+    }
+    fieldOrder.push('email');
+    if (verificationMethod === 'PHONE') {
+      fieldOrder.push('phone');
+    }
+    if (verificationType === 'PASSWORD') {
+      fieldOrder.push('password');
+    }
 
     const startFieldIdx = fieldOrder.indexOf(startFieldKey);
     const startIdx = startFieldIdx >= 0 ? startFieldIdx : 0;
@@ -462,7 +547,7 @@ export default function CreatePoll() {
     parsedRows.forEach((cols, rOffset) => {
       const targetRowIdx = startRow + rOffset;
       if (!updated[targetRowIdx]) {
-        updated[targetRowIdx] = { identifier: '', confirmer1: '', confirmer2: '', email: '' };
+        updated[targetRowIdx] = { identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '' };
       }
 
       // Preserve other fields of the row, only modifying targeted ones
@@ -479,7 +564,7 @@ export default function CreatePoll() {
     });
 
     const filtered = updated.filter(v => v.identifier || v.confirmer1 || v.email);
-    const finalRows = filtered.length > 0 ? filtered : [{ identifier: '', confirmer1: '', confirmer2: '', email: '' }];
+    const finalRows = filtered.length > 0 ? filtered : [{ identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '' }];
     
     setAllowedVoters(finalRows);
     setNumVoters(finalRows.length);
@@ -512,6 +597,20 @@ export default function CreatePoll() {
       if (invalidEmails) {
         setError('Please enter valid email addresses for all rows in the voter table.');
         return false;
+      }
+      if (verificationMethod === 'PHONE') {
+        const invalidPhones = allowedVoters.some(v => !v.phone || !v.phone.trim());
+        if (invalidPhones) {
+          setError('Please enter valid phone numbers for all rows in the voter table.');
+          return false;
+        }
+      }
+      if (verificationType === 'PASSWORD') {
+        const invalidPasswords = allowedVoters.some(v => !v.password || !v.password.trim());
+        if (invalidPasswords) {
+          setError('Please enter valid passwords for all rows in the voter table.');
+          return false;
+        }
       }
       const missingIdentifiers = allowedVoters.some((v) => !v.identifier.trim() || !v.confirmer1.trim());
       if (missingIdentifiers) {
@@ -556,6 +655,11 @@ export default function CreatePoll() {
         pageNumber: q.pageNumber || 1,
         order: idx + 1,
         logicRules: q.logicRules || null,
+        correctAnswer: q.correctAnswer || null,
+        correctAnswers: q.correctAnswers || null,
+        marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+        inputConstraint: q.inputConstraint || 'NONE',
+        fileUploadDriveUrl: q.fileUploadDriveUrl || null,
       })),
       settings: {
         limitOneVotePerUser,
@@ -584,6 +688,51 @@ export default function CreatePoll() {
         enableSemanticAnalysis: pollType === 'SURVEY' ? enableSemanticAnalysis : false,
         enableCrossTabulation: pollType === 'SURVEY' ? enableCrossTabulation : false,
         enableTimeAnalytics: pollType === 'SURVEY' ? enableTimeAnalytics : false,
+
+        // Verification matrices
+        verificationMethod,
+        verificationType,
+
+        // Online Testing / Exam Engine Toggles
+        examTimerDuration: pollType === 'EXAM' ? examTimerDuration : null,
+        enableProctorCamera: pollType === 'EXAM' ? enableProctorCamera : false,
+        enableProctorMicrophone: pollType === 'EXAM' ? enableProctorMicrophone : false,
+        proctorDriveFolderUrl: pollType === 'EXAM' ? proctorDriveFolderUrl : null,
+        enableAutoSubmitOnTabLeave: pollType === 'EXAM' ? enableAutoSubmitOnTabLeave : false,
+        enableAutoSubmitOnCacheClear: pollType === 'EXAM' ? enableAutoSubmitOnCacheClear : false,
+        enableAutoSubmitOnLeave: pollType === 'EXAM' ? enableAutoSubmitOnLeave : false,
+
+        // Custom White-Label Branding
+        enableCustomBranding,
+        customLogoUrl,
+        customBrandingText,
+
+        // Additional 30 Advanced Features Toggles
+        enableShuffleQuestions: pollType === 'EXAM' ? enableShuffleQuestions : false,
+        enableShuffleOptions: pollType === 'EXAM' ? enableShuffleOptions : false,
+        enableCopyPasteBlock: pollType === 'EXAM' ? enableCopyPasteBlock : false,
+        enableInstantFeedback: pollType === 'EXAM' ? enableInstantFeedback : false,
+        enableNegativeMarking: pollType === 'EXAM' ? enableNegativeMarking : false,
+        enableCalculator: pollType === 'EXAM' ? enableCalculator : false,
+        enableOtpBypass: pollType === 'EXAM' ? enableOtpBypass : false,
+        enableStrictTimeBuffer: pollType === 'EXAM' ? enableStrictTimeBuffer : false,
+        enableTabDepartureSound: pollType === 'EXAM' ? enableTabDepartureSound : false,
+
+        enableDemographicWeighting: pollType === 'POLL' ? enableDemographicWeighting : false,
+        enableVpnBlocking: pollType === 'POLL' ? enableVpnBlocking : false,
+        enableWriteInOptions: pollType === 'POLL' ? enableWriteInOptions : false,
+        enableQuadraticVoting: pollType === 'POLL' ? enableQuadraticVoting : false,
+        enableTieBreakerEngine: pollType === 'POLL' ? enableTieBreakerEngine : false,
+        enableConsensusScore: pollType === 'POLL' ? enableConsensusScore : false,
+        enableSentimentChat: pollType === 'POLL' ? enableSentimentChat : false,
+        enableSwingMap: pollType === 'POLL' ? enableSwingMap : false,
+
+        enableCustomNavLabels: pollType === 'SURVEY' ? enableCustomNavLabels : false,
+        enablePreOnboarding: pollType === 'SURVEY' ? enablePreOnboarding : false,
+        enableBranchingLogic: pollType === 'SURVEY' ? enableBranchingLogic : false,
+        enableDomainRestriction: pollType === 'SURVEY' ? enableDomainRestriction : false,
+        enableDirectInbox: pollType === 'SURVEY' ? enableDirectInbox : false,
+        enableDraftSave: pollType === 'SURVEY' ? enableDraftSave : false,
       },
       allowedVoters: isOpenVoting 
         ? [] 
@@ -591,7 +740,9 @@ export default function CreatePoll() {
             identifier: v.identifier,
             confirmer1: v.confirmer1,
             confirmer2: useConfirmer2 ? v.confirmer2 : '',
-            email: v.email
+            email: v.email,
+            phone: v.phone || null,
+            password: v.password || null,
           })),
       identifierLabel: isOpenVoting ? 'Roll Number' : identifierLabel,
       confirmer1Label: isOpenVoting ? 'Student Name' : confirmer1Label,
@@ -617,9 +768,11 @@ export default function CreatePoll() {
     }
   };
 
-  const stepsList = pollType === 'SURVEY'
-    ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
-    : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
+  const stepsList = pollType === 'EXAM'
+    ? ['Details', 'Questions', 'Completion', 'Audience', 'Security', 'Anti-Cheat', 'Schedule', 'Visibility', 'Settings']
+    : pollType === 'SURVEY'
+      ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
+      : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -683,7 +836,7 @@ export default function CreatePoll() {
                 <p className="text-gray-400 text-sm mt-1">Provide a title and a description to engage your audience.</p>
               </div>
 
-              <div className="flex gap-4 border-b border-white/5 pb-6">
+              <div className="flex flex-col sm:flex-row gap-4 border-b border-white/5 pb-6">
                 <button
                   type="button"
                   onClick={() => { setPollType('POLL'); setIdentifierLabel('Roll Number'); setConfirmer1Label('Student Name'); setConfirmer2Label('Parent Name'); }}
@@ -691,7 +844,7 @@ export default function CreatePoll() {
                     pollType === 'POLL' ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
                   }`}
                 >
-                  <span>Create Standard Poll</span>
+                  <span>Standard Poll</span>
                   <span className="text-[10px] font-normal text-gray-500 mt-1">One question, advanced security</span>
                 </button>
                 <button
@@ -701,8 +854,21 @@ export default function CreatePoll() {
                     pollType === 'SURVEY' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
                   }`}
                 >
-                  <div>Create Survey <span className="bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded ml-2 uppercase animate-pulse">New</span></div>
-                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open public responses</span>
+                  <div>Survey Questionnaire</div>
+                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open responses</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPollType('EXAM'); setIdentifierLabel('Examinee ID'); setConfirmer1Label('Student Name'); setConfirmer2Label('Class/Branch'); }}
+                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
+                    pollType === 'EXAM' ? 'border-violet-500 bg-violet-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Online Proctored Exam</span>
+                    <span className="bg-violet-500 text-white text-[9px] px-1.5 py-0.5 rounded font-mono uppercase animate-pulse">PRO</span>
+                  </div>
+                  <span className="text-[10px] font-normal text-gray-500 mt-1">Anti-cheat proctoring & AI grading</span>
                 </button>
               </div>
 
@@ -802,8 +968,18 @@ export default function CreatePoll() {
 
               <div className="space-y-6">
                 {questions.map((q, qIndex) => (
-                  <div key={q.id} className="p-5 rounded-2xl border border-white/10 bg-white/5 space-y-4 relative group">
-                    {pollType === 'SURVEY' && questions.length > 1 && (
+                  <div
+                    key={q.id}
+                    draggable={['SURVEY', 'EXAM'].includes(pollType)}
+                    onDragStart={() => setDraggedIndex(qIndex)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDropQuestion(qIndex)}
+                    onDragEnd={() => setDraggedIndex(null)}
+                    className={`p-5 rounded-2xl border border-white/10 bg-[#080d1a] space-y-4 relative group transition-all duration-300 ${
+                      draggedIndex === qIndex ? 'opacity-40 scale-95 border-dashed border-indigo-500/50' : 'opacity-100 hover:border-white/15'
+                    }`}
+                  >
+                    {['SURVEY', 'EXAM'].includes(pollType) && questions.length > 1 && (
                       <button
                         type="button"
                         onClick={() => handleRemoveQuestion(qIndex)}
@@ -815,8 +991,15 @@ export default function CreatePoll() {
                     
                     <div>
                       <label className="flex justify-between items-center text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                        <span>Question {qIndex + 1}</span>
-                        {pollType === 'SURVEY' && (
+                        <span className="flex items-center gap-1.5">
+                          {['SURVEY', 'EXAM'].includes(pollType) && (
+                            <span title="Drag to reorder" className="cursor-grab active:cursor-grabbing shrink-0">
+                              <GripVertical className="w-4 h-4 hover:text-indigo-400 text-gray-500" />
+                            </span>
+                          )}
+                          <span>Question {qIndex + 1}</span>
+                        </span>
+                        {['SURVEY', 'EXAM'].includes(pollType) && (
                           <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Page {q.pageNumber}</span>
                         )}
                       </label>
@@ -829,12 +1012,12 @@ export default function CreatePoll() {
                           updated[qIndex].questionText = e.target.value;
                           setQuestions(updated);
                         }}
-                        placeholder="Type your question here..."
+                        placeholder={pollType === 'EXAM' ? "Type exam question here..." : "Type your question here..."}
                         className="w-full glass-input placeholder-gray-600 text-sm pr-12"
                       />
                     </div>
 
-                    {pollType === 'SURVEY' && (
+                    {['SURVEY', 'EXAM'].includes(pollType) && (
                       <div>
                         <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
                           Question Type
@@ -844,22 +1027,65 @@ export default function CreatePoll() {
                           onChange={(e) => {
                             const updated = [...questions];
                             updated[qIndex].type = e.target.value;
+                            // Clean up options or properties when switching types
+                            if (['SHORT_TEXT', 'LONG_TEXT', 'FILE_UPLOAD'].includes(e.target.value)) {
+                              updated[qIndex].options = [];
+                            } else if (updated[qIndex].options.length === 0) {
+                              updated[qIndex].options = ['Option 1', 'Option 2'];
+                            }
                             setQuestions(updated);
                           }}
                           className="w-full glass-input placeholder-gray-600 text-sm"
                         >
-                          <option value="SINGLE">Single Choice</option>
-                          <option value="MULTIPLE_CHOICE">Multiple Choice</option>
-                          <option value="SHORT_TEXT">Short Text</option>
-                          <option value="LONG_TEXT">Long Text / Paragraph</option>
-                          <option value="RATING">Rating (1-5 Stars)</option>
-                          <option value="RANKED">Ranked Choice (Borda)</option>
-                          <option value="KNOCKOUT">Knockout Tournament</option>
+                          {pollType === 'EXAM' ? (
+                            <>
+                              <option value="SINGLE">Single Choice MCQ</option>
+                              <option value="MULTI_SELECT">Multiple Correct MCQ</option>
+                              <option value="SHORT_TEXT">Short Answer (SAQ)</option>
+                              <option value="LONG_TEXT">Long Answer (LAQ)</option>
+                              <option value="FILE_UPLOAD">File Upload Question</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="SINGLE">Single Choice</option>
+                              <option value="MULTIPLE_CHOICE">Multiple Choice</option>
+                              <option value="SHORT_TEXT">Short Text</option>
+                              <option value="LONG_TEXT">Long Text / Paragraph</option>
+                              <option value="RATING">Rating (1-5 Stars)</option>
+                              <option value="RANKED">Ranked Choice (Borda)</option>
+                              <option value="KNOCKOUT">Knockout Tournament</option>
+                            </>
+                          )}
                         </select>
                       </div>
                     )}
 
-                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT'].includes(q.type) && (
+                    {/* ASSIGNED MARKS FOR EXAMS */}
+                    {pollType === 'EXAM' && (
+                      <div className="pt-1">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-1.5">
+                          Assigned Question Marks
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          required
+                          value={q.marks !== undefined ? q.marks : 1}
+                          onChange={(e) => {
+                            const updated = [...questions];
+                            updated[qIndex].marks = parseFloat(e.target.value) || 1;
+                            setQuestions(updated);
+                          }}
+                          className="w-full glass-input text-sm"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1">
+                          Specify points awarded for this question. Must be a multiple of 0.5 (e.g. 1.0, 1.5, 2.0).
+                        </p>
+                      </div>
+                    )}
+
+                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT', 'MULTI_SELECT'].includes(q.type) && (
                       <div className="space-y-3 pt-2">
                         <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
                           Options / Choices
@@ -899,6 +1125,136 @@ export default function CreatePoll() {
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add Another Option</span>
                         </button>
+                      </div>
+                    )}
+
+                    {/* MCQ SINGLE CORRECT ANSWER SELECTOR */}
+                    {pollType === 'EXAM' && q.type === 'SINGLE' && (
+                      <div className="pt-2">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                          Correct Answer Option Choice
+                        </label>
+                        <select
+                          value={q.correctAnswer || ''}
+                          required
+                          onChange={(e) => {
+                            const updated = [...questions];
+                            updated[qIndex].correctAnswer = e.target.value;
+                            setQuestions(updated);
+                          }}
+                          className="w-full glass-input text-sm"
+                        >
+                          <option value="" disabled>-- Select Correct Option --</option>
+                          {q.options.map((opt: string, optIdx: number) => (
+                            <option key={optIdx} value={opt || `Option ${optIdx + 1}`}>{opt || `Option ${optIdx + 1}`}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* MCQ MULTIPLE CORRECT OPTIONS SELECTOR */}
+                    {pollType === 'EXAM' && q.type === 'MULTI_SELECT' && (
+                      <div className="pt-2 space-y-2">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                          Select Correct Answer Options (Multiple Selection Allowed)
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {q.options.map((opt: string, optIdx: number) => {
+                            const correctAnswersList = Array.isArray(q.correctAnswers) ? q.correctAnswers : [];
+                            const isChecked = correctAnswersList.includes(opt);
+                            return (
+                              <div
+                                key={optIdx}
+                                onClick={() => {
+                                  const updated = [...questions];
+                                  const currentList = Array.isArray(updated[qIndex].correctAnswers) ? [...updated[qIndex].correctAnswers] : [];
+                                  if (currentList.includes(opt)) {
+                                    updated[qIndex].correctAnswers = currentList.filter(item => item !== opt);
+                                  } else {
+                                    updated[qIndex].correctAnswers = [...currentList, opt];
+                                  }
+                                  setQuestions(updated);
+                                }}
+                                className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                                  isChecked ? 'border-indigo-500 bg-indigo-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                                }`}
+                              >
+                                <span className="text-xs text-gray-300">{opt || `Option ${optIdx + 1}`}</span>
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isChecked ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                                }`}>
+                                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SAQ & LAQ INPUT CONSTRAINTS & SAMPLE ANSWER */}
+                    {pollType === 'EXAM' && ['SHORT_TEXT', 'LONG_TEXT'].includes(q.type) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                        <div className="space-y-1.5">
+                          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                            Sample Model Answer (For AI Semantic Evaluation)
+                          </label>
+                          <textarea
+                            rows={q.type === 'LONG_TEXT' ? 3 : 2}
+                            placeholder="Type sample answer. AI will match keywords and calculate similarity..."
+                            value={q.correctAnswer || ''}
+                            onChange={(e) => {
+                              const updated = [...questions];
+                              updated[qIndex].correctAnswer = e.target.value;
+                              setQuestions(updated);
+                            }}
+                            className="w-full glass-input text-xs placeholder-gray-600"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                            Examinee Input Restriction Constraint
+                          </label>
+                          <select
+                            value={q.inputConstraint || 'NONE'}
+                            onChange={(e) => {
+                              const updated = [...questions];
+                              updated[qIndex].inputConstraint = e.target.value;
+                              setQuestions(updated);
+                            }}
+                            className="w-full glass-input text-xs"
+                          >
+                            <option value="NONE">No Constraints (Letters, numbers, special symbols)</option>
+                            <option value="NUMBERS">Numbers Only (Numeric inputs only)</option>
+                            <option value="CHARACTERS">Characters Only (Alphabets only)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* FILE UPLOAD DRIVE LINK MAPPING */}
+                    {pollType === 'EXAM' && q.type === 'FILE_UPLOAD' && (
+                      <div className="pt-2 space-y-1.5 border-t border-white/5">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                          Google Drive Shared Upload Folder URL (Publicly Editable)
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          value={q.fileUploadDriveUrl || ''}
+                          onChange={(e) => {
+                            const updated = [...questions];
+                            updated[qIndex].fileUploadDriveUrl = e.target.value;
+                            setQuestions(updated);
+                          }}
+                          className="w-full glass-input text-sm placeholder-gray-600"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1 leading-normal">
+                          Examinee uploaded answer documents will go to this GDrive folder. Set shared folder permissions to "Anyone with the link can edit/organize/upload".
+                        </p>
                       </div>
                     )}
 
@@ -1227,6 +1583,55 @@ export default function CreatePoll() {
                     )}
                   </div>
 
+                  {/* Verification matrices selectors */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/2 p-5 rounded-2xl border border-white/5">
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Verification Method
+                      </label>
+                      <select
+                        value={verificationMethod}
+                        onChange={(e) => {
+                          const nextMethod = e.target.value;
+                          setVerificationMethod(nextMethod);
+                          // Enforce OTP disablement for phone verification
+                          if (nextMethod === 'PHONE') {
+                            setVerificationType('PASSWORD');
+                          }
+                        }}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      >
+                        <option value="EMAIL">📧 Email Verification</option>
+                        <option value="PHONE">📱 Phone Verification</option>
+                      </select>
+                      <p className="text-[10px] text-gray-500 mt-1.5">
+                        {verificationMethod === 'EMAIL'
+                          ? 'Voters will be verified using their registered email addresses.'
+                          : 'Phone verification is active. Requires pre-assigned passwords as SMS is disabled.'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        Access Format / Type
+                      </label>
+                      <select
+                        value={verificationType}
+                        disabled={verificationMethod === 'PHONE'}
+                        onChange={(e) => setVerificationType(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="OTP">🔢 One-Time Password (OTP)</option>
+                        <option value="PASSWORD">🔑 Pre-Defined Static Password</option>
+                      </select>
+                      <p className="text-[10px] text-gray-500 mt-1.5">
+                        {verificationType === 'OTP'
+                          ? 'A 6-digit dynamic OTP will be sent to the voter’s destination address.'
+                          : 'Voters will authenticate instantly using their unique assigned password.'}
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Confirmer 2 Toggle Option Selector */}
                   <div className="flex items-center space-x-3 bg-white/2 p-4 rounded-xl border border-white/5 mb-4">
                     <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
@@ -1302,6 +1707,8 @@ export default function CreatePoll() {
                             <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
                             {useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>}
                             <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
+                            {verificationMethod === 'PHONE' && <th className="py-3.5 px-4 min-w-[150px]">Phone Number <span className="text-red-400">*</span></th>}
+                            {verificationType === 'PASSWORD' && <th className="py-3.5 px-4 min-w-[150px]">Password <span className="text-red-400">*</span></th>}
                             <th className="py-3.5 px-4 w-16 text-center">Action</th>
                           </tr>
                         </thead>
@@ -1358,12 +1765,40 @@ export default function CreatePoll() {
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
                               </td>
+                              {verificationMethod === 'PHONE' && (
+                                <td className="py-2.5 px-2">
+                                  <input
+                                    type="text"
+                                    required
+                                    value={voter.phone || ''}
+                                    onChange={(e) => handleVoterCellChange(e.target.value, idx, 'phone')}
+                                    data-row-idx={idx}
+                                    data-field-key="phone"
+                                    placeholder="e.g. +919876543210"
+                                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                  />
+                                </td>
+                              )}
+                              {verificationType === 'PASSWORD' && (
+                                <td className="py-2.5 px-2">
+                                  <input
+                                    type="text"
+                                    required
+                                    value={voter.password || ''}
+                                    onChange={(e) => handleVoterCellChange(e.target.value, idx, 'password')}
+                                    data-row-idx={idx}
+                                    data-field-key="password"
+                                    placeholder="e.g. Secret123"
+                                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                  />
+                                </td>
+                              )}
                               <td className="py-2.5 px-4 text-center">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     const updated = allowedVoters.filter((_, vIdx) => vIdx !== idx);
-                                    setAllowedVoters(updated.length > 0 ? updated : [{ identifier: '', confirmer1: '', confirmer2: '', email: '' }]);
+                                    setAllowedVoters(updated.length > 0 ? updated : [{ identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '' }]);
                                     setNumVoters(updated.length > 0 ? updated.length : 1);
                                   }}
                                   className="text-red-400 hover:text-red-300 hover:scale-105 active:scale-95 transition-all text-xs font-bold font-mono"
@@ -1382,7 +1817,7 @@ export default function CreatePoll() {
                       <button
                         type="button"
                         onClick={() => {
-                          setAllowedVoters([...allowedVoters, { identifier: '', confirmer1: '', confirmer2: '', email: '' }]);
+                          setAllowedVoters([...allowedVoters, { identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '' }]);
                           setNumVoters(allowedVoters.length + 1);
                         }}
                         className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-xs font-bold transition-all border border-indigo-500/10 shrink-0 flex items-center justify-center gap-1.5"
@@ -2077,24 +2512,31 @@ export default function CreatePoll() {
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Advanced Features</h2>
-                <p className="text-gray-400 text-sm mt-1">Turn on special analytics and tools for your {pollType === 'SURVEY' ? 'survey' : 'poll'} type.</p>
+                <p className="text-gray-400 text-sm mt-1">Turn on special capabilities and settings for your {pollType.toLowerCase()} below.</p>
               </div>
 
               <div className="space-y-6 pt-4">
-                {pollType === 'SURVEY' ? (
+                {/* 10 Advanced Exam Controls */}
+                {pollType === 'EXAM' && (
                   <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-4 animate-fade-in-up">
                     <div>
-                      <h4 className="font-outfit font-bold text-white text-sm">Premium Survey Analysis Suite</h4>
+                      <h4 className="font-outfit font-bold text-white text-sm text-indigo-400">Exam Integrity &amp; Administration Extras</h4>
                       <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                        Add enterprise-grade tracking and deep analytical capabilities to your survey.
+                        Customize strict anti-cheating measures, question delivery, and calculator features.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        [enableDropOffTracking, setEnableDropOffTracking, 'Respondent Drop-Off & Abandonment', 'Pinpoint exactly which survey page or specific question is causing respondents to quit early.'],
-                        [enableSemanticAnalysis, setEnableSemanticAnalysis, 'Semantic Grouping & Sentiment Profiling', 'Automatically aggregates open-text answers by sentiment tones and extracts common thematic keywords.'],
-                        [enableCrossTabulation, setEnableCrossTabulation, 'Demographic & Cohort Cross-Tabulation', 'Allows you to slice, dice, filter, and sort survey results by age groups, region, and responder segments.'],
-                        [enableTimeAnalytics, setEnableTimeAnalytics, 'Time-to-Complete & Attention Tracking', 'Measure the precise seconds spent by respondents on each page to identify question friction.']
+                        [enableShuffleQuestions, setEnableShuffleQuestions, 'Randomize Question Order', 'Show questions in a completely different, random order for each student to prevent copying.'],
+                        [enableShuffleOptions, setEnableShuffleOptions, 'Randomize Multiple Choice Options', 'Shuffle the choice options inside each question randomly for every student.'],
+                        [enableCopyPasteBlock, setEnableCopyPasteBlock, 'Disable Copying & Copy-Pasting', 'Block copy-pasting, right-clicking, and text highlighting to secure your test content.'],
+                        [enableInstantFeedback, setEnableInstantFeedback, 'Show Grades Instantly', 'Let students see their marks and correct answers immediately after they finish the test.'],
+                        [enableNegativeMarking, setEnableNegativeMarking, 'Penalty for Wrong Answers', 'Deduct marks for incorrect answers on multiple-choice questions.'],
+                        [enableCalculator, setEnableCalculator, 'Floating Scientific Calculator', 'Provide a helpful popup calculator on the screen during the exam.'],
+                        [enableOtpBypass, setEnableOtpBypass, 'Password Logins (Skip Email Code)', 'Allow registered students to enter instantly with a password instead of waiting for an email or phone code.'],
+                        [enableStrictTimeBuffer, setEnableStrictTimeBuffer, 'Strict Timer Cutoff', 'Forcefully submit the test the exact second the countdown timer hits zero.'],
+                        [enableProctorCamera, setEnableProctorCamera, 'Monitor via Webcam snap', 'Automatically check student presence and capture periodic screenshots through the camera to stop cheating.'],
+                        [enableTabDepartureSound, setEnableTabDepartureSound, 'Alert Sound on Switch Tab', 'Play a loud warning buzzer sound if the student switches tabs or exits the exam window.']
                       ].map(([val, setter, label, desc], idx) => {
                         const isVal = val as boolean;
                         const labelStr = label as string;
@@ -2122,169 +2564,187 @@ export default function CreatePoll() {
                       })}
                     </div>
                   </div>
-                ) : (
-                  <>
-                    {/* Single Choice features */}
-                    {hasSingleQuestion && (
-                      <div className="glass-card rounded-2xl p-5 border border-indigo-500/20 bg-indigo-500/5 space-y-4 animate-fade-in-up">
-                        <div>
-                          <h4 className="font-outfit font-bold text-white text-sm">Single Choice Extras</h4>
-                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                            Add advanced options to your single choice questions.
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[
-                            ['enableQuadraticVoting', 'Quadratic Voting (Point-based)', 'Voters get points to split among choices. Buying more votes for one option costs exponentially more.'],
-                            ['enableAiProjection', 'AI Vote Projection', 'Predicts the final vote outcome early on by analyzing voting speed and patterns.'],
-                            ['enableCohortCrossTab', 'Voter Group Comparison', 'Filters and shows results by different groups like age, location, or department.'],
-                            ['enableSentimentChat', 'Opinion Chatbox', 'Adds a live chat sidebar where voter comments are automatically marked with feeling/sentiment tags.'],
-                            ['enableSwingMap', 'Voter Shift Map', 'Shows how voter preferences shift from one choice to another over time.']
-                          ].map(([key, label, desc]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => toggleSingleFeature(key)}
-                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                                singleFeatures[key] ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/5 bg-white/2'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full gap-3">
-                                <span className="text-xs font-bold text-white">{label}</span>
-                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                  singleFeatures[key] ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                                }`}>
-                                  {singleFeatures[key] && <Check className="w-3 h-3" />}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Ranked Choice features */}
-                    {hasRankedQuestion && (
-                      <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up">
-                        <div>
-                          <h4 className="font-outfit font-bold text-white text-sm">Ranked Choice Extras</h4>
-                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                            Add advanced voting modules and deep analytics to your ranked questions.
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[
-                            ['enablePreferenceFlowMap', 'Preference Flow Map', 'Shows where votes go when lower-ranked options get eliminated.'],
-                            ['enableHeadToHeadMatrix', 'Head-to-Head Duel Matrix', 'A table showing how every choice fares head-to-head against every other.'],
-                            ['enableConsensusScore', 'Consensus Score', 'Finds the choice that most voters find acceptable, even if it is not their first choice.'],
-                            ['enablePolarizationDetector', 'Polarization Detector', 'Flags options that voters either love (1st place) or hate (last place).'],
-                            ['enableKingmakerAnalysis', 'Kingmaker Analysis', 'Identifies which eliminated option had the most power to decide the winner.'],
-                            ['enableRankHeatmap', 'Rank Distribution Heatmap', 'A map showing exactly how many 1st, 2nd, and 3rd place votes each choice got.'],
-                            ['enableRankConfidence', 'Voter Confidence by Rank', 'Measures how sure voters were about their choices at each rank level.'],
-                            ['enableScenarioSimulator', 'Scenario Simulator', 'Lets you temporarily remove a choice to see how it changes the winner.'],
-                            ['enableTieBreakerEngine', 'Tie-Breaker Engine', 'Uses custom rules to resolve close ties.'],
-                            ['enableRankCompleteness', 'Rank Completeness Rules', 'Sets whether voters must rank all choices or just their top ones.'],
-                            ['enablePodiumResults', 'Podium Result Mode', 'Displays the top three choices on a gold, silver, and bronze podium.'],
-                            ['enableCoalitionFinder', 'Preference Coalition Finder', 'Finds groups of voters who made similar top ranking patterns.'],
-                            ['enableMinorityProtection', 'Minority Protection Score', 'Checks if choices favored by smaller groups were completely ignored.'],
-                            ['enableAuditReplay', 'Audit Replay', 'Lets you review and replay the elimination rounds step-by-step.']
-                          ].map(([key, label, desc]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => toggleRankedFeature(key)}
-                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                                rankedFeatures[key] ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full gap-3">
-                                <span className="text-xs font-bold text-white">{label}</span>
-                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                  rankedFeatures[key] ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                                }`}>
-                                  {rankedFeatures[key] && <Check className="w-3 h-3" />}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                            </button>
-                          ))}
-                        </div>
-
-                        {rankedFeatures.enableTieBreakerEngine && (
-                          <select
-                            value={rankedTieBreakerRule}
-                            onChange={(e) => setRankedTieBreakerRule(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
-                          >
-                            <option value="FIRST_PLACE" className="bg-slate-900 text-white">Tie-break by most first-place votes</option>
-                            <option value="AVERAGE_RANK" className="bg-slate-900 text-white">Tie-break by best average rank</option>
-                            <option value="HEAD_TO_HEAD" className="bg-slate-900 text-white">Tie-break by head-to-head preference</option>
-                          </select>
-                        )}
-
-                        {rankedFeatures.enableRankCompleteness && (
-                          <select
-                            value={rankedCompletenessRule}
-                            onChange={(e) => setRankedCompletenessRule(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
-                          >
-                            <option value="PARTIAL" className="bg-slate-900 text-white">Allow partial rankings</option>
-                            <option value="TOP_3" className="bg-slate-900 text-white">Require at least top 3</option>
-                            <option value="FULL" className="bg-slate-900 text-white">Require full ranking</option>
-                          </select>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Knockout features */}
-                    {hasKnockoutQuestion && (
-                      <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
-                        <div>
-                          <h4 className="font-outfit font-bold text-white text-sm">Knockout Extras</h4>
-                          <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                            Add bracket guessing and other game-like features to your knockout tournament questions.
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[
-                            ['enableBracketPredictions', 'Playoff Bracket Guessing', 'Voters can guess the tournament bracket winner before matches start, earning prediction points.'],
-                            ['enableDoubleElimination', 'Double Elimination', 'Options must lose twice before being knocked out, giving underdogs a second chance.'],
-                            ['enableUnderdogTracker', 'Underdog Tracker', 'Highlights matches where the lower-seeded option beats the favorite.'],
-                            ['enableOptionStatsCards', 'Option Factsheets', 'Displays key stats, player cards, or descriptions for each option directly on the ballot.'],
-                            ['enableSuddenDeath', 'Sudden Death Overtime', 'Instantly breaks tie matches using a quick voter shootout or coin toss.']
-                          ].map(([key, label, desc]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => toggleKnockoutFeature(key)}
-                              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                                knockoutFeatures[key] ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full gap-3">
-                                <span className="text-xs font-bold text-white">{label}</span>
-                                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                  knockoutFeatures[key] ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
-                                }`}>
-                                  {knockoutFeatures[key] && <Check className="w-3 h-3" />}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-gray-400 leading-normal">{desc}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* If none of the advanced features are applicable */}
-                    {!hasSingleQuestion && !hasRankedQuestion && !hasKnockoutQuestion && (
-                      <div className="text-center py-8 text-gray-400 text-sm">
-                        No advanced features are available for the selected question types.
-                      </div>
-                    )}
-                  </>
                 )}
+
+                {/* 10 Advanced Poll Controls */}
+                {pollType === 'POLL' && (
+                  <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-4 animate-fade-in-up">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm text-amber-400">Advanced Polling Extras</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Enrich your audience poll with custom voting systems, live charts, and privacy rules.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        [enableQuadraticVoting, setEnableQuadraticVoting, 'Point-Based Voting (Quadratic)', 'Voters get points to split. Buying more votes for one option costs exponentially more.'],
+                        [enableLiveTicker, setEnableLiveTicker, 'Scrolling Live Ticker', 'Display a rolling real-time ticker bar of ongoing vote transitions.'],
+                        [enableDemographicWeighting, setEnableDemographicWeighting, 'Group Influence Weighting', 'Assign higher vote importance factors based on role, age, or department.'],
+                        [enableTieBreakerEngine, setEnableTieBreakerEngine, 'Automatic Tie Resolver', 'Instantly break close ties using customized priority or duel criteria.'],
+                        [enableHotStreaks, setEnableHotStreaks, 'Fast Surge Detector (Hot Streaks)', 'Highlight options that are receiving votes exceptionally fast in real time.'],
+                        [enableConsensusScore, setEnableConsensusScore, 'Consensus & Polarization Score', 'Measure and display community agreement rates or highly divided choices.'],
+                        [enableVpnBlocking, setEnableVpnBlocking, 'Block VPNs & Proxies', 'Verify IPs and refuse votes coming from anonymous proxy lists or VPN servers.'],
+                        [enableWriteInOptions, setEnableWriteInOptions, 'Allow Custom Write-In Choices', 'Permit voters to type and suggest a custom choice not in the original list.'],
+                        [enableSentimentChat, setEnableSentimentChat, 'Opinion Chat & Sentiment Sidebar', 'Include a sidebar chatbox where text is sorted by positive, neutral, or negative feelings.'],
+                        [enableSwingMap, setEnableSwingMap, 'Opinion Trend Shift Map', 'Render a beautiful visual graph showing how public preferences shifted over the voting span.']
+                      ].map(([val, setter, label, desc], idx) => {
+                        const isVal = val as boolean;
+                        const labelStr = label as string;
+                        const descStr = desc as string;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => (setter as any)(!isVal)}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                              isVal ? 'border-amber-500/50 bg-amber-500/10' : 'border-white/5 bg-white/2'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full gap-3">
+                              <span className="text-xs font-bold text-white">{labelStr}</span>
+                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                isVal ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isVal && <Check className="w-3 h-3" />}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 10 Advanced Survey Controls */}
+                {pollType === 'SURVEY' && (
+                  <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm text-purple-400">Enterprise Survey Engine Suite</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Add deeper page navigation, demographic inputs, and local draft recovery features.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        [enableDropOffTracking, setEnableDropOffTracking, 'Respondent Leave-Page Analytics', 'Pinpoint exactly which survey page or question triggers respondents to quit early.'],
+                        [enableSemanticAnalysis, setEnableSemanticAnalysis, 'AI Text Sentiment & Keyword Finder', 'Analyze and group text box submissions by positive/negative feelings and find common words.'],
+                        [enableCrossTabulation, setEnableCrossTabulation, 'Demographic & Segment Pivoting', 'Compare response groups based on age brackets, regions, and professional categories.'],
+                        [enableTimeAnalytics, setEnableTimeAnalytics, 'Page-Level Completion Timers', 'Monitor the exact seconds spent on each page to find confusing sections.'],
+                        [enableCustomNavLabels, setEnableCustomNavLabels, 'Custom Button Text Labels', 'Write your own custom text for "Next Page", "Previous Page", and "Complete" buttons.'],
+                        [enablePreOnboarding, setEnablePreOnboarding, 'Demographic Pre-Survey Onboarding', 'Collect attendee age, gender, and workspace sector before starting the survey.'],
+                        [enableBranchingLogic, setEnableBranchingLogic, 'Dynamic Question Paths (Skip Logic)', 'Direct respondents to different survey pages depending on what they chose in earlier steps.'],
+                        [enableDomainRestriction, setEnableDomainRestriction, 'Authorized Email Domains Only', 'Permit entries strictly from specified corporate/organizational domains (e.g., @school.edu).'],
+                        [enableDirectInbox, setEnableDirectInbox, 'Direct Private Messenger', 'Provide a private feedback chatbox directly between the respondent and the author.'],
+                        [enableDraftSave, setEnableDraftSave, 'Save Progress & Resume Later', 'Allow users to save answers locally so they can return later to submit.']
+                      ].map(([val, setter, label, desc], idx) => {
+                        const isVal = val as boolean;
+                        const labelStr = label as string;
+                        const descStr = desc as string;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => (setter as any)(!isVal)}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                              isVal ? 'border-purple-500/50 bg-purple-500/10' : 'border-white/5 bg-white/2'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full gap-3">
+                              <span className="text-xs font-bold text-white">{labelStr}</span>
+                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                isVal ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isVal && <Check className="w-3 h-3" />}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 leading-normal">{descStr}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Premium White-Label Custom Branding Card */}
+                <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up mt-6">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="font-outfit font-bold text-white text-sm">White-Label Custom Branding</h4>
+                      <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                        Replace Pollstar logos and names with your own custom logo and manual header text.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEnableCustomBranding(!enableCustomBranding)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                        enableCustomBranding ? 'bg-purple-600 text-white shadow-md' : 'bg-white/5 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {enableCustomBranding ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {enableCustomBranding && (
+                    <div className="space-y-4 pt-2 border-t border-white/5 animate-fade-in-up">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-gray-300 text-[10px] uppercase font-bold tracking-wider mb-2">
+                            Custom Branding Title / Text
+                          </label>
+                          <input
+                            type="text"
+                            value={customBrandingText}
+                            onChange={(e) => setCustomBrandingText(e.target.value)}
+                            placeholder="e.g. Acme Corporation Survey"
+                            className="w-full glass-input text-xs py-2.5"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-300 text-[10px] uppercase font-bold tracking-wider mb-2">
+                            Custom Logo Image
+                          </label>
+                          <div className="flex items-center space-x-3">
+                            {customLogoUrl ? (
+                              <div className="relative w-12 h-12 bg-white/5 rounded-xl border border-white/10 p-1 shrink-0 overflow-hidden">
+                                <img src={customLogoUrl} alt="Logo preview" className="w-full h-full object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={() => setCustomLogoUrl('')}
+                                  className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-red-400 text-[10px] font-bold"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 cursor-pointer flex items-center justify-center shrink-0 text-gray-400 transition-colors">
+                                <Upload className="w-5 h-5" />
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => {
+                                        setCustomLogoUrl(reader.result as string);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+                            <span className="text-[10px] text-gray-500">Upload custom brand icon/logo (transparency recommended).</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

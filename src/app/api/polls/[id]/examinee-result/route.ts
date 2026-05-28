@@ -1,0 +1,139 @@
+import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id: pollId } = await params;
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+    const voterToken = searchParams.get('voterToken');
+
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: {
+        settings: true,
+        questions: {
+          include: { options: true }
+        }
+      }
+    });
+
+    if (!poll) {
+      return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+    }
+
+    if (poll.pollType !== 'EXAM') {
+      return NextResponse.json({ error: 'This poll is not an examination' }, { status: 400 });
+    }
+
+    // Safeguard: Check if results are released
+    if (!poll.settings?.resultsReleased) {
+      return NextResponse.json({
+        success: false,
+        resultsReleased: false,
+        message: '🔒 Exam results are currently withheld. The examiner has not released score reports yet.'
+      }, { status: 200 });
+    }
+
+    // Authenticate candidate
+    let voterEmail = email;
+    let voterIdentifier = '';
+
+    if (voterToken) {
+      try {
+        const decoded = jwt.verify(voterToken, JWT_SECRET) as any;
+        if (decoded.pollId === pollId) {
+          voterEmail = decoded.email;
+          voterIdentifier = decoded.identifier;
+        }
+      } catch (e) {
+        console.error('Invalid voter token in examinee-result api:', e);
+      }
+    }
+
+    if (!voterEmail) {
+      return NextResponse.json({ error: 'Candidate email is required to fetch results' }, { status: 400 });
+    }
+
+    // Find the student's vote
+    const vote = await prisma.vote.findFirst({
+      where: {
+        pollId,
+        OR: [
+          { email: { equals: voterEmail, mode: 'insensitive' } },
+          { userIdentifier: { equals: voterEmail, mode: 'insensitive' } }
+        ]
+      }
+    });
+
+    if (!vote) {
+      return NextResponse.json({
+        success: false,
+        resultsReleased: true,
+        voted: false,
+        message: 'No submission found for this examinee. You may have missed the examination.'
+      }, { status: 200 });
+    }
+
+    // Parse the answers details
+    let answersObj: any = {};
+    try {
+      answersObj = typeof vote.answers === 'string' ? JSON.parse(vote.answers) : vote.answers;
+    } catch (e) {
+      console.error(e);
+    }
+
+    const examBreakdown = answersObj?.__examBreakdown || {};
+    const examScore = answersObj?.__examScore || { earned: 0.0, total: 0.0 };
+
+    // Format output with strict security (returning only this examinee's context)
+    const resultDetails = {
+      poll: {
+        id: poll.id,
+        title: poll.title,
+        description: poll.description,
+        startTime: poll.startTime,
+        endTime: poll.endTime,
+      },
+      examinee: {
+        email: vote.email,
+        identifier: vote.userIdentifier,
+        ipAddress: vote.ipAddress,
+        device: vote.device,
+        flaggedSuspicious: vote.flaggedSuspicious,
+        timeSpent: vote.timeSpent,
+        createdAt: vote.createdAt,
+      },
+      score: examScore,
+      questions: poll.questions.map((q) => {
+        const qb = examBreakdown[q.id] || {};
+        return {
+          id: q.id,
+          questionText: q.questionText,
+          type: q.type,
+          marks: q.marks,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          correctAnswers: q.correctAnswers,
+          candidateAnswer: qb.answer || null,
+          marksAwarded: qb.marksAwarded ?? 0.0,
+          feedback: qb.feedback || 'No feedback calculated.',
+          isAIGraded: qb.isAIGraded ?? true,
+        };
+      })
+    };
+
+    return NextResponse.json({
+      success: true,
+      resultsReleased: true,
+      voted: true,
+      result: resultDetails
+    });
+  } catch (error: any) {
+    console.error('Fetch examinee result API error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
