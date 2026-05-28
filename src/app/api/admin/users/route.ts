@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-import { sendCreatorApprovalEmail } from '@/lib/nodemailer';
-
-export const dynamic = 'force-dynamic';
 import { verifyAccessToken } from '@/lib/jwt';
 
-// Helper to confirm admin privileges
+export const dynamic = 'force-dynamic';
+
 async function getAuthAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('accessToken')?.value;
@@ -20,9 +18,7 @@ async function getAuthAdmin() {
   });
 }
 
-/**
- * GET: Lists all registered creators.
- */
+// GET: Lists all registered users (USER role and optional admin view, ordered by signup date)
 export async function GET() {
   try {
     const admin = await getAuthAdmin();
@@ -31,15 +27,21 @@ export async function GET() {
     }
 
     const creators = await prisma.user.findMany({
-      where: { role: 'USER' },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        email: true,
-        verified: true,
-        approvedByAdmin: true,
-        createdAt: true,
-      },
+      include: {
+        plan: true,
+        polls: {
+          include: {
+            questions: {
+              include: { options: true }
+            },
+            votes: true
+          }
+        },
+        _count: {
+          select: { polls: true }
+        }
+      }
     });
 
     return NextResponse.json({ success: true, creators });
@@ -49,9 +51,7 @@ export async function GET() {
   }
 }
 
-/**
- * PATCH: Approves or revokes a creator.
- */
+// PATCH: Updates moderation, plans, or verification flags
 export async function PATCH(req: Request) {
   try {
     const admin = await getAuthAdmin();
@@ -59,43 +59,69 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { userId, approve } = await req.json();
+    const body = await req.json();
+    const { userId, action, ban, suspend, suspensionUntil, suspensionReason, restrict, planId } = body;
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (targetUser.role === 'ADMIN') {
+      return NextResponse.json({ error: 'Moderation of administrative accounts is forbidden' }, { status: 403 });
+    }
+
+    let updateData: any = {};
+    let logMessage = '';
+
+    if (action === 'BAN') {
+      updateData.isBanned = !!ban;
+      logMessage = `${ban ? 'Banned' : 'Unbanned'} user account: ${targetUser.email}`;
+    } else if (action === 'SUSPEND') {
+      updateData.isSuspended = !!suspend;
+      updateData.suspensionUntil = suspend && suspensionUntil ? new Date(suspensionUntil) : null;
+      updateData.suspensionReason = suspend ? suspensionReason : null;
+      logMessage = `${suspend ? 'Suspended' : 'Lifted suspension for'} user: ${targetUser.email}. Until: ${suspensionUntil || 'indefinite'}. Reason: ${suspensionReason || 'none'}`;
+    } else if (action === 'RESTRICT') {
+      updateData.isActivityRestricted = !!restrict;
+      logMessage = `${restrict ? 'Restricted' : 'Restored'} activity privileges for user: ${targetUser.email}`;
+    } else if (action === 'CHANGE_PLAN') {
+      if (!planId) return NextResponse.json({ error: 'Plan ID is required for subscription changes' }, { status: 400 });
+      const plan = await prisma.plan.findUnique({ where: { id: planId } });
+      if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+      
+      updateData.planId = planId;
+      logMessage = `Changed subscription plan for user: ${targetUser.email} to: "${plan.name}"`;
+    } else {
+      return NextResponse.json({ error: 'Invalid moderation action request' }, { status: 400 });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { approvedByAdmin: !!approve },
+      data: updateData,
+      include: { plan: true }
     });
 
     // Write audit log entry
     await prisma.auditLog.create({
       data: {
-        action: approve ? 'APPROVE_USER' : 'REVOKE_USER',
+        action: action,
         adminId: admin.id,
-        details: `${approve ? 'Approved' : 'Revoked approval for'} user: ${updatedUser.email} (ID: ${userId})`,
+        details: logMessage,
       },
     });
 
-    // Send email to creator confirming their approved status
-    if (approve) {
-      try {
-        await sendCreatorApprovalEmail(updatedUser.email);
-      } catch (mailError) {
-        console.error('Error sending creator approval notice email:', mailError);
-      }
-    }
-
     return NextResponse.json({
       success: true,
-      message: `User approval state successfully ${approve ? 'verified' : 'revoked'}.`,
-      user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        approved: updatedUser.approvedByAdmin,
-      },
+      message: 'Moderation status successfully synchronized.',
+      user: updatedUser,
     });
   } catch (error: any) {
     console.error('Admin Update User API Error:', error);
@@ -103,9 +129,7 @@ export async function PATCH(req: Request) {
   }
 }
 
-/**
- * DELETE: Deletes a registered creator account.
- */
+// DELETE: Deletes user permanently (same as before)
 export async function DELETE(req: Request) {
   try {
     const admin = await getAuthAdmin();
@@ -120,7 +144,6 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // Find user to log their email
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -129,9 +152,8 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Prevent Admin from deleting themselves
-    if (targetUser.id === admin.id) {
-      return NextResponse.json({ error: 'You cannot delete your own admin account' }, { status: 400 });
+    if (targetUser.role === 'ADMIN') {
+      return NextResponse.json({ error: 'You cannot delete administrative accounts' }, { status: 403 });
     }
 
     // Delete user
@@ -144,7 +166,7 @@ export async function DELETE(req: Request) {
       data: {
         action: 'DELETE_USER',
         adminId: admin.id,
-        details: `Deleted creator account: ${targetUser.email} (ID: ${userId})`,
+        details: `Deleted user account: ${targetUser.email} (ID: ${userId})`,
       },
     });
 

@@ -45,6 +45,40 @@ model User {
   collaborations   PollCollaborator[]
   auditLogs        AuditLog[]
   createdAt        DateTime    @default(now())
+
+  // Profile Onboarding & Verification fields
+  profileCompleted     Boolean     @default(false)
+  fullName             String?
+  avatar               String?
+  phoneNumber          String?
+  occupation           String?
+  institution          String?
+  studyField           String?
+  gradYear             Int?
+  jobTitle             String?
+  industry             String?
+  educatorSubject      String?
+  educatorDept         String?
+  researchDomain       String?
+  researchPos          String?
+  otherDetail          String?
+  bio                  String?
+
+  verificationStatus   String      @default("UNAPPLIED") // UNAPPLIED, PENDING, VERIFIED, REJECTED
+  verificationReason   String?
+  verificationDocUrl   String?
+  isVerifiedUser       Boolean     @default(false)
+
+  // Moderation fields
+  isBanned             Boolean     @default(false)
+  isSuspended          Boolean     @default(false)
+  suspensionUntil      DateTime?
+  suspensionReason     String?
+  isActivityRestricted Boolean     @default(false)
+
+  // Subscriptions & Plans
+  planId               String?
+  plan                 Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
 }
 
 model OTP {
@@ -219,4 +253,16 @@ model AuditLog {
   poll      Poll?    @relation(fields: [pollId], references: [id], onDelete: SetNull)
   details   String
   timestamp DateTime @default(now())
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  price        Float    @default(0.0)
+  billingCycle String   @default("MONTHLY") // MONTHLY, YEARLY, PACK_5, PACK_10, etc.
+  features     Json     // JSON object with 13 boolean flags
+  users        User[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

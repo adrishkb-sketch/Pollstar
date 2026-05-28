@@ -1218,6 +1218,17 @@ export default function VoterPortal({ params }: PageProps) {
               <h1 className="font-outfit text-3xl font-extrabold text-white leading-tight">
                 {poll.title}
               </h1>
+              {poll.creator && (
+                <div className="flex items-center space-x-1.5 text-xs text-gray-400">
+                  <span>Hosted by:</span>
+                  <span className="font-semibold text-gray-200">{poll.creator.fullName || poll.creator.email}</span>
+                  {poll.creator.isVerifiedUser && (
+                    <span className="inline-flex items-center justify-center p-0.5 bg-blue-500 text-white rounded-full" title="Verified Creator">
+                      <Check className="w-2.5 h-2.5 stroke-[4]" />
+                    </span>
+                  )}
+                </div>
+              )}
               <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line bg-white/3 p-4 rounded-2xl border border-white/5">
                 {poll.description ? poll.description.replace(/\[domains:\s*([^\]]+)\]/i, '').replace(/\[geolock:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(\d+)\s*\]/i, '').trim() : 'No guidelines specified.'}
               </p>

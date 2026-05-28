@@ -6,8 +6,25 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, ArrowLeft, Loader2, Users, FileText, CheckCircle, 
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
-  Eye, BarChart3, Calendar, Lock, ShieldAlert, X
+  Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
+  ExternalLink, User
 } from 'lucide-react';
+
+const FEATURES_KEYS = [
+  { key: 'singleChoice', label: 'Single Choice Voting' },
+  { key: 'bordaCount', label: 'Borda Count Ranked Choice' },
+  { key: 'knockoutBracket', label: 'Knockout Tournament' },
+  { key: 'multipageSurveys', label: 'Multi-page Surveys' },
+  { key: 'sentimentAnalysis', label: 'Sentiment Semantic Text' },
+  { key: 'dropOffTracking', label: 'Abandonment Drop-off' },
+  { key: 'crossTabulation', label: 'Demographic Cross-Tabulation' },
+  { key: 'geolocations', label: 'Geolocations Maps' },
+  { key: 'domainLocking', label: 'Domain locks list' },
+  { key: 'otpVerification', label: 'Voter Email OTP' },
+  { key: 'collaborations', label: 'Creator Collaborations' },
+  { key: 'inboxMessages', label: 'Voter Inbox Direct Messaging' },
+  { key: 'dataExport', label: 'Excel/CSV Data Export' },
+];
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -15,162 +32,411 @@ export default function AdminPortal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Admin lists states
-  const [creators, setCreators] = useState<any[]>([]);
+  // Lists states
+  const [creators, setCreators] = useState<any[]>([]); // "creators" means users list in backend payload
+  const [plans, setPlans] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [polls, setPolls] = useState<any[]>([]);
 
-  // UI Tabs & Modal details states
-  const [activeTab, setActiveTab] = useState<'creators' | 'logs' | 'polls'>('creators');
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs'>('users');
+
+  // Inspector States
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [selectedPoll, setSelectedPoll] = useState<any | null>(null);
-
-  // Toggling states
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  // Override States
   const [editingVote, setEditingVote] = useState<any | null>(null);
   const [overrideAnswers, setOverrideAnswers] = useState<Record<string, any>>({});
   const [overrideError, setOverrideError] = useState('');
   const [overrideLoading, setOverrideLoading] = useState(false);
 
-  // 1. Fetch system details on mount
-  useEffect(() => {
-    const fetchAdminData = async () => {
-      try {
-        const adminRes = await fetch('/api/auth/me');
-        if (!adminRes.ok) {
-          router.push('/login');
-          return;
-        }
-        const adminData = await adminRes.json();
-        
-        if (adminData.user.role !== 'ADMIN') {
-          router.push('/dashboard');
-          return;
-        }
+  // User moderation interaction modals
+  const [suspensionUser, setSuspensionUser] = useState<any | null>(null);
+  const [suspensionReason, setSuspensionReason] = useState('');
+  const [suspensionDays, setSuspensionDays] = useState('7');
+  const [suspensionLoading, setSuspensionLoading] = useState(false);
 
-        // Fetch Creators
-        const creatorsRes = await fetch('/api/admin/users');
-        if (creatorsRes.ok) {
-          const creatorsData = await creatorsRes.json();
-          setCreators(creatorsData.creators || []);
-        }
+  // Verification Rejection reason prompt
+  const [rejectionUser, setRejectionUser] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionLoading, setRejectionLoading] = useState(false);
 
-        // Fetch Audit Logs
-        const logsRes = await fetch('/api/admin/logs');
-        if (logsRes.ok) {
-          const logsData = await logsRes.json();
-          setLogs(logsData.logs || []);
-        }
+  // Plans CRUD Panel states
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [planName, setPlanName] = useState('');
+  const [planDesc, setPlanDesc] = useState('');
+  const [planPrice, setPlanPrice] = useState('0.0');
+  const [planCycle, setPlanCycle] = useState('MONTHLY');
+  const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({
+    singleChoice: true,
+    bordaCount: true,
+    knockoutBracket: true,
+    multipageSurveys: true,
+    sentimentAnalysis: false,
+    dropOffTracking: false,
+    crossTabulation: false,
+    geolocations: false,
+    domainLocking: false,
+    otpVerification: true,
+    collaborations: false,
+    inboxMessages: false,
+    dataExport: false,
+  });
+  const [planFormError, setPlanFormError] = useState('');
+  const [planFormLoading, setPlanFormLoading] = useState(false);
 
-        // Fetch System Polls
-        const pollsRes = await fetch('/api/admin/override-vote');
-        if (pollsRes.ok) {
-          const pollsData = await pollsRes.json();
-          setPolls(pollsData.polls || []);
-        }
+  // Action loading track
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-      } catch (err) {
-        setError('Failed to fetch administrator console assets.');
-      } finally {
-        setLoading(false);
+  // Search & Filter
+  const [userSearch, setUserSearch] = useState('');
+
+  const fetchAdminData = async () => {
+    try {
+      const adminRes = await fetch('/api/auth/me');
+      if (!adminRes.ok) {
+        router.push('/login');
+        return;
       }
-    };
+      const adminData = await adminRes.json();
+      
+      if (adminData.user.role !== 'ADMIN') {
+        router.push('/dashboard');
+        return;
+      }
 
+      // 1. Fetch Users
+      const creatorsRes = await fetch('/api/admin/users');
+      if (creatorsRes.ok) {
+        const creatorsData = await creatorsRes.json();
+        setCreators(creatorsData.creators || []);
+      }
+
+      // 2. Fetch Plans
+      const plansRes = await fetch('/api/admin/plans');
+      if (plansRes.ok) {
+        const plansData = await plansRes.json();
+        setPlans(plansData.plans || []);
+      }
+
+      // 3. Fetch Audit Logs
+      const logsRes = await fetch('/api/admin/logs');
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+      }
+
+    } catch (err) {
+      setError('Failed to fetch administrator console credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchAdminData();
   }, []);
 
-  // 2. Toggle Creator Verification approval
-  const handleToggleApproval = async (userId: string, currentApproved: boolean) => {
-    setUpdatingId(userId);
+  const handleToggleActivity = async (userId: string, currentRestricted: boolean) => {
+    setActionLoadingId(userId);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, approve: !currentApproved }),
+        body: JSON.stringify({ userId, action: 'RESTRICT', restrict: !currentRestricted }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to restrict activities');
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to update approval state');
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, isActivityRestricted: !currentRestricted } : u));
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev: any) => ({ ...prev, isActivityRestricted: !currentRestricted }));
       }
-
-      // Update creators local state
-      setCreators((prev) =>
-        prev.map((c) => (c.id === userId ? { ...c, approvedByAdmin: !currentApproved } : c))
-      );
-
-      // Re-fetch logs to update audit trails immediately
-      const logsRes = await fetch('/api/admin/logs');
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setLogs(logsData.logs || []);
-      }
-    } catch (e: any) {
-      alert(e.message);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
     } finally {
-      setUpdatingId(null);
+      setActionLoadingId(null);
     }
   };
 
-  // 3. Delete Creator Account
-  const handleDeleteCreator = async (userId: string, email: string) => {
-    if (!confirm(`Are you sure you want to permanently delete creator account "${email}"? This will delete all of their polls and voting sessions as well!`)) return;
-
-    setUpdatingId(userId);
+  const handleToggleBan = async (userId: string, currentBanned: boolean) => {
+    setActionLoadingId(userId);
     try {
-      const res = await fetch(`/api/admin/users?userId=${userId}`, {
-        method: 'DELETE',
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'BAN', ban: !currentBanned }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to apply ban');
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to delete user');
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, isBanned: !currentBanned } : u));
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev: any) => ({ ...prev, isBanned: !currentBanned }));
       }
-
-      // Update local creators state
-      setCreators((prev) => prev.filter((c) => c.id !== userId));
-
-      // Re-fetch logs to update audit trails immediately
-      const logsRes = await fetch('/api/admin/logs');
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setLogs(logsData.logs || []);
-      }
-    } catch (e: any) {
-      alert(e.message);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
     } finally {
-      setUpdatingId(null);
+      setActionLoadingId(null);
     }
   };
 
-  const handleDeletePoll = async (pollId: string, title: string) => {
-    if (!confirm(`Are you sure you want to permanently delete poll "${title}"? This action is destructive and removes all vote records, questions, and allowed voter logs permanently.`)) return;
+  const handleOpenSuspend = (userObj: any) => {
+    setSuspensionUser(userObj);
+    setSuspensionReason('');
+    setSuspensionDays('7');
+  };
 
+  const handleSuspendUser = async () => {
+    if (!suspensionUser) return;
+    setSuspensionLoading(true);
     try {
-      const res = await fetch(`/api/polls/${pollId}`, {
-        method: 'DELETE',
+      const untilDate = new Date();
+      untilDate.setDate(untilDate.getDate() + parseInt(suspensionDays, 10));
+
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: suspensionUser.id,
+          action: 'SUSPEND',
+          suspend: true,
+          suspensionUntil: untilDate.toISOString(),
+          suspensionReason: suspensionReason
+        })
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to suspend user');
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to delete poll');
+      setCreators(prev => prev.map(u => u.id === suspensionUser.id ? { 
+        ...u, 
+        isSuspended: true, 
+        suspensionUntil: untilDate.toISOString(), 
+        suspensionReason: suspensionReason 
+      } : u));
+      if (selectedUser && selectedUser.id === suspensionUser.id) {
+        setSelectedUser((prev: any) => ({ 
+          ...prev, 
+          isSuspended: true, 
+          suspensionUntil: untilDate.toISOString(), 
+          suspensionReason: suspensionReason 
+        }));
       }
-
-      // Update polls list state locally
-      setPolls((prev) => prev.filter((p) => p.id !== pollId));
-
-      // Re-fetch logs to update audit trails immediately
-      const logsRes = await fetch('/api/admin/logs');
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setLogs(logsData.logs || []);
-      }
-    } catch (e: any) {
-      alert(e.message);
+      setSuspensionUser(null);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSuspensionLoading(false);
     }
   };
 
+  const handleUnsuspendUser = async (userId: string) => {
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'SUSPEND', suspend: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to lift suspension');
+
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, isSuspended: false, suspensionUntil: null, suspensionReason: null } : u));
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev: any) => ({ ...prev, isSuspended: false, suspensionUntil: null, suspensionReason: null }));
+      }
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePlanChange = async (userId: string, newPlanId: string) => {
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'CHANGE_PLAN', planId: newPlanId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to change subscription plan');
+
+      const planObj = plans.find(p => p.id === newPlanId);
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, planId: newPlanId, plan: planObj } : u));
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev: any) => ({ ...prev, planId: newPlanId, plan: planObj }));
+      }
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to permanently delete account "${email}"? This will delete all of their polls, questions, and responses!`)) return;
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users?userId=${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete account');
+
+      setCreators(prev => prev.filter(u => u.id !== userId));
+      setSelectedUser(null);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleApproveVerification = async (userId: string) => {
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch('/api/admin/verify-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'APPROVE' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to verify account');
+
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, verificationStatus: 'VERIFIED', isVerifiedUser: true } : u));
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleOpenRejectVerification = (userObj: any) => {
+    setRejectionUser(userObj);
+    setRejectionReason('');
+  };
+
+  const handleRejectVerification = async () => {
+    if (!rejectionUser || !rejectionReason.trim()) return;
+    setRejectionLoading(true);
+    try {
+      const res = await fetch('/api/admin/verify-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: rejectionUser.id, action: 'REJECT', reason: rejectionReason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reject verification');
+
+      setCreators(prev => prev.map(u => u.id === rejectionUser.id ? { 
+        ...u, 
+        verificationStatus: 'REJECTED', 
+        isVerifiedUser: false, 
+        verificationReason: rejectionReason 
+      } : u));
+      setRejectionUser(null);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRejectionLoading(false);
+    }
+  };
+
+  // Plans CRUD logic
+  const handleOpenCreatePlan = () => {
+    setEditingPlan(null);
+    setPlanName('');
+    setPlanDesc('');
+    setPlanPrice('0.0');
+    setPlanCycle('MONTHLY');
+    const resetFeats: Record<string, boolean> = {};
+    FEATURES_KEYS.forEach(f => { resetFeats[f.key] = true; });
+    setPlanFeatures(resetFeats);
+    setPlanFormError('');
+    setShowPlanForm(true);
+  };
+
+  const handleOpenEditPlan = (plan: any) => {
+    setEditingPlan(plan);
+    setPlanName(plan.name);
+    setPlanDesc(plan.description || '');
+    setPlanPrice(plan.price.toString());
+    setPlanCycle(plan.billingCycle);
+    
+    let resolvedFeats: Record<string, boolean> = {};
+    FEATURES_KEYS.forEach(f => {
+      resolvedFeats[f.key] = plan.features ? !!plan.features[f.key] : false;
+    });
+    setPlanFeatures(resolvedFeats);
+    setPlanFormError('');
+    setShowPlanForm(true);
+  };
+
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlanFormError('');
+    setPlanFormLoading(true);
+
+    if (!planName.trim()) {
+      setPlanFormError('Plan name is required.');
+      setPlanFormLoading(false);
+      return;
+    }
+
+    const payload = {
+      planId: editingPlan?.id,
+      name: planName,
+      description: planDesc,
+      price: parseFloat(planPrice),
+      billingCycle: planCycle,
+      features: planFeatures,
+    };
+
+    try {
+      const url = '/api/admin/plans';
+      const method = editingPlan ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save subscription plan.');
+
+      setShowPlanForm(false);
+      fetchAdminData();
+    } catch (err: any) {
+      setPlanFormError(err.message);
+    } finally {
+      setPlanFormLoading(false);
+    }
+  };
+
+  const handleDeletePlan = async (planId: string, name: string) => {
+    if (name === 'Free') {
+      alert('The Free plan is the default platform tier and cannot be deleted.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete subscription plan "${name}"? Any users assigned to it will fallback to no plan settings.`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/plans?planId=${planId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete plan.');
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Ballot Overrides
   const handleStartOverride = (v: any) => {
     let parsedAns = {};
     try {
@@ -205,9 +471,9 @@ export default function AdminPortal() {
         return { ...prev, votes: updatedVotes };
       });
 
-      // Update polls list state locally
-      setPolls((prev: any[]) => 
-        prev.map((p) => {
+      // Update creators list created polls state locally
+      setCreators((prevCreators) => prevCreators.map(u => {
+        const updatedPolls = u.polls.map((p: any) => {
           if (p.id === selectedPoll.id) {
             const updatedVotes = p.votes.map((v: any) =>
               v.id === editingVote.id ? { ...v, answers: JSON.stringify(overrideAnswers) } : v
@@ -215,17 +481,12 @@ export default function AdminPortal() {
             return { ...p, votes: updatedVotes };
           }
           return p;
-        })
-      );
-
-      // Re-fetch audit logs to show override audit logs instantly!
-      const logsRes = await fetch('/api/admin/logs');
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setLogs(logsData.logs || []);
-      }
+        });
+        return { ...u, polls: updatedPolls };
+      }));
 
       setEditingVote(null);
+      fetchAdminData();
     } catch (err: any) {
       setOverrideError(err.message);
     } finally {
@@ -233,288 +494,933 @@ export default function AdminPortal() {
     }
   };
 
+  const handleDeletePoll = async (pollId: string, title: string) => {
+    if (!confirm(`Are you sure you want to permanently delete poll "${title}"? This action is destructive and removes all vote records, questions, and allowed voter logs permanently.`)) return;
+
+    try {
+      const res = await fetch(`/api/polls/${pollId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete poll');
+      }
+
+      // Update local state
+      setCreators(prevCreators => prevCreators.map(u => {
+        return {
+          ...u,
+          polls: u.polls.filter((p: any) => p.id !== pollId)
+        };
+      }));
+
+      if (selectedUser) {
+        setSelectedUser((prev: any) => ({
+          ...prev,
+          polls: prev.polls.filter((p: any) => p.id !== pollId)
+        }));
+      }
+
+      fetchAdminData();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center bg-[#030712]">
+      <div className="flex-1 flex flex-col justify-center items-center bg-[#030712] min-h-screen">
         <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
         <span className="text-gray-400 text-sm mt-4 font-semibold">Opening Admin Console...</span>
       </div>
     );
   }
 
+  // Filtered Users list
+  const filteredUsers = creators.filter(c => 
+    c.email.toLowerCase().includes(userSearch.toLowerCase()) || 
+    (c.fullName || '').toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  // Pending Verifications users list
+  const pendingVerifications = creators.filter(c => c.verificationStatus === 'PENDING');
+
   return (
-    <div className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 space-y-10 relative">
+    <div className="flex-1 flex flex-col min-h-screen bg-[#030712] text-gray-200">
       
-      {/* Ambience glow */}
-      <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-pink-500/5 rounded-full blur-3xl pointer-events-none" />
-
       {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-white/5 pb-6">
-        <div className="flex items-center space-x-3.5">
-          <div className="p-3 bg-purple-500/10 rounded-2xl border border-purple-500/20 text-purple-400">
-            <ShieldCheck className="w-6 h-6" />
+      <header className="w-full border-b border-white/5 bg-[#080d1a]/80 backdrop-blur-md sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3.5">
+            <div className="p-2.5 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="font-outfit text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                System Admin Console
+              </span>
+              <p className="text-gray-400 text-[10px] uppercase font-bold mt-0.5">Control creators, verifications, & platform subscription plans</p>
+            </div>
           </div>
-          <div>
-            <span className="font-outfit text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              System Admin Console
-            </span>
-            <p className="text-gray-400 text-xs mt-0.5">Control creator listings, verify accounts, and inspect audit ledgers.</p>
+
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-all flex items-center space-x-1.5"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Exit Console</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 space-y-8 relative">
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-pink-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        {error && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center space-x-2">
+            <AlertCircle className="w-4.5 h-4.5 shrink-0" />
+            <span>{error}</span>
           </div>
+        )}
+
+        {/* Tab Selectors */}
+        <div className="flex border-b border-white/5 space-x-6 pb-1">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+              activeTab === 'users' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Users Management
+            {activeTab === 'users' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('verifications')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 ${
+              activeTab === 'verifications' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Verification Requests
+            {pendingVerifications.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold rounded-full">
+                {pendingVerifications.length}
+              </span>
+            )}
+            {activeTab === 'verifications' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('plans')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+              activeTab === 'plans' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Plans Management
+            {activeTab === 'plans' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+              activeTab === 'logs' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Audit Ledgers
+            {activeTab === 'logs' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
         </div>
 
-        <Link
-          href="/dashboard"
-          className="px-4 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-all flex items-center space-x-1.5"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Exit Console</span>
-        </Link>
-      </div>
-
-      {error && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center space-x-2">
-          <AlertCircle className="w-4.5 h-4.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Tab Selectors */}
-      <div id="admin-tabs" className="flex border-b border-white/5 space-x-6 pb-1">
-        <button
-          onClick={() => setActiveTab('creators')}
-          className={`pb-3 text-sm font-bold transition-all relative uppercase tracking-wider ${
-            activeTab === 'creators' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Creators Listings
-          {activeTab === 'creators' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('polls')}
-          className={`pb-3 text-sm font-bold transition-all relative uppercase tracking-wider flex items-center gap-2`}
-        >
-          <BarChart3 className="w-4 h-4 text-purple-400" />
-          <span>Poll Databases</span>
-          {activeTab === 'polls' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`pb-3 text-sm font-bold transition-all relative uppercase tracking-wider ${
-            activeTab === 'logs' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Audit Ledgers
-          {activeTab === 'logs' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
-          )}
-        </button>
-      </div>
-
-      {/* Tab: Creators Mapping */}
-      {activeTab === 'creators' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Left Card: Users / Creators Approval */}
-          <div id="creators-list" className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
-            <div className="flex items-center space-x-2.5 border-b border-white/5 pb-4">
-              <Users className="w-5 h-5 text-purple-400" />
-              <h3 className="font-outfit text-lg font-bold text-white">Pending Creator Listings</h3>
+        {/* TAB 1: USERS MANAGEMENT */}
+        {activeTab === 'users' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  placeholder="Search user email or legal name..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  className="w-full bg-white/5 border border-white/8 hover:border-white/15 focus:border-purple-500/60 rounded-xl pl-4 pr-10 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all"
+                />
+              </div>
             </div>
 
-            {creators.length === 0 ? (
-              <div className="p-8 text-center text-xs text-gray-500 italic">
-                No registered user accounts found.
+            <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                      <th className="p-4">User</th>
+                      <th className="p-4">Demographics</th>
+                      <th className="p-4">Active Plan</th>
+                      <th className="p-4">Activity Status</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-gray-300">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-gray-500 italic">No users found.</td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((u) => {
+                        const isUserSuspended = u.isSuspended && (!u.suspensionUntil || new Date() < new Date(u.suspensionUntil));
+                        return (
+                          <tr key={u.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
+                                  {u.fullName ? u.fullName.charAt(0).toUpperCase() : u.email.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="truncate max-w-[200px]">
+                                  <span className="font-semibold text-white block truncate flex items-center gap-1">
+                                    {u.fullName || 'Anonymous User'}
+                                    {u.isVerifiedUser && (
+                                      <span className="inline-flex items-center justify-center p-0.5 bg-blue-500 text-white rounded-full" title="Verified Account">
+                                        <Check className="w-2 h-2 stroke-[4]" />
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500 font-mono block truncate">{u.email}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="px-2 py-0.5 bg-white/5 border border-white/5 rounded text-[10px] font-bold text-gray-400">
+                                {u.occupation || 'UNSPECIFIED'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="font-semibold text-purple-300">{u.plan?.name || 'Free'}</span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-wrap gap-1.5">
+                                {u.isBanned && (
+                                  <span className="px-2 py-0.5 bg-red-500/15 border border-red-500/30 text-red-400 text-[9px] font-bold uppercase rounded">Banned</span>
+                                )}
+                                {isUserSuspended && (
+                                  <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[9px] font-bold uppercase rounded">Suspended</span>
+                                )}
+                                {u.isActivityRestricted && (
+                                  <span className="px-2 py-0.5 bg-orange-500/15 border border-orange-500/30 text-orange-400 text-[9px] font-bold uppercase rounded">Restricted</span>
+                                )}
+                                {!u.isBanned && !isUserSuspended && !u.isActivityRestricted && (
+                                  <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase rounded">Active</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => setSelectedUser(u)}
+                                className="px-3 py-1.5 rounded-lg font-bold bg-purple-500/15 border border-purple-500/20 text-purple-300 hover:bg-purple-600 hover:text-white transition-all"
+                              >
+                                Inspect Profile
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-2">
-                {creators.map((c) => (
-                  <div key={c.id} className="p-4 rounded-2xl bg-white/3 border border-white/5 flex items-center justify-between gap-4 hover:border-white/10 transition-colors">
-                    <div className="space-y-1">
-                      <span className="text-sm font-semibold text-white block truncate max-w-[200px]">{c.email}</span>
-                      <div className="flex items-center space-x-3 text-[10px]">
-                        <span className="text-gray-500 font-bold">{new Date(c.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</span>
-                        <div className="w-1 h-1 rounded-full bg-white/10" />
-                        <span className={c.verified ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
-                          {c.verified ? 'Verified Email' : 'Email Unverified'}
-                        </span>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: VERIFICATION REQUESTS */}
+        {activeTab === 'verifications' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex items-center space-x-2 pb-4 border-b border-white/5">
+              <ShieldAlert className="w-5 h-5 text-purple-400" />
+              <h3 className="font-outfit text-lg font-bold text-white">Pending Creator Verification Approvals</h3>
+            </div>
+
+            <div className="space-y-4">
+              {pendingVerifications.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-500 italic">
+                  No pending verification applications found.
+                </div>
+              ) : (
+                pendingVerifications.map((reqUser) => (
+                  <div key={reqUser.id} className="p-4 rounded-2xl bg-white/2 border border-white/5 hover:border-white/10 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1 truncate max-w-md">
+                      <h4 className="font-bold text-white flex items-center gap-1.5">
+                        {reqUser.fullName || 'Anonymous Legal Name'}
+                        <span className="text-[10px] text-gray-500 font-mono">({reqUser.email})</span>
+                      </h4>
+                      <p className="text-[10px] text-gray-400">Occupation Role: <strong className="text-gray-200">{reqUser.occupation}</strong> at <strong className="text-gray-200">{reqUser.institution || 'N/A'}</strong></p>
+                      
+                      <div className="pt-2">
+                        <a
+                          href={reqUser.verificationDocUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white transition-all text-[11px] font-bold inline-flex items-center gap-1"
+                        >
+                          <span>Open Google Drive Proof Link</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                      {/* Toggle Switch */}
+                    <div className="flex items-center space-x-2 shrink-0">
                       <button
-                        onClick={() => handleToggleApproval(c.id, c.approvedByAdmin)}
-                        disabled={updatingId === c.id}
-                        className="p-1 rounded-xl hover:bg-white/5 transition-all text-purple-400"
-                        title={c.approvedByAdmin ? 'Revoke Approval' : 'Approve Account'}
+                        onClick={() => handleApproveVerification(reqUser.id)}
+                        disabled={actionLoadingId === reqUser.id}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1 shadow-md shadow-emerald-500/10"
                       >
-                        {updatingId === c.id ? (
-                          <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
-                        ) : c.approvedByAdmin ? (
-                          <ToggleRight className="w-9 h-9 text-emerald-400" />
-                        ) : (
-                          <ToggleLeft className="w-9 h-9 text-gray-600" />
-                        )}
+                        {actionLoadingId === reqUser.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                        <span>Approve</span>
                       </button>
-
-                      {/* Delete Account Button */}
                       <button
-                        onClick={() => handleDeleteCreator(c.id, c.email)}
-                        disabled={updatingId === c.id}
-                        className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
-                        title="Delete Creator Account"
+                        onClick={() => handleOpenRejectVerification(reqUser)}
+                        disabled={actionLoadingId === reqUser.id}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: PLANS MANAGEMENT */}
+        {activeTab === 'plans' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-outfit text-lg font-bold text-white">Subscription Tiers Plan Matrix</h3>
+                <p className="text-gray-500 text-xs mt-0.5">Control pricing cycles and toggle precise platform feature flags.</p>
+              </div>
+              <button
+                onClick={handleOpenCreatePlan}
+                className="px-4 py-2.5 rounded-xl gradient-btn text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg shadow-purple-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Plan</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {plans.map((p) => {
+                const featsCount = p.features ? Object.values(p.features).filter(Boolean).length : 0;
+                return (
+                  <div key={p.id} className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] flex flex-col justify-between hover:border-white/10 transition-all relative">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                        <span className="text-[10px] text-gray-500 uppercase font-extrabold tracking-widest">{p.billingCycle} billing</span>
+                        <span className="text-xs font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded">
+                          {featsCount} Features
+                        </span>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-outfit text-xl font-extrabold text-white">{p.name} Tier</h4>
+                        <p className="text-gray-400 text-xs mt-1 leading-relaxed line-clamp-2">{p.description || 'No plan details provided.'}</p>
+                      </div>
+
+                      <div className="pt-2">
+                        <span className="font-outfit text-3xl font-black text-white">${p.price.toFixed(2)}</span>
+                        <span className="text-gray-500 text-[11px] font-bold"> / Cycle</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
+                      <button
+                        onClick={() => handleOpenEditPlan(p)}
+                        className="flex-1 py-2 bg-white/5 border border-white/8 hover:border-white/15 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeletePlan(p.id, p.name)}
+                        disabled={p.name === 'Free'}
+                        className="p-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 text-red-400 hover:text-red-300 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Delete Subscription Plan"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
+        )}
 
-          {/* Right Card: Mini logs summary */}
-          <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
+        {/* TAB 4: AUDIT LEDGERS */}
+        {activeTab === 'logs' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
             <div className="flex items-center space-x-2.5 border-b border-white/5 pb-4">
               <FileText className="w-5 h-5 text-purple-400" />
-              <h3 className="font-outfit text-lg font-bold text-white">Recent Security Logs</h3>
+              <h3 className="font-outfit text-lg font-bold text-white">Platform System Audit Ledger</h3>
             </div>
 
             {logs.length === 0 ? (
               <div className="p-8 text-center text-xs text-gray-500 italic">
-                No audit logs recorded.
+                No system logs recorded.
               </div>
             ) : (
-              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-2">
-                {logs.slice(0, 5).map((l) => (
-                  <div key={l.id} className="p-3.5 rounded-2xl bg-white/2 border border-white/5 space-y-1 hover:border-white/10 transition-colors">
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                {logs.map((l) => (
+                  <div key={l.id} className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1.5 hover:border-white/10 transition-colors">
                     <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-wider">
-                      <span className="text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                      <span className="text-purple-300 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
                         {l.action}
                       </span>
-                      <span className="text-gray-500">{new Date(l.timestamp).toLocaleTimeString()}</span>
+                      <span className="text-gray-500 font-mono">
+                        {new Date(l.timestamp).toLocaleString()}
+                      </span>
                     </div>
-                    <p className="text-gray-300 text-xs truncate">{l.details}</p>
+                    <p className="text-gray-300 text-xs leading-relaxed">{l.details}</p>
+                    <div className="text-[10px] text-gray-500 font-semibold">
+                      <span>Administrator Account: {l.admin?.email || 'System'}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Tab: Full Security Logs List */}
-      {activeTab === 'logs' && (
-        <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
-          <div className="flex items-center space-x-2.5 border-b border-white/5 pb-4">
-            <FileText className="w-5 h-5 text-purple-400" />
-            <h3 className="font-outfit text-lg font-bold text-white">Security Audit Ledger</h3>
-          </div>
+      </main>
 
-          {logs.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-500 italic">
-              No audit logs have been recorded in the ledger.
+      {/* ── USER INSPECTOR MODAL ────────────────────────────────────────── */}
+      {selectedUser && (
+        <div className="fixed inset-0 bg-[#020612]/95 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-4xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-8 animate-fade-in">
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="absolute top-6 right-6 text-gray-400 hover:text-white transition-all p-1 bg-white/5 rounded-lg border border-white/5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 rounded-2xl bg-purple-600/10 border border-purple-600/20 text-purple-400 flex items-center justify-center text-3xl font-extrabold shrink-0">
+                  {selectedUser.fullName ? selectedUser.fullName.charAt(0).toUpperCase() : selectedUser.email.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-outfit text-2xl font-bold text-white flex items-center gap-2">
+                    {selectedUser.fullName || 'Anonymous Account'}
+                    {selectedUser.isVerifiedUser && (
+                      <span className="inline-flex items-center justify-center p-0.5 bg-blue-500 text-white rounded-full" title="Verified Creator">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-sm text-gray-400 font-mono mt-0.5">{selectedUser.email}</p>
+                </div>
+              </div>
+
+              {/* Status flag Indicators */}
+              <div className="flex flex-wrap gap-2">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                  selectedUser.isBanned 
+                    ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                }`}>
+                  {selectedUser.isBanned ? 'BANNED' : 'UNBANNED'}
+                </span>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                  selectedUser.isSuspended 
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                }`}>
+                  {selectedUser.isSuspended ? 'SUSPENDED' : 'UNSUSPENDED'}
+                </span>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                  selectedUser.isActivityRestricted 
+                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
+                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                }`}>
+                  {selectedUser.isActivityRestricted ? 'PRIVILEGES LOCKED' : 'CREATION ACTIVE'}
+                </span>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-              {logs.map((l) => (
-                <div key={l.id} className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1.5 hover:border-white/10 transition-colors">
-                  <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-wider">
-                    <span className="text-purple-300 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
-                      {l.action}
-                    </span>
-                    <span className="text-gray-500 font-mono">
-                      {new Date(l.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-gray-300 text-xs leading-relaxed">{l.details}</p>
-                  <div className="text-[10px] text-gray-500 font-semibold flex justify-between">
-                    <span>By Administrator: {l.admin?.email || 'System'}</span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Left Demographic Details Column */}
+              <div className="md:col-span-1 space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-white/5 pb-1">Demographics Profile</h4>
+                  
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className="text-gray-500 font-bold block uppercase text-[9px]">Occupation Role</span>
+                      <span className="text-white font-medium">{selectedUser.occupation || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 font-bold block uppercase text-[9px]">Institution / Co.</span>
+                      <span className="text-white font-medium">{selectedUser.institution || 'N/A'}</span>
+                    </div>
+                    {selectedUser.phoneNumber && (
+                      <div>
+                        <span className="text-gray-500 font-bold block uppercase text-[9px]">Phone Number</span>
+                        <span className="text-white font-medium">{selectedUser.phoneNumber}</span>
+                      </div>
+                    )}
+                    {selectedUser.bio && (
+                      <div>
+                        <span className="text-gray-500 font-bold block uppercase text-[9px]">Profile Biography</span>
+                        <p className="text-gray-300 mt-1 leading-relaxed bg-white/2 border border-white/5 p-3 rounded-xl italic">"{selectedUser.bio}"</p>
+                      </div>
+                    )}
+
+                    {/* Specific details */}
+                    {selectedUser.occupation === 'STUDENT' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Field of Study</span>
+                          <span className="text-white font-medium">{selectedUser.studyField}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Graduation Year</span>
+                          <span className="text-white font-medium">{selectedUser.gradYear}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedUser.occupation === 'PROFESSIONAL' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Job Title</span>
+                          <span className="text-white font-medium">{selectedUser.jobTitle}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Industry</span>
+                          <span className="text-white font-medium">{selectedUser.industry}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedUser.occupation === 'EDUCATOR' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Subject</span>
+                          <span className="text-white font-medium">{selectedUser.educatorSubject}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Department</span>
+                          <span className="text-white font-medium">{selectedUser.educatorDept}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedUser.occupation === 'RESEARCHER' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Research Domain</span>
+                          <span className="text-white font-medium">{selectedUser.researchDomain}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-bold block uppercase text-[9px]">Position</span>
+                          <span className="text-white font-medium">{selectedUser.researchPos}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedUser.occupation === 'OTHER' && (
+                      <div>
+                        <span className="text-gray-500 font-bold block uppercase text-[9px]">Custom details</span>
+                        <span className="text-white font-medium">{selectedUser.otherDetail}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
+
+                {/* Subscription Switcher Dropdown */}
+                <div className="space-y-2 pt-4 border-t border-white/5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Manage Subscription Plan</label>
+                  <select
+                    value={selectedUser.planId || ''}
+                    onChange={(e) => handlePlanChange(selectedUser.id, e.target.value)}
+                    disabled={actionLoadingId === selectedUser.id}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    <option value="" disabled>-- Select Subscription --</option>
+                    {plans.map((pl) => (
+                      <option key={pl.id} value={pl.id}>{pl.name} (${pl.price.toFixed(2)})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Middle Section: User Polls list */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Created Session Registries</h4>
+                  <span className="text-xs text-purple-300 font-bold">{selectedUser.polls?.length || 0} Polls Launched</span>
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                  {!selectedUser.polls || selectedUser.polls.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-gray-500 italic bg-white/1 rounded-2xl border border-dashed border-white/5">
+                      This user hasn't created any surveys or polls.
+                    </div>
+                  ) : (
+                    selectedUser.polls.map((pl: any) => (
+                      <div key={pl.id} className="p-3.5 rounded-2xl bg-white/2 border border-white/5 hover:border-white/10 flex items-center justify-between gap-4 transition-colors">
+                        <div className="truncate space-y-1">
+                          <h5 className="font-bold text-white text-xs truncate max-w-[320px]">{pl.title}</h5>
+                          <div className="flex items-center space-x-2.5 text-[9px] text-gray-500 font-bold uppercase tracking-wide">
+                            <span className={pl.pollType === 'SURVEY' ? 'text-violet-400' : 'text-blue-400'}>{pl.pollType}</span>
+                            <span>•</span>
+                            <span>{pl.votes?.length || 0} Votes</span>
+                            <span>•</span>
+                            <span className={pl.status === 'ACTIVE' ? 'text-emerald-400' : 'text-amber-400'}>{pl.status}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-1.5 shrink-0">
+                          <button
+                            onClick={() => setSelectedPoll(pl)}
+                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Override Ballot</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeletePoll(pl.id, pl.title)}
+                            className="p-1.5 bg-red-500/5 border border-red-500/10 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-all"
+                            title="Delete Poll permanently"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Moderation Controls Trigger Buttons */}
+                <div className="border-t border-white/5 pt-6 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Moderator Access Restrictions</h4>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {/* Ban Account */}
+                    <button
+                      onClick={() => handleToggleBan(selectedUser.id, selectedUser.isBanned)}
+                      disabled={actionLoadingId === selectedUser.id}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                        selectedUser.isBanned
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                          : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
+                      }`}
+                    >
+                      {selectedUser.isBanned ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                      <span>{selectedUser.isBanned ? 'Lift Ban' : 'Permanently Ban'}</span>
+                    </button>
+
+                    {/* Suspension triggers */}
+                    {selectedUser.isSuspended ? (
+                      <button
+                        onClick={() => handleUnsuspendUser(selectedUser.id)}
+                        disabled={actionLoadingId === selectedUser.id}
+                        className="py-2 px-3 rounded-xl text-xs font-bold border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Lift Suspension</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenSuspend(selectedUser)}
+                        disabled={actionLoadingId === selectedUser.id}
+                        className="py-2 px-3 rounded-xl text-xs font-bold border bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Suspend User</span>
+                      </button>
+                    )}
+
+                    {/* Restrict Creation */}
+                    <button
+                      onClick={() => handleToggleActivity(selectedUser.id, selectedUser.isActivityRestricted)}
+                      disabled={actionLoadingId === selectedUser.id}
+                      className="py-2 px-3 rounded-xl text-xs font-bold border bg-orange-500/10 border-orange-500/20 text-orange-400 hover:bg-orange-500 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-orange-400" />
+                      <span>{selectedUser.isActivityRestricted ? 'Allow Creation' : 'Restrict Actions'}</span>
+                    </button>
+
+                    {/* Permanent Account Deletion */}
+                    <button
+                      onClick={() => handleDeleteUser(selectedUser.id, selectedUser.email)}
+                      disabled={actionLoadingId === selectedUser.id}
+                      className="py-2 px-3 rounded-xl text-xs font-bold border bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-1.5 shadow"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete User</span>
+                    </button>
+
+                  </div>
+                </div>
+
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Tab: System Polls & Analytic Results */}
-      {activeTab === 'polls' && (
-        <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6">
-          <div className="flex items-center space-x-2.5 border-b border-white/5 pb-4">
-            <BarChart3 className="w-5 h-5 text-purple-400" />
-            <h3 className="font-outfit text-lg font-bold text-white">System Poll Database</h3>
+      {/* ── SYSTEM SUSPENSION SETTINGS MODAL ───────────────────────────── */}
+      {suspensionUser && (
+        <div className="fixed inset-0 bg-[#020612]/90 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
+          <div className="glass-card rounded-3xl border border-white/10 p-6 max-w-sm w-full bg-[#080d1a] relative space-y-5 animate-fade-in">
+            <button
+              onClick={() => setSuspensionUser(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <span className="text-[10px] text-amber-400 font-extrabold uppercase tracking-widest block">Security Enforcement</span>
+              <h4 className="text-white text-base font-bold mt-1">Suspend Account Access</h4>
+              <p className="text-gray-400 text-[10px] truncate max-w-[300px]">User: {suspensionUser.email}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Suspension End Duration</label>
+                <select
+                  value={suspensionDays}
+                  onChange={e => setSuspensionDays(e.target.value)}
+                  className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                >
+                  <option value="1">1 Day (Temporary Lock)</option>
+                  <option value="3">3 Days (Warning Period)</option>
+                  <option value="7">7 Days (Standard Suspension)</option>
+                  <option value="30">30 Days (Extended Suspension)</option>
+                  <option value="365">1 Year (Longterm Block)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Suspension Reason Label</label>
+                <textarea
+                  placeholder="Provide precise violation details for client dashboard notification..."
+                  value={suspensionReason}
+                  onChange={e => setSuspensionReason(e.target.value)}
+                  rows={3}
+                  className="w-full bg-white/2 border border-white/10 text-white placeholder-gray-500 text-xs rounded-xl p-3 focus:outline-none focus:border-amber-500 resize-none"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSuspensionUser(null)}
+                className="flex-1 py-2 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSuspendUser}
+                disabled={suspensionLoading || !suspensionReason.trim()}
+                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow"
+              >
+                {suspensionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                <span>Suspend</span>
+              </button>
+            </div>
           </div>
+        </div>
+      )}
 
-          {polls.length === 0 ? (
-            <div className="p-12 text-center text-xs text-gray-500 italic">
-              No voting polls exist in the database.
+      {/* ── VERIFICATION REJECTION REASON PROMPT ───────────────────────── */}
+      {rejectionUser && (
+        <div className="fixed inset-0 bg-[#020612]/90 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
+          <div className="glass-card rounded-3xl border border-white/10 p-6 max-w-sm w-full bg-[#080d1a] relative space-y-5 animate-fade-in">
+            <button
+              onClick={() => setRejectionUser(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-widest block">Verification Review</span>
+              <h4 className="text-white text-base font-bold mt-1">Reject Verification Request</h4>
+              <p className="text-gray-400 text-[10px]">Applicant: {rejectionUser.email}</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {polls.map((poll) => {
-                const statusColors = {
-                  DRAFT: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
-                  ACTIVE: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-                  ENDED: 'bg-red-500/10 border-red-500/20 text-red-400',
-                };
 
-                return (
-                  <div key={poll.id} className="p-5 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between space-y-5 hover:border-white/10 transition-all">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${statusColors[poll.status as keyof typeof statusColors]}`}>
-                          {poll.status}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-semibold truncate max-w-[200px]">
-                          Creator: {poll.creator?.email || 'System'}
-                        </span>
-                      </div>
-                      <h4 className="font-outfit text-base font-bold text-white leading-tight truncate">
-                        {poll.title}
-                      </h4>
-                      <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed">
-                        {poll.description}
-                      </p>
-                    </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Reason for rejection</label>
+              <textarea
+                placeholder="Explain why the proof documents were not accepted (e.g. Blurred photocopy, public access disabled)..."
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                rows={3}
+                className="w-full bg-white/2 border border-white/10 text-white placeholder-gray-500 text-xs rounded-xl p-3 focus:outline-none focus:border-red-500 resize-none"
+                required
+              />
+            </div>
 
-                    <div className="flex items-center justify-between border-t border-white/5 pt-4">
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                        {poll.isOpenVoting ? '🔓 Public' : '🔒 Closed'} ({poll.votes?.length || 0} Votes)
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setSelectedPoll(poll)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Inspect Results</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeletePoll(poll.id, poll.title)}
-                          className="p-1.5 rounded-lg text-red-400 hover:text-white hover:bg-red-500/20 border border-red-500/20 transition-all"
-                          title="Delete Poll permanently"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRejectionUser(null)}
+                className="flex-1 py-2 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectVerification}
+                disabled={rejectionLoading || !rejectionReason.trim()}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow"
+              >
+                {rejectionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                <span>Reject</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PLANS CREATE / EDIT FORM MODAL ────────────────────────────── */}
+      {showPlanForm && (
+        <div className="fixed inset-0 bg-[#020612]/90 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-2xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-6 animate-fade-in">
+            <button
+              onClick={() => setShowPlanForm(false)}
+              className="absolute top-6 right-6 text-gray-400 hover:text-white transition-all p-1 bg-white/5 rounded-lg border border-white/5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <span className="text-[10px] text-purple-400 font-extrabold uppercase tracking-widest block">Plan Matrix Console</span>
+              <h4 className="text-white text-lg font-bold mt-1">
+                {editingPlan ? `Edit Subscription: "${editingPlan.name}"` : 'Create Custom Platform Plan'}
+              </h4>
+            </div>
+
+            {planFormError && (
+              <div className="p-3 bg-red-500/15 border border-red-500/20 text-red-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{planFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSavePlan} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Plan Name Label</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Standard, Creator Pro"
+                    value={planName}
+                    onChange={e => setPlanName(e.target.value)}
+                    className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Price ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="e.g. 19.99"
+                      value={planPrice}
+                      onChange={e => setPlanPrice(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Cycle</label>
+                    <select
+                      value={planCycle}
+                      onChange={e => setPlanCycle(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    >
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="YEARLY">Yearly</option>
+                      <option value="PACK_5">5 Polls Pack</option>
+                      <option value="PACK_10">10 Polls Pack</option>
+                      <option value="ONE_TIME">One Time</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Description / Tagline</label>
+                <textarea
+                  placeholder="A descriptive caption details about billing limits and features available under this tier..."
+                  value={planDesc}
+                  onChange={e => setPlanDesc(e.target.value)}
+                  rows={2}
+                  className="w-full bg-white/3 border border-white/10 text-white placeholder-gray-500 text-xs rounded-xl p-3 focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">Toggle Features Allowed (13 Toggles)</label>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {FEATURES_KEYS.map((item) => {
+                    const isChecked = planFeatures[item.key] || false;
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
+                        className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                          isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                        }`}
+                      >
+                        <span className="text-[11px] text-gray-300 font-medium">{item.label}</span>
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                        }`}>
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowPlanForm(false)}
+                  className="flex-1 py-3 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={planFormLoading}
+                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow"
+                >
+                  {planFormLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  <span>{editingPlan ? 'Save Subscription' : 'Create Subscription'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
       {/* Selected Poll Analytical Inspector Overlay Modal */}
       {selectedPoll && (
-        <div className="fixed inset-0 bg-[#030712]/90 backdrop-blur-md flex items-center justify-center p-6 z-50 overflow-y-auto">
-          <div className="glass-card rounded-3xl w-full max-w-4xl p-8 border border-white/5 max-h-[85vh] overflow-y-auto space-y-8 relative">
+        <div className="fixed inset-0 bg-[#030712]/90 backdrop-blur-md flex items-center justify-center p-6 z-50 overflow-y-auto animate-fade-in">
+          <div className="glass-card rounded-3xl w-full max-w-4xl p-8 border border-white/5 max-h-[85vh] overflow-y-auto space-y-8 bg-[#080d1a] relative">
             <button
               onClick={() => setSelectedPoll(null)}
               className="absolute top-6 right-6 p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5 transition-all"
@@ -542,7 +1448,6 @@ export default function AdminPortal() {
               </h4>
 
               {selectedPoll.questions.map((q: any, idx: number) => {
-                // Calculate question scores/counts dynamically
                 const stats: Record<string, number> = {};
                 q.options.forEach((opt: any) => { stats[opt.id] = 0; });
 
@@ -554,7 +1459,7 @@ export default function AdminPortal() {
                       const numOpts = q.options.length;
                       val.forEach((optId: string, itemIdx: number) => {
                         if (stats[optId] !== undefined) {
-                          stats[optId] += numOpts - itemIdx; // weighting preference score
+                          stats[optId] += numOpts - itemIdx;
                         }
                       });
                     } else if (q.type === 'SINGLE' && typeof val === 'string') {
@@ -602,89 +1507,87 @@ export default function AdminPortal() {
               })}
             </div>
 
-            {/* Who Voted For Whom details (Always Visible to Admin) */}
-            {selectedPoll && (
-              <div className="space-y-4 pt-4">
-                <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
-                  <Lock className="w-4 h-4 text-purple-400" />
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Voter Registry & Choice Map</h4>
-                </div>
-                {selectedPoll.votes?.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic text-center py-4">No votes have been cast yet.</p>
-                ) : (
-                  <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/1">
-                    <table className="w-full border-collapse text-left">
-                      <thead>
-                        <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
-                          <th className="p-3">Unique ID</th>
-                          <th className="p-3">Email Address</th>
-                          {selectedPoll.questions.map((q: any, qIdx: number) => (
-                            <th key={q.id} className="p-3 truncate max-w-[200px]">Choice: Q{qIdx + 1}</th>
-                          ))}
-                          <th className="p-3">Timestamp</th>
-                          <th className="p-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-xs text-gray-300">
-                        {selectedPoll.votes.map((v: any) => {
-                          let ans: any = {};
-                          try {
-                            ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
-                          } catch (e) {}
-
-                          return (
-                            <tr key={v.id} className="hover:bg-white/2 transition-colors">
-                              <td className="p-3 font-mono font-bold text-purple-300">{v.userIdentifier || 'N/A'}</td>
-                              <td className="p-3 font-semibold">{v.email || 'N/A'}</td>
-                              {selectedPoll.questions.map((q: any) => {
-                                const val = ans[q.id];
-                                let resolvedText = 'No Answer';
-                                if (q.type === 'SINGLE' && typeof val === 'string') {
-                                  resolvedText = q.options.find((o: any) => o.id === val)?.text || val;
-                                } else if (q.type === 'RANKED' && Array.isArray(val)) {
-                                  resolvedText = val.map((optId, idx) => {
-                                    const optText = q.options.find((o: any) => o.id === optId)?.text || optId;
-                                    return `${idx + 1}st Preference: ${optText}`;
-                                  }).join(' | ');
-                                } else if (q.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
-                                  const champText = q.options.find((o: any) => o.id === val.winner)?.text || val.winner;
-                                  resolvedText = `🏆 Champion: ${champText}`;
-                                }
-
-                                return (
-                                  <td key={q.id} className="p-3 truncate max-w-[250px]" title={resolvedText}>
-                                    {resolvedText}
-                                  </td>
-                                );
-                              })}
-                              <td className="p-3 text-[10px] text-gray-500 font-mono">
-                                {new Date(v.createdAt).toLocaleString()}
-                              </td>
-                              <td className="p-3 text-right">
-                                <button
-                                  onClick={() => handleStartOverride(v)}
-                                  className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-600 hover:text-white font-bold text-[10px] transition-all"
-                                >
-                                  Override Ballot
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+            {/* Voter Registry table */}
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
+                <Lock className="w-4 h-4 text-purple-400" />
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Voter Registry & Choice Map</h4>
               </div>
-            )}
+              {selectedPoll.votes?.length === 0 ? (
+                <p className="text-xs text-gray-500 italic text-center py-4">No votes have been cast yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/1">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                        <th className="p-3">Unique ID</th>
+                        <th className="p-3">Email Address</th>
+                        {selectedPoll.questions.map((q: any, qIdx: number) => (
+                          <th key={q.id} className="p-3 truncate max-w-[200px]">Choice: Q{qIdx + 1}</th>
+                        ))}
+                        <th className="p-3">Timestamp</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-xs text-gray-300">
+                      {selectedPoll.votes.map((v: any) => {
+                        let ans: any = {};
+                        try {
+                          ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                        } catch (e) {}
+
+                        return (
+                          <tr key={v.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-3 font-mono font-bold text-purple-300">{v.userIdentifier || 'N/A'}</td>
+                            <td className="p-3 font-semibold">{v.email || 'N/A'}</td>
+                            {selectedPoll.questions.map((q: any) => {
+                              const val = ans[q.id];
+                              let resolvedText = 'No Answer';
+                              if (q.type === 'SINGLE' && typeof val === 'string') {
+                                resolvedText = q.options.find((o: any) => o.id === val)?.text || val;
+                              } else if (q.type === 'RANKED' && Array.isArray(val)) {
+                                resolvedText = val.map((optId, idx) => {
+                                  const optText = q.options.find((o: any) => o.id === optId)?.text || optId;
+                                  return `${idx + 1}st: ${optText}`;
+                                }).join(', ');
+                              } else if (q.type === 'KNOCKOUT' && val && typeof val.winner === 'string') {
+                                const champText = q.options.find((o: any) => o.id === val.winner)?.text || val.winner;
+                                resolvedText = `🏆 Champ: ${champText}`;
+                              }
+
+                              return (
+                                <td key={q.id} className="p-3 truncate max-w-[250px]" title={resolvedText}>
+                                  {resolvedText}
+                                </td>
+                              );
+                            })}
+                            <td className="p-3 text-[10px] text-gray-500 font-mono">
+                              {new Date(v.createdAt).toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => handleStartOverride(v)}
+                                className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-600 hover:text-white font-bold text-[10px] transition-all"
+                              >
+                                Override Ballot
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Editing Override modal */}
       {editingVote && (
-        <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-md flex items-center justify-center p-6 z-[60]">
-          <div className="glass-card rounded-3xl w-full max-w-md p-6 border border-white/5 space-y-6 relative">
+        <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-md flex items-center justify-center p-6 z-[60] animate-fade-in">
+          <div className="glass-card rounded-3xl w-full max-w-md p-6 border border-white/5 space-y-6 bg-[#080d1a] relative">
             <button
               onClick={() => setEditingVote(null)}
               className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-white"
@@ -717,7 +1620,7 @@ export default function AdminPortal() {
                       <select
                         value={typeof val === 'string' ? val : ''}
                         onChange={(e) => setOverrideAnswers({ ...overrideAnswers, [q.id]: e.target.value })}
-                        className="w-full glass-input text-xs"
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                       >
                         <option value="">-- Select Winner --</option>
                         {q.options.map((opt: any) => (
@@ -742,7 +1645,7 @@ export default function AdminPortal() {
                                   newRankList[index] = e.target.value;
                                   setOverrideAnswers({ ...overrideAnswers, [q.id]: newRankList });
                                 }}
-                                className="flex-1 glass-input text-[11px] py-1 px-2"
+                                className="flex-1 bg-[#030712] border border-white/10 rounded-lg py-1 px-2 text-[11px] text-white"
                               >
                                 <option value="">-- Choose Candidate --</option>
                                 {q.options.map((cand: any) => (
@@ -771,7 +1674,7 @@ export default function AdminPortal() {
                               }
                             });
                           }}
-                          className="w-full glass-input text-xs"
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                         >
                           <option value="">-- Select Champion --</option>
                           {q.options.map((opt: any) => (
@@ -807,6 +1710,7 @@ export default function AdminPortal() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

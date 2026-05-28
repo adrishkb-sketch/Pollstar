@@ -40,6 +40,29 @@ export async function POST(req: Request) {
       );
     }
 
+    // Check Ban
+    if (user.isBanned) {
+      return NextResponse.json(
+        { error: 'Your account has been banned due to violations.' },
+        { status: 403 }
+      );
+    }
+
+    // Check Suspension
+    if (user.isSuspended) {
+      const isStillSuspended = !user.suspensionUntil || new Date() < new Date(user.suspensionUntil);
+      if (isStillSuspended) {
+        const untilStr = user.suspensionUntil 
+          ? ` until ${new Date(user.suspensionUntil).toLocaleString()}` 
+          : ' indefinitely';
+        const reasonStr = user.suspensionReason ? ` Reason: ${user.suspensionReason}` : '';
+        return NextResponse.json(
+          { error: `Your account is suspended${untilStr}.${reasonStr}` },
+          { status: 403 }
+        );
+      }
+    }
+
     // Verify email verification status
     if (!user.verified) {
       return NextResponse.json(

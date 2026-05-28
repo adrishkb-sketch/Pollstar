@@ -32,15 +32,41 @@ export async function GET() {
       );
     }
 
+    // Ensure default plan exists
+    let freePlan = await prisma.plan.findUnique({
+      where: { name: 'Free' }
+    });
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: {
+          name: 'Free',
+          description: 'Our standard free tier with access to all basic and premium features.',
+          price: 0.0,
+          billingCycle: 'MONTHLY',
+          features: {
+            singleChoice: true,
+            bordaCount: true,
+            knockoutBracket: true,
+            multipageSurveys: true,
+            sentimentAnalysis: true,
+            dropOffTracking: true,
+            crossTabulation: true,
+            geolocations: true,
+            domainLocking: true,
+            otpVerification: true,
+            collaborations: true,
+            inboxMessages: true,
+            dataExport: true
+          }
+        }
+      });
+    }
+
     // Retrieve fresh user info from the database
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        approvedByAdmin: true,
-        createdAt: true,
+      include: {
+        plan: true,
       },
     });
 
@@ -51,6 +77,15 @@ export async function GET() {
       );
     }
 
+    // Auto-assign Free plan if missing
+    if (!user.planId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { planId: freePlan.id },
+        include: { plan: true }
+      });
+    }
+
     const response = NextResponse.json({
       success: true,
       user: {
@@ -59,6 +94,32 @@ export async function GET() {
         role: user.role,
         approved: user.approvedByAdmin,
         createdAt: user.createdAt,
+        profileCompleted: user.profileCompleted,
+        fullName: user.fullName,
+        avatar: user.avatar,
+        phoneNumber: user.phoneNumber,
+        occupation: user.occupation,
+        institution: user.institution,
+        studyField: user.studyField,
+        gradYear: user.gradYear,
+        jobTitle: user.jobTitle,
+        industry: user.industry,
+        educatorSubject: user.educatorSubject,
+        educatorDept: user.educatorDept,
+        researchDomain: user.researchDomain,
+        researchPos: user.researchPos,
+        otherDetail: user.otherDetail,
+        bio: user.bio,
+        verificationStatus: user.verificationStatus,
+        verificationReason: user.verificationReason,
+        verificationDocUrl: user.verificationDocUrl,
+        isVerifiedUser: user.isVerifiedUser,
+        isBanned: user.isBanned,
+        isSuspended: user.isSuspended,
+        suspensionUntil: user.suspensionUntil,
+        suspensionReason: user.suspensionReason,
+        isActivityRestricted: user.isActivityRestricted,
+        plan: user.plan,
       },
     });
 

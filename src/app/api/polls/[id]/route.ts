@@ -43,6 +43,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: {
+        creator: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            isVerifiedUser: true,
+            avatar: true,
+          }
+        },
         questions: {
           include: { options: true },
         },
@@ -159,6 +168,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       settings: poll.settings,
       stats,
       totalVotes: poll.votes.length,
+      creator: poll.creator,
       // Only include logs and allowed voter list if creator or admin
       allowedVoters: isCreatorOrAdmin ? poll.allowedVoters : undefined,
       votes: isCreatorOrAdmin
@@ -271,6 +281,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Only creator or admin can update status
     if (poll.creatorId !== user.id && user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Check Activity Restriction
+    if (user.isActivityRestricted && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Your account activities have been restricted by the Administrator. You cannot edit this poll/survey.' },
+        { status: 403 }
+      );
     }
 
     const { 

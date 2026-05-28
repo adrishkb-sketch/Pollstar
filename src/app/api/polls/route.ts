@@ -46,7 +46,7 @@ export async function GET() {
       polls = await prisma.poll.findMany({
         orderBy: { createdAt: 'desc' },
         include: {
-          creator: { select: { email: true } },
+          creator: { select: { email: true, isVerifiedUser: true, fullName: true } },
           questions: { include: { options: true } },
           votes: true,
           settings: true,
@@ -67,7 +67,7 @@ export async function GET() {
         },
         orderBy: { createdAt: 'desc' },
         include: {
-          creator: { select: { email: true } },
+          creator: { select: { email: true, isVerifiedUser: true, fullName: true } },
           questions: { include: { options: true } },
           votes: true,
           settings: true,
@@ -114,10 +114,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Creator must be approved by ADMIN to create polls (except ADMIN themselves)
-    if (!user.approvedByAdmin && user.role !== 'ADMIN') {
+    // Verify email verification status
+    if (!user.verified) {
       return NextResponse.json(
-        { error: 'Your account is pending admin approval. You cannot create polls yet.' },
+        { error: 'Please verify your email via signup OTP before creating sessions.' },
+        { status: 403 }
+      );
+    }
+
+    // Check Activity Restriction
+    if (user.isActivityRestricted && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Your account activities have been restricted by the Administrator. You cannot create new polls or surveys.' },
         { status: 403 }
       );
     }
