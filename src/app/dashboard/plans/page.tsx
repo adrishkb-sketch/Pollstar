@@ -22,26 +22,109 @@ import {
 import DashboardHeader from '@/components/DashboardHeader';
 
 const FEATURES_INFO = [
-  { key: 'singleChoice', label: 'Single Choice Voting', desc: 'Allow voters to pick one answer option.' },
-  { key: 'bordaCount', label: 'Borda Count Ranked Choice', desc: 'Voters rank preferences; weight scores using Borda counts.' },
-  { key: 'knockoutBracket', label: 'Knockout Tournament Bracket', desc: 'Run bracket tournament-style single/double elimination voting.' },
-  { key: 'multipageSurveys', label: 'Multi-page Surveys', desc: 'Organize surveys across multiple pages with step progression.' },
-  { key: 'sentimentAnalysis', label: 'Sentiment & Semantic Text Grouping', desc: 'Classify text responses into positive, neutral, and negative sentiment.' },
-  { key: 'dropOffTracking', label: 'Abandonment & Drop-off Tracking', desc: 'Visualize where respondents stop filling out your survey sessions.' },
-  { key: 'crossTabulation', label: 'Demographic Cross-Tabulation', desc: 'Filter response metrics against virtual demographic cohorts.' },
-  { key: 'geolocations', label: 'Geolocation & Map Analytics', desc: 'Track geographic and ISP distribution heatmaps of cast ballots.' },
-  { key: 'domainLocking', label: 'Domain and Email Lock Lists', desc: 'Limit ballot submissions to verified email domain matching lists.' },
-  { key: 'otpVerification', label: 'Voter OTP Verification', desc: 'Enforce security verification using standard email OTP flow.' },
-  { key: 'collaborations', label: 'Real-time Creator Collaboration', desc: 'Invite external co-creators to edit and monitor sessions.' },
-  { key: 'inboxMessages', label: 'Voter Inbox Direct Messages', desc: 'Receive and reply to direct messages sent by session respondents.' },
-  { key: 'dataExport', label: 'Data Export (CSV/JSON)', desc: 'Export full response registries and analytical breakdowns.' },
-  { key: 'creatorScribbleCanvas', label: 'Creator Brain Scribble Board', desc: 'Floating scribble canvas and markdown flow planner to map page branching rules.' },
-  { key: 'studentWhiteboardQuestion', label: 'Student Whiteboard Drawing', desc: 'Let exam-takers sketch answers to questions on an interactive canvas.' },
-  { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator', desc: 'Draggable scientific calculator featuring Trig and log functions during exams.' },
-  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey/Exam)', desc: 'Allow respondents to pause their session and resume securely on return.' },
-  { key: 'customBrandingThemes', label: 'Premium Branding & 5 Rich Themes', desc: 'Replace branding with custom logos and swap between Sunset, Jade, and Ocean glass themes.' },
-  { key: 'embedCode', label: 'Embed Voting Widget', desc: 'Generate copy-paste iframe HTML snippets to embed active polls directly into external CMS or webpages.' },
-  { key: 'linkShortener', label: 'Link Shortener Option', desc: 'Generate customized short links (e.g. /s/abcde) for simplified voter sharing.' }
+  // 1. Poll Features (19)
+  { key: 'openPublicPolls', label: 'Open Public Polls' },
+  { key: 'realTimeLiveResults', label: 'Real-Time Live Results' },
+  { key: 'liveGeolocationMap', label: 'Live Geolocation Map' },
+  { key: 'liveVoteTicker', label: 'Live Vote Ticker' },
+  { key: 'viralVoteIndicators', label: 'Viral Vote Indicators' },
+  { key: 'rankedChoiceBordaCount', label: 'Ranked Choice / Borda Count' },
+  { key: 'quadraticVoting', label: 'Quadratic Voting' },
+  { key: 'singleChoiceMultiSelect', label: 'Single Choice / Multi-Select' },
+  { key: 'enableDragAndDropPodium', label: 'Drag-and-Drop Ballot Podium' },
+  { key: 'opinionChatbox', label: 'Opinion Chatbox' },
+  { key: 'sentimentReactions', label: 'Sentiment Reactions' },
+  { key: 'voterLeaderboard', label: 'Voter Leaderboard' },
+  { key: 'multipleChartTypes', label: 'Multiple Chart Types' },
+  { key: 'voteTimelineGraph', label: 'Vote Timeline Graph' },
+  { key: 'multiRoundPolls', label: 'Multi-Round Polls' },
+  { key: 'revoteChangeVote', label: 'Revote / Change Vote' },
+  { key: 'knockoutBracket', label: 'Knockout Tournament Bracket' },
+  { key: 'enableScenarioSimulator', label: 'What-If Scenario Simulator' },
+  { key: 'enableAiProjection', label: 'AI Vote Projection & Live Predictions' },
+
+  // 2. Survey Features (24)
+  { key: 'multipleQuestionTypes', label: 'Multiple Question Types' },
+  { key: 'longFormTextResponses', label: 'Long-Form Text Responses' },
+  { key: 'starEmojiRatings', label: 'Star & Emoji Ratings' },
+  { key: 'matrixGridQuestions', label: 'Matrix / Grid Questions' },
+  { key: 'yesnoToggleQuestions', label: 'Yes/No & Toggle Questions' },
+  { key: 'fileUploadQuestions', label: 'File Upload Questions' },
+  { key: 'conditionalLogicBranching', label: 'Conditional Logic Branching' },
+  { key: 'multiPageSurveys', label: 'Multi-Page Surveys' },
+  { key: 'questionRandomizationSurvey', label: 'Question Randomization' },
+  { key: 'responseTimeLimits', label: 'Response Time Limits' },
+  { key: 'requiredVsOptionalQuestions', label: 'Required vs Optional Questions' },
+  { key: 'inputValidationRules', label: 'Input Validation Rules' },
+  { key: 'realTimeResponseDashboard', label: 'Real-Time Response Dashboard' },
+  { key: 'aiSentimentAnalysis', label: 'AI Sentiment Analysis' },
+  { key: 'wordCloudGenerator', label: 'Word Cloud Generator' },
+  { key: 'aiSummaryReport', label: 'AI Summary Report' },
+  { key: 'automatedReminders', label: 'Automated Reminders' },
+  { key: 'completionRateTracking', label: 'Completion Rate Tracking' },
+  { key: 'anonymousResponses', label: 'Anonymous Responses' },
+  { key: 'targetedDistribution', label: 'Targeted Distribution' },
+  { key: 'responseFilteringSegmentation', label: 'Response Filtering & Segmentation' },
+  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey)' },
+  { key: 'enableDropOffTracking', label: 'Abandonment & Drop-off Tracking' },
+  { key: 'enableCrossTabulation', label: 'Demographic Cross-Tabulation' },
+
+  // 3. Exam Features (25)
+  { key: 'timedExams', label: 'Timed Exams' },
+  { key: 'fullScreenLockdown', label: 'Full-Screen Lockdown' },
+  { key: 'tabSwitchDetection', label: 'Tab-Switch Detection' },
+  { key: 'copyPastePrevention', label: 'Copy-Paste Prevention' },
+  { key: 'cheatProbabilityScore', label: 'Cheat Probability Score' },
+  { key: 'perQuestionMarks', label: 'Per-Question Marks' },
+  { key: 'autoGradingEngine', label: 'Auto-Grading Engine' },
+  { key: 'manualGradingInterface', label: 'Manual Grading Interface' },
+  { key: 'pageBreaksSections', label: 'Page Breaks / Sections' },
+  { key: 'dragAndDropQuestionOrderingExam', label: 'Drag-and-Drop Question Ordering' },
+  { key: 'detailedScoreReports', label: 'Detailed Score Reports' },
+  { key: 'classPerformanceAnalytics', label: 'Class Performance Analytics' },
+  { key: 'weaknessAnalysis', label: 'Weakness Analysis' },
+  { key: 'aiConceptExplanations', label: 'AI Concept Explanations' },
+  { key: 'printableResultsPdf', label: 'Printable Results PDF' },
+  { key: 'bulkResultsExport', label: 'Bulk Results Export' },
+  { key: 'emailResultsToStudents', label: 'Email Results to Students' },
+  { key: 'teacherGradebook', label: 'Teacher Gradebook' },
+  { key: 'scheduledStartEnd', label: 'Scheduled Start & End' },
+  { key: 'questionHints', label: 'Question Hints' },
+  { key: 'negativeMarking', label: 'Negative Marking' },
+  { key: 'studentRosterManagement', label: 'Student Roster Management' },
+  { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
+  { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
+  { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' },
+
+  // 4. Exam Question Types (10)
+  { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
+  { key: 'mcqMultipleCorrect', label: 'MCQ (Multiple Correct)' },
+  { key: 'shortAnswerQuestionsSaq', label: 'Short Answer Questions (SAQ)' },
+  { key: 'longAnswerQuestionsLaq', label: 'Long Answer Questions (LAQ)' },
+  { key: 'trueOrFalse', label: 'True or False' },
+  { key: 'fillInTheBlanks', label: 'Fill in the Blanks' },
+  { key: 'matchTheFollowing', label: 'Match the Following' },
+  { key: 'numericalInput', label: 'Numerical Input' },
+  { key: 'fileUploadAnswers', label: 'File Upload Answers' },
+  { key: 'studentWhiteboardQuestion', label: 'Student Drawing Whiteboard' },
+
+  // 5. Platform Features (16)
+  { key: 'otpVoterVerification', label: 'OTP Voter Verification' },
+  { key: 'closedVoterLists', label: 'Closed Voter Lists' },
+  { key: 'customBranding', label: 'Custom Logo Branding' },
+  { key: 'customBrandingThemes', label: 'Custom Branding & Premium Themes' },
+  { key: 'creatorScribbleCanvas', label: 'Creator Brain Scribble Canvas' },
+  { key: 'premiumDarkMode', label: 'Premium Dark Mode' },
+  { key: 'organizationAccounts', label: 'Organization Accounts' },
+  { key: 'apiWebhooks', label: 'API & Webhooks' },
+  { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
+  { key: 'exportResults', label: 'Export Results' },
+  { key: 'enableDomainRestriction', label: 'Domain and Email Lock Lists' },
+  { key: 'collaborations', label: 'Real-time Creator Collaboration' },
+  { key: 'enableDirectInbox', label: 'Voter Inbox Direct Messages' },
+  { key: 'removeAdvertisements', label: 'Ad-Free Experience (No Ads)' },
+  { key: 'embedCode', label: 'Embed Voting Widget Option' },
+  { key: 'linkShortener', label: 'Link Shortener Option' }
 ];
 
 const getCurrencySymbol = (currencyCode?: string) => {
@@ -260,7 +343,7 @@ export default function PlansPage() {
                     {/* Checklists features details */}
                     <div className="space-y-3">
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
-                      <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                      <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-purple-500/20">
                         {FEATURES_INFO.map((feat) => {
                           const hasFeature = getHasFeature(p.features, feat.key);
                           return (

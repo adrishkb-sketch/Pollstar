@@ -36,28 +36,35 @@ export async function GET() {
     let freePlan = await prisma.plan.findUnique({
       where: { name: 'Free' }
     });
+
+    const basicFreeFeatures = {
+      openPublicPolls: true,
+      realTimeLiveResults: true,
+      singleChoiceMultiSelect: true,
+      multipleQuestionTypes: true,
+      anonymousResponses: true,
+      mcqSingleCorrect: true,
+      trueOrFalse: true,
+      premiumDarkMode: true
+    };
+
     if (!freePlan) {
       freePlan = await prisma.plan.create({
         data: {
           name: 'Free',
-          description: 'Our standard free tier with access to all basic and premium features.',
+          description: 'Our standard free tier with access to all basic features.',
           price: 0.0,
           billingCycle: 'MONTHLY',
-          features: {
-            singleChoice: true,
-            bordaCount: true,
-            knockoutBracket: true,
-            multipageSurveys: true,
-            sentimentAnalysis: true,
-            dropOffTracking: true,
-            crossTabulation: true,
-            geolocations: true,
-            domainLocking: true,
-            otpVerification: true,
-            collaborations: true,
-            inboxMessages: true,
-            dataExport: true
-          }
+          features: basicFreeFeatures
+        }
+      });
+    } else {
+      // Force update Free plan features to the new basic set to align everything
+      freePlan = await prisma.plan.update({
+        where: { id: freePlan.id },
+        data: {
+          features: basicFreeFeatures,
+          description: 'Our standard free tier with access to all basic features.'
         }
       });
     }
