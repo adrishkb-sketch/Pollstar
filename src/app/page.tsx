@@ -8,8 +8,11 @@ import Footer from '@/components/Footer';
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [heroTitle, setHeroTitle] = useState('The Ultimate Platform for Interactive Elections & Polls');
+  const [heroSubtitle, setHeroSubtitle] = useState('Create highly secure, real-time, and mobile-friendly polls. See live result charts, track voter groups, count ranked choices, and view voter maps instantly.');
 
   useEffect(() => {
+    // Fetch user info
     fetch('/api/auth/me')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -19,6 +22,19 @@ export default function Home() {
       })
       .catch((e) => console.error(e))
       .finally(() => setLoading(false));
+
+    // Fetch site configs
+    fetch('/api/admin/site-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && data.configs) {
+          const title = data.configs.find((c: any) => c.key === 'landing_hero_title')?.value;
+          const subtitle = data.configs.find((c: any) => c.key === 'landing_hero_subtitle')?.value;
+          if (title) setHeroTitle(title);
+          if (subtitle) setHeroSubtitle(subtitle);
+        }
+      })
+      .catch((e) => console.error(e));
   }, []);
 
   return (
@@ -72,12 +88,11 @@ export default function Home() {
         </div>
 
         <h1 className="font-outfit text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-tight mb-8">
-          The Ultimate Platform for <br className="hidden sm:inline" />
-          <span className="gradient-text">Interactive Elections & Polls</span>
+          {heroTitle}
         </h1>
 
         <p className="text-gray-400 text-base sm:text-xl max-w-3xl mb-12 leading-relaxed">
-          Create highly secure, real-time, and mobile-friendly polls. See live result charts, track voter groups, count ranked choices, and view voter maps instantly.
+          {heroSubtitle}
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20 w-full sm:w-auto">

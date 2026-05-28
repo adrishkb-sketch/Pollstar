@@ -11,19 +11,112 @@ import {
 } from 'lucide-react';
 
 const FEATURES_KEYS = [
-  { key: 'singleChoice', label: 'Single Choice Voting' },
-  { key: 'bordaCount', label: 'Borda Count Ranked Choice' },
-  { key: 'knockoutBracket', label: 'Knockout Tournament' },
-  { key: 'multipageSurveys', label: 'Multi-page Surveys' },
-  { key: 'sentimentAnalysis', label: 'Sentiment Semantic Text' },
-  { key: 'dropOffTracking', label: 'Abandonment Drop-off' },
-  { key: 'crossTabulation', label: 'Demographic Cross-Tabulation' },
-  { key: 'geolocations', label: 'Geolocations Maps' },
-  { key: 'domainLocking', label: 'Domain locks list' },
-  { key: 'otpVerification', label: 'Voter Email OTP' },
-  { key: 'collaborations', label: 'Creator Collaborations' },
-  { key: 'inboxMessages', label: 'Voter Inbox Direct Messaging' },
-  { key: 'dataExport', label: 'Excel/CSV Data Export' },
+  { key: 'otpVoterVerification', label: 'OTP Voter Verification' },
+  { key: 'closedVoterLists', label: 'Closed Voter Lists' },
+  { key: 'openPublicPolls', label: 'Open Public Polls' },
+  { key: 'realTimeLiveResults', label: 'Real-Time Live Results' },
+  { key: 'liveGeolocationMap', label: 'Live Geolocation Map' },
+  { key: 'liveVoteTicker', label: 'Live Vote Ticker' },
+  { key: 'viralVoteIndicators', label: 'Viral Vote Indicators' },
+  { key: 'rankedChoiceBordaCount', label: 'Ranked Choice / Borda Count' },
+  { key: 'quadraticVoting', label: 'Quadratic Voting' },
+  { key: 'singleChoiceMultiSelect', label: 'Single Choice / Multi-Select' },
+  { key: 'aiResultSummary', label: 'AI Result Summary' },
+  { key: 'timedPolls', label: 'Timed Polls' },
+  { key: 'resultVisibilityControl', label: 'Result Visibility Control' },
+  { key: 'optionRandomization', label: 'Option Randomization' },
+  { key: 'customBranding', label: 'Custom Branding' },
+  { key: 'mobileFirstDesign', label: 'Mobile-First Design' },
+  { key: 'shareableLinksQrCodes', label: 'Shareable Links & QR Codes' },
+  { key: 'embeddableWidget', label: 'Embeddable Widget' },
+  { key: 'opinionChatbox', label: 'Opinion Chatbox' },
+  { key: 'sentimentReactions', label: 'Sentiment Reactions' },
+  { key: 'voterLeaderboard', label: 'Voter Leaderboard' },
+  { key: 'richMediaOptions', label: 'Rich Media Options' },
+  { key: 'multipleChartTypes', label: 'Multiple Chart Types' },
+  { key: 'voteTimelineGraph', label: 'Vote Timeline Graph' },
+  { key: 'multiRoundPolls', label: 'Multi-Round Polls' },
+  { key: 'notificationAlerts', label: 'Notification Alerts' },
+  { key: 'liveBroadcastMode', label: 'Live Broadcast Mode' },
+  { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
+  { key: 'exportResults', label: 'Export Results' },
+  { key: 'revoteChangeVote', label: 'Revote / Change Vote' },
+  { key: 'multipleQuestionTypes', label: 'Multiple Question Types' },
+  { key: 'longFormTextResponses', label: 'Long-Form Text Responses' },
+  { key: 'starEmojiRatings', label: 'Star & Emoji Ratings' },
+  { key: 'matrixGridQuestions', label: 'Matrix / Grid Questions' },
+  { key: 'yesnoToggleQuestions', label: 'Yes/No & Toggle Questions' },
+  { key: 'fileUploadQuestions', label: 'File Upload Questions' },
+  { key: 'conditionalLogicBranching', label: 'Conditional Logic Branching' },
+  { key: 'multiPageSurveys', label: 'Multi-Page Surveys' },
+  { key: 'questionRandomizationSurvey', label: 'Question Randomization' },
+  { key: 'responseTimeLimits', label: 'Response Time Limits' },
+  { key: 'requiredVsOptionalQuestions', label: 'Required vs Optional Questions' },
+  { key: 'inputValidationRules', label: 'Input Validation Rules' },
+  { key: 'realTimeResponseDashboard', label: 'Real-Time Response Dashboard' },
+  { key: 'aiSentimentAnalysis', label: 'AI Sentiment Analysis' },
+  { key: 'wordCloudGenerator', label: 'Word Cloud Generator' },
+  { key: 'aiSummaryReport', label: 'AI Summary Report' },
+  { key: 'automatedReminders', label: 'Automated Reminders' },
+  { key: 'completionRateTracking', label: 'Completion Rate Tracking' },
+  { key: 'anonymousResponses', label: 'Anonymous Responses' },
+  { key: 'targetedDistribution', label: 'Targeted Distribution' },
+  { key: 'scheduledLaunchClose', label: 'Scheduled Launch & Close' },
+  { key: 'mobileOptimizedSurveys', label: 'Mobile-Optimized Surveys' },
+  { key: 'saveResumeLater', label: 'Save & Resume Later' },
+  { key: 'responseFilteringSegmentation', label: 'Response Filtering & Segmentation' },
+  { key: 'exportToCsvpdfexcel', label: 'Export to CSV/PDF/Excel' },
+  { key: 'customBrandingThemes', label: 'Custom Branding & Themes' },
+  { key: 'shareableLinksQrCodesSurvey', label: 'Shareable Links & QR Codes (Survey)' },
+  { key: 'embedInWebsites', label: 'Embed in Websites' },
+  { key: 'dragAndDropQuestionOrdering', label: 'Drag-and-Drop Question Ordering' },
+  { key: 'duplicateResponsePrevention', label: 'Duplicate Response Prevention' },
+  { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
+  { key: 'mcqMultipleCorrect', label: 'MCQ (Multiple Correct)' },
+  { key: 'shortAnswerQuestionsSaq', label: 'Short Answer Questions (SAQ)' },
+  { key: 'longAnswerQuestionsLaq', label: 'Long Answer Questions (LAQ)' },
+  { key: 'trueOrFalse', label: 'True or False' },
+  { key: 'fillInTheBlanks', label: 'Fill in the Blanks' },
+  { key: 'matchTheFollowing', label: 'Match the Following' },
+  { key: 'numericalInput', label: 'Numerical Input' },
+  { key: 'fileUploadAnswers', label: 'File Upload Answers' },
+  { key: 'timedExams', label: 'Timed Exams' },
+  { key: 'fullScreenLockdown', label: 'Full-Screen Lockdown' },
+  { key: 'tabSwitchDetection', label: 'Tab-Switch Detection' },
+  { key: 'copyPastePrevention', label: 'Copy-Paste Prevention' },
+  { key: 'cheatProbabilityScore', label: 'Cheat Probability Score' },
+  { key: 'perQuestionMarks', label: 'Per-Question Marks' },
+  { key: 'autoGradingEngine', label: 'Auto-Grading Engine' },
+  { key: 'manualGradingInterface', label: 'Manual Grading Interface' },
+  { key: 'pageBreaksSections', label: 'Page Breaks / Sections' },
+  { key: 'dragAndDropQuestionOrderingExam', label: 'Drag-and-Drop Question Ordering (Exam)' },
+  { key: 'detailedScoreReports', label: 'Detailed Score Reports' },
+  { key: 'classPerformanceAnalytics', label: 'Class Performance Analytics' },
+  { key: 'weaknessAnalysis', label: 'Weakness Analysis' },
+  { key: 'aiConceptExplanations', label: 'AI Concept Explanations' },
+  { key: 'printableResultsPdf', label: 'Printable Results PDF' },
+  { key: 'bulkResultsExport', label: 'Bulk Results Export' },
+  { key: 'emailResultsToStudents', label: 'Email Results to Students' },
+  { key: 'teacherGradebook', label: 'Teacher Gradebook' },
+  { key: 'accessCodeProtection', label: 'Access Code Protection' },
+  { key: 'scheduledStartEnd', label: 'Scheduled Start & End' },
+  { key: 'questionHints', label: 'Question Hints' },
+  { key: 'customBrandingExam', label: 'Custom Branding (Exam)' },
+  { key: 'negativeMarking', label: 'Negative Marking' },
+  { key: 'studentRosterManagement', label: 'Student Roster Management' },
+  { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
+  { key: 'premiumDarkMode', label: 'Premium Dark Mode' },
+  { key: 'fullyResponsive', label: 'Fully Responsive' },
+  { key: 'realTimeUpdates', label: 'Real-Time Updates' },
+  { key: 'adminDashboard', label: 'Admin Dashboard' },
+  { key: 'secureAuthentication', label: 'Secure Authentication' },
+  { key: 'antiFraudEngine', label: 'Anti-Fraud Engine' },
+  { key: 'organizationAccounts', label: 'Organization Accounts' },
+  { key: 'accessibilityA11y', label: 'Accessibility (A11y)' },
+  { key: 'globalSearch', label: 'Global Search' },
+  { key: 'raiseAnIssueButton', label: 'Raise an Issue Button' },
+  { key: 'apiWebhooks', label: 'API & Webhooks' },
+  { key: 'cdnOptimizedAssets', label: 'CDN-Optimized Assets' }
 ];
 
 export default function AdminPortal() {
@@ -36,10 +129,13 @@ export default function AdminPortal() {
   const [creators, setCreators] = useState<any[]>([]); // "creators" means users list in backend payload
   const [plans, setPlans] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [issues, setIssues] = useState<any[]>([]);
+  const [moderationLogs, setModerationLogs] = useState<any[]>([]);
+  const [contactRequests, setContactRequests] = useState<any[]>([]);
+  const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues'>('users');
-  const [issues, setIssues] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor'>('users');
   const [issueLoadingId, setIssueLoadingId] = useState<string | null>(null);
 
   // Inspector States
@@ -68,23 +164,47 @@ export default function AdminPortal() {
   const [planDesc, setPlanDesc] = useState('');
   const [planPrice, setPlanPrice] = useState('0.0');
   const [planCycle, setPlanCycle] = useState('MONTHLY');
-  const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({
-    singleChoice: true,
-    bordaCount: true,
-    knockoutBracket: true,
-    multipageSurveys: true,
-    sentimentAnalysis: false,
-    dropOffTracking: false,
-    crossTabulation: false,
-    geolocations: false,
-    domainLocking: false,
-    otpVerification: true,
-    collaborations: false,
-    inboxMessages: false,
-    dataExport: false,
+  const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({});
+  
+  // New pricing & trial options
+  const [planIsFree, setPlanIsFree] = useState(false);
+  const [planCurrency, setPlanCurrency] = useState('USD');
+  const [planType, setPlanType] = useState('SUBSCRIPTION');
+  const [planPackQuantity, setPlanPackQuantity] = useState('10');
+  const [planFreePerks, setPlanFreePerks] = useState('0');
+  const [planComboTypes, setPlanComboTypes] = useState<string[]>(['POLL', 'SURVEY']);
+  const [planBadgeColor, setPlanBadgeColor] = useState('#a855f7');
+  const [planBadgeLabel, setPlanBadgeLabel] = useState('');
+  const [planHasFreeTrial, setPlanHasFreeTrial] = useState(false);
+  const [planFreeTrialDays, setPlanFreeTrialDays] = useState('7');
+  const [planFreeTrialFeatures, setPlanFreeTrialFeatures] = useState<Record<string, boolean>>({});
+  const [planPollSubtypes, setPlanPollSubtypes] = useState<Record<string, boolean>>({
+    mcq: true,
+    ranked: true,
+    multi: true,
+    knockout: true
   });
+  const [planIsActive, setPlanIsActive] = useState(true);
+
   const [planFormError, setPlanFormError] = useState('');
   const [planFormLoading, setPlanFormLoading] = useState(false);
+
+  // Contact requests inspector & reply notes
+  const [selectedContact, setSelectedContact] = useState<any | null>(null);
+  const [contactNote, setContactNote] = useState('');
+  const [contactNoteLoading, setContactNoteLoading] = useState(false);
+
+  // Moderation state
+  const [modLoadingId, setModLoadingId] = useState<string | null>(null);
+
+  // Site Config state
+  const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [configSaving, setConfigSaving] = useState(false);
+
+  // Bulk transfer target plan selection
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [bulkTargetPlanId, setBulkTargetPlanId] = useState('');
+  const [bulkTransferLoading, setBulkTransferLoading] = useState(false);
 
   // Action loading track
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -132,6 +252,34 @@ export default function AdminPortal() {
       if (issuesRes.ok) {
         const issuesData = await issuesRes.json();
         setIssues(issuesData.issues || []);
+      }
+
+      // 5. Fetch Content Moderation Logs
+      const modRes = await fetch('/api/admin/moderation');
+      if (modRes.ok) {
+        const modData = await modRes.json();
+        setModerationLogs(modData.logs || []);
+      }
+
+      // 6. Fetch Contact Requests
+      const contactRes = await fetch('/api/contact');
+      if (contactRes.ok) {
+        const contactData = await contactRes.json();
+        setContactRequests(contactData.requests || []);
+      }
+
+      // 7. Fetch Site Configs
+      const configRes = await fetch('/api/admin/site-config');
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        setSiteConfigs(configData.configs || []);
+        
+        // Populate configValues dictionary
+        const vals: Record<string, string> = {};
+        (configData.configs || []).forEach((c: any) => {
+          vals[c.key] = c.value;
+        });
+        setConfigValues(vals);
       }
 
     } catch (err) {
@@ -365,9 +513,27 @@ export default function AdminPortal() {
     setPlanDesc('');
     setPlanPrice('0.0');
     setPlanCycle('MONTHLY');
+    setPlanIsFree(false);
+    setPlanCurrency('USD');
+    setPlanType('SUBSCRIPTION');
+    setPlanPackQuantity('10');
+    setPlanFreePerks('0');
+    setPlanComboTypes(['POLL', 'SURVEY']);
+    setPlanBadgeColor('#a855f7');
+    setPlanBadgeLabel('');
+    setPlanHasFreeTrial(false);
+    setPlanFreeTrialDays('7');
+    setPlanIsActive(true);
+
     const resetFeats: Record<string, boolean> = {};
     FEATURES_KEYS.forEach(f => { resetFeats[f.key] = true; });
     setPlanFeatures(resetFeats);
+
+    const resetTrialFeats: Record<string, boolean> = {};
+    FEATURES_KEYS.forEach(f => { resetTrialFeats[f.key] = false; });
+    setPlanFreeTrialFeatures(resetTrialFeats);
+
+    setPlanPollSubtypes({ mcq: true, ranked: true, multi: true, knockout: true });
     setPlanFormError('');
     setShowPlanForm(true);
   };
@@ -378,12 +544,41 @@ export default function AdminPortal() {
     setPlanDesc(plan.description || '');
     setPlanPrice(plan.price.toString());
     setPlanCycle(plan.billingCycle);
-    
+    setPlanIsFree(plan.isFree);
+    setPlanCurrency(plan.currency || 'USD');
+    setPlanType(plan.planType || 'SUBSCRIPTION');
+    setPlanPackQuantity((plan.packQuantity || 10).toString());
+    setPlanFreePerks((plan.freePerks || 0).toString());
+    setPlanComboTypes(plan.comboTypes ? plan.comboTypes.split(',') : ['POLL', 'SURVEY']);
+    setPlanBadgeColor(plan.badgeColor || '#a855f7');
+    setPlanBadgeLabel(plan.badgeLabel || '');
+    setPlanHasFreeTrial(plan.hasFreeTrial || false);
+    setPlanFreeTrialDays((plan.freeTrialDays || 7).toString());
+    setPlanIsActive(plan.isActive !== false);
+
     let resolvedFeats: Record<string, boolean> = {};
     FEATURES_KEYS.forEach(f => {
       resolvedFeats[f.key] = plan.features ? !!plan.features[f.key] : false;
     });
     setPlanFeatures(resolvedFeats);
+
+    let resolvedTrialFeats: Record<string, boolean> = {};
+    FEATURES_KEYS.forEach(f => {
+      resolvedTrialFeats[f.key] = plan.freeTrialFeatures ? !!plan.freeTrialFeatures[f.key] : false;
+    });
+    setPlanFreeTrialFeatures(resolvedTrialFeats);
+
+    let resolvedSubtypes = { mcq: true, ranked: true, multi: true, knockout: true };
+    if (plan.pollSubtypes) {
+      resolvedSubtypes = {
+        mcq: plan.pollSubtypes.includes('mcq'),
+        ranked: plan.pollSubtypes.includes('ranked'),
+        multi: plan.pollSubtypes.includes('multi'),
+        knockout: plan.pollSubtypes.includes('knockout')
+      };
+    }
+    setPlanPollSubtypes(resolvedSubtypes);
+
     setPlanFormError('');
     setShowPlanForm(true);
   };
@@ -403,8 +598,21 @@ export default function AdminPortal() {
       planId: editingPlan?.id,
       name: planName,
       description: planDesc,
-      price: parseFloat(planPrice),
+      price: planIsFree ? 0 : parseFloat(planPrice),
+      isFree: planIsFree,
+      currency: planCurrency,
       billingCycle: planCycle,
+      planType,
+      packQuantity: planType !== 'SUBSCRIPTION' ? parseInt(planPackQuantity) : null,
+      freePerks: parseInt(planFreePerks) || 0,
+      comboTypes: planType === 'COMBO_PACK' ? planComboTypes.join(',') : null,
+      badgeColor: planBadgeColor,
+      badgeLabel: planBadgeLabel,
+      hasFreeTrial: planHasFreeTrial,
+      freeTrialDays: planHasFreeTrial ? parseInt(planFreeTrialDays) : null,
+      freeTrialFeatures: planHasFreeTrial ? planFreeTrialFeatures : null,
+      pollSubtypes: Object.keys(planPollSubtypes).filter(k => planPollSubtypes[k]).join(','),
+      isActive: planIsActive,
       features: planFeatures,
     };
 
@@ -425,6 +633,107 @@ export default function AdminPortal() {
       setPlanFormError(err.message);
     } finally {
       setPlanFormLoading(false);
+    }
+  };
+
+  const handleBulkTransfer = async () => {
+    if (selectedUserIds.length === 0) {
+      alert('No users selected.');
+      return;
+    }
+    if (!bulkTargetPlanId) {
+      alert('Please select a target plan.');
+      return;
+    }
+    setBulkTransferLoading(true);
+    try {
+      const res = await fetch('/api/admin/plans', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bulkTransfer: true,
+          targetPlanId: bulkTargetPlanId,
+          userIds: selectedUserIds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to transfer users');
+      
+      alert(`Successfully transferred ${data.transferred} users.`);
+      setSelectedUserIds([]);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setBulkTransferLoading(false);
+    }
+  };
+
+  const handleResolveModeration = async (id: string, action: 'APPROVE' | 'REJECT') => {
+    setModLoadingId(id);
+    try {
+      const res = await fetch('/api/admin/moderation', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update moderation status');
+      
+      // Update in local state
+      setModerationLogs(prev => prev.map(m => m.id === id ? { ...m, status: action === 'APPROVE' ? 'APPROVED' : 'REJECTED' } : m));
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setModLoadingId(null);
+    }
+  };
+
+  const handleSaveContactNote = async () => {
+    if (!selectedContact) return;
+    setContactNoteLoading(true);
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedContact.id,
+          adminNote: contactNote,
+          status: 'READ'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update contact request');
+      
+      setSelectedContact(null);
+      setContactNote('');
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setContactNoteLoading(false);
+    }
+  };
+
+  const handleSaveSiteConfigs = async () => {
+    setConfigSaving(true);
+    try {
+      const entries = Object.entries(configValues).map(([key, value]) => ({ key, value }));
+      const res = await fetch('/api/admin/site-config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save site configurations');
+      
+      alert('Website configurations updated successfully.');
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setConfigSaving(false);
     }
   };
 
@@ -616,11 +925,64 @@ export default function AdminPortal() {
           </div>
         )}
 
+        {/* System Stats Bar */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Total Creators</span>
+              <span className="text-xl font-bold text-white mt-1 block">{creators.length}</span>
+            </div>
+            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Verifications</span>
+              <span className="text-xl font-bold text-amber-400 mt-1 block">{pendingVerifications.length}</span>
+            </div>
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Active Tiers</span>
+              <span className="text-xl font-bold text-emerald-400 mt-1 block">{plans.length}</span>
+            </div>
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Flagged Items</span>
+              <span className="text-xl font-bold text-red-400 mt-1 block">
+                {moderationLogs.filter(m => m.status === 'PENDING').length}
+              </span>
+            </div>
+            <div className="p-2 rounded-xl bg-red-500/10 text-red-400">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between col-span-2 md:col-span-1">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Contact Inquiries</span>
+              <span className="text-xl font-bold text-blue-400 mt-1 block">
+                {contactRequests.filter(c => c.status === 'UNREAD').length}
+              </span>
+            </div>
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+              <FileText className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
         {/* Tab Selectors */}
-        <div className="flex border-b border-white/5 space-x-6 pb-1">
+        <div className="flex border-b border-white/5 space-x-6 pb-1 overflow-x-auto">
           <button
             onClick={() => setActiveTab('users')}
-            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider shrink-0 ${
               activeTab === 'users' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -631,7 +993,7 @@ export default function AdminPortal() {
           </button>
           <button
             onClick={() => setActiveTab('verifications')}
-            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 ${
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
               activeTab === 'verifications' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -647,7 +1009,7 @@ export default function AdminPortal() {
           </button>
           <button
             onClick={() => setActiveTab('plans')}
-            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider shrink-0 ${
               activeTab === 'plans' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -657,8 +1019,51 @@ export default function AdminPortal() {
             )}
           </button>
           <button
+            onClick={() => setActiveTab('moderation')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'moderation' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Content Moderation
+            {moderationLogs.filter(m => m.status === 'PENDING').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full animate-pulse">
+                {moderationLogs.filter(m => m.status === 'PENDING').length}
+              </span>
+            )}
+            {activeTab === 'moderation' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('contact')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'contact' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Contact Inquiries
+            {contactRequests.filter(c => c.status === 'UNREAD').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded-full">
+                {contactRequests.filter(c => c.status === 'UNREAD').length}
+              </span>
+            )}
+            {activeTab === 'contact' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('site_editor')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider shrink-0 ${
+              activeTab === 'site_editor' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Site Editor
+            {activeTab === 'site_editor' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('logs')}
-            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider ${
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider shrink-0 ${
               activeTab === 'logs' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -669,7 +1074,7 @@ export default function AdminPortal() {
           </button>
           <button
             onClick={() => setActiveTab('issues')}
-            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 ${
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
               activeTab === 'issues' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -700,11 +1105,53 @@ export default function AdminPortal() {
               </div>
             </div>
 
+            {/* Bulk Actions Bar */}
+            {selectedUserIds.length > 0 && (
+              <div className="p-4 rounded-2xl bg-purple-950/20 border border-purple-500/20 flex flex-col sm:flex-row items-center justify-between gap-4 animate-slide-in">
+                <span className="text-xs text-purple-300 font-semibold">
+                  Selected {selectedUserIds.length} creator accounts
+                </span>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={bulkTargetPlanId}
+                    onChange={e => setBulkTargetPlanId(e.target.value)}
+                    className="bg-[#030712] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-purple-500"
+                  >
+                    <option value="">-- Choose Target Plan --</option>
+                    {plans.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.isFree ? 'Free' : `${p.currency} ${p.price}`})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleBulkTransfer}
+                    disabled={bulkTransferLoading || !bulkTargetPlanId}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    {bulkTransferLoading ? 'Transferring...' : 'Transfer Selected'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-left text-xs">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                      <th className="p-4 w-10">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUserIds.length === filteredUsers.length && filteredUsers.length > 0} 
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUserIds(filteredUsers.map(u => u.id));
+                            } else {
+                              setSelectedUserIds([]);
+                            }
+                          }}
+                          className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0" 
+                        />
+                      </th>
                       <th className="p-4">User</th>
                       <th className="p-4">Demographics</th>
                       <th className="p-4">Active Plan</th>
@@ -715,13 +1162,27 @@ export default function AdminPortal() {
                   <tbody className="divide-y divide-white/5 text-gray-300">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-gray-500 italic">No users found.</td>
+                        <td colSpan={6} className="p-8 text-center text-gray-500 italic">No users found.</td>
                       </tr>
                     ) : (
                       filteredUsers.map((u) => {
                         const isUserSuspended = u.isSuspended && (!u.suspensionUntil || new Date() < new Date(u.suspensionUntil));
                         return (
                           <tr key={u.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-4 w-10">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedUserIds.includes(u.id)} 
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedUserIds([...selectedUserIds, u.id]);
+                                  } else {
+                                    setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                                  }
+                                }}
+                                className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0" 
+                              />
+                            </td>
                             <td className="p-4">
                               <div className="flex items-center space-x-3">
                                 <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
@@ -746,7 +1207,17 @@ export default function AdminPortal() {
                               </span>
                             </td>
                             <td className="p-4">
-                              <span className="font-semibold text-purple-300">{u.plan?.name || 'Free'}</span>
+                              <span 
+                                className="px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 w-fit"
+                                style={{
+                                  backgroundColor: `${u.plan?.badgeColor || '#a855f7'}1A`,
+                                  borderColor: `${u.plan?.badgeColor || '#a855f7'}33`,
+                                  color: u.plan?.badgeColor || '#a855f7'
+                                }}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: u.plan?.badgeColor || '#a855f7' }} />
+                                {u.plan?.badgeLabel || u.plan?.name || 'Free'}
+                              </span>
                             </td>
                             <td className="p-4">
                               <div className="flex flex-wrap gap-1.5">
@@ -864,8 +1335,35 @@ export default function AdminPortal() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {plans.map((p) => {
                 const featsCount = p.features ? Object.values(p.features).filter(Boolean).length : 0;
+                
+                // Determine currency prefix
+                let currSymbol = '$';
+                if (p.currency === 'INR') currSymbol = '₹';
+                else if (p.currency === 'EUR') currSymbol = '€';
+                else if (p.currency === 'GBP') currSymbol = '£';
+                else if (p.currency === 'AUTO') currSymbol = 'Geo ';
+
                 return (
-                  <div key={p.id} className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] flex flex-col justify-between hover:border-white/10 transition-all relative">
+                  <div key={p.id} className={`glass-card rounded-3xl p-6 border bg-[#080d1a] flex flex-col justify-between hover:border-white/10 transition-all relative ${
+                    !p.isActive ? 'opacity-60 border-dashed border-white/5' : 'border-white/5'
+                  }`}>
+                    {/* Active/Inactive state & Badge preview */}
+                    <div className="absolute top-4 right-4 flex items-center gap-1.5">
+                      {p.badgeLabel && (
+                        <span 
+                          className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border"
+                          style={{
+                            backgroundColor: `${p.badgeColor || '#a855f7'}1A`,
+                            borderColor: `${p.badgeColor || '#a855f7'}40`,
+                            color: p.badgeColor || '#a855f7'
+                          }}
+                        >
+                          {p.badgeLabel}
+                        </span>
+                      )}
+                      <span className={`w-2 h-2 rounded-full ${p.isActive ? 'bg-emerald-500' : 'bg-gray-500'}`} title={p.isActive ? 'Active Plan' : 'Inactive Plan'} />
+                    </div>
+
                     <div className="space-y-4">
                       <div className="flex items-center justify-between border-b border-white/5 pb-3">
                         <span className="text-[10px] text-gray-500 uppercase font-extrabold tracking-widest">{p.billingCycle} billing</span>
@@ -875,13 +1373,44 @@ export default function AdminPortal() {
                       </div>
                       
                       <div>
-                        <h4 className="font-outfit text-xl font-extrabold text-white">{p.name} Tier</h4>
+                        <h4 className="font-outfit text-xl font-extrabold text-white flex items-center gap-2">
+                          {p.name}
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-white/5 border border-white/5 text-gray-400 uppercase">
+                            {p.planType || 'SUBSCRIPTION'}
+                          </span>
+                        </h4>
                         <p className="text-gray-400 text-xs mt-1 leading-relaxed line-clamp-2">{p.description || 'No plan details provided.'}</p>
                       </div>
 
+                      {/* Display trial & pack information */}
+                      {(p.hasFreeTrial || p.packQuantity) && (
+                        <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1">
+                          {p.hasFreeTrial && (
+                            <div className="flex items-center justify-between">
+                              <span>Free Trial Period:</span>
+                              <strong className="text-purple-300 font-bold">{p.freeTrialDays || 7} Days</strong>
+                            </div>
+                          )}
+                          {p.planType !== 'SUBSCRIPTION' && p.packQuantity && (
+                            <div className="flex items-center justify-between">
+                              <span>Pack Allowance:</span>
+                              <strong className="text-emerald-300 font-bold">
+                                {p.packQuantity} Items {p.freePerks > 0 && `(+ ${p.freePerks} Bonus)`}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <div className="pt-2">
-                        <span className="font-outfit text-3xl font-black text-white">${p.price.toFixed(2)}</span>
-                        <span className="text-gray-500 text-[11px] font-bold"> / Cycle</span>
+                        {p.isFree ? (
+                          <span className="font-outfit text-3xl font-black text-white">FREE</span>
+                        ) : (
+                          <>
+                            <span className="font-outfit text-3xl font-black text-white">{currSymbol}{p.price.toFixed(2)}</span>
+                            <span className="text-gray-500 text-[11px] font-bold"> / Cycle</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -1058,6 +1587,311 @@ export default function AdminPortal() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: CONTENT MODERATION */}
+        {activeTab === 'moderation' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex items-center space-x-2 pb-4 border-b border-white/5">
+              <ShieldCheck className="w-5 h-5 text-purple-400" />
+              <div>
+                <h3 className="font-outfit text-lg font-bold text-white">Content Moderation & Flagged Items</h3>
+                <p className="text-gray-500 text-xs mt-0.5">Inspect items flagged by AI for offensive, toxic, or explicit content.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {moderationLogs.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-500 italic">
+                  No content has been flagged by the AI.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/1">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                        <th className="p-4">Flagged Item Details</th>
+                        <th className="p-4">Reason For Flag</th>
+                        <th className="p-4">Violating text Snippet</th>
+                        <th className="p-4">Created On</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-gray-300">
+                      {moderationLogs.map((log) => {
+                        const isPending = log.status === 'PENDING';
+                        return (
+                          <tr key={log.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-4">
+                              <span className="font-semibold text-white block">{log.poll?.title || 'Untitled Poll'}</span>
+                              <span className="text-[10px] text-gray-500 block font-mono">ID: {log.pollId}</span>
+                              <span className="text-[10px] text-indigo-400 block font-semibold">Creator: {log.poll?.creator?.email || 'N/A'}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-[10px]">
+                                {log.reason}
+                              </span>
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              <p className="font-mono text-[11px] text-amber-300 bg-white/5 border border-white/5 p-2 rounded-lg max-h-24 overflow-y-auto whitespace-pre-wrap animate-pulse-glow">
+                                {log.flaggedText || 'N/A'}
+                              </p>
+                            </td>
+                            <td className="p-4 text-gray-500 font-mono text-[10px]">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase ${
+                                log.status === 'PENDING' 
+                                  ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' 
+                                  : log.status === 'APPROVED'
+                                  ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                  : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                              }`}>
+                                {log.status}
+                              </span>
+                              {log.reviewedBy && (
+                                <span className="block text-[9px] text-gray-500 mt-1 font-semibold">By: {log.reviewedBy}</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right">
+                              {isPending ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleResolveModeration(log.id, 'APPROVE')}
+                                    disabled={modLoadingId === log.id}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow shadow-emerald-500/10"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleResolveModeration(log.id, 'REJECT')}
+                                    disabled={modLoadingId === log.id}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow shadow-red-500/10"
+                                  >
+                                    Block
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-gray-500 text-[11px] italic">Resolved</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: CONTACT REQUESTS */}
+        {activeTab === 'contact' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex items-center space-x-2 pb-4 border-b border-white/5">
+              <FileText className="w-5 h-5 text-purple-400" />
+              <div>
+                <h3 className="font-outfit text-lg font-bold text-white">Contact & Support Requests</h3>
+                <p className="text-gray-500 text-xs mt-0.5">Inspect inquiries sent via the Contact Us form.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {contactRequests.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-500 italic">
+                  No contact requests received yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/1">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white/2">
+                        <th className="p-4">Sender</th>
+                        <th className="p-4">Subject</th>
+                        <th className="p-4">Message Snippet</th>
+                        <th className="p-4">Submitted On</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-gray-300">
+                      {contactRequests.map((reqItem) => {
+                        const isUnread = reqItem.status === 'UNREAD';
+                        return (
+                          <tr key={reqItem.id} className="hover:bg-white/2 transition-colors">
+                            <td className="p-4">
+                              <span className="font-bold text-white block">{reqItem.name}</span>
+                              <span className="text-[10px] text-gray-500 block font-mono">{reqItem.email}</span>
+                            </td>
+                            <td className="p-4 font-semibold text-gray-300">
+                              {reqItem.subject}
+                            </td>
+                            <td className="p-4 max-w-xs truncate">
+                              <span className="text-gray-400 truncate block">{reqItem.message}</span>
+                            </td>
+                            <td className="p-4 text-gray-500 font-mono text-[10px]">
+                              {new Date(reqItem.createdAt).toLocaleString()}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                                isUnread 
+                                  ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400 animate-pulse' 
+                                  : 'bg-white/5 border border-white/5 text-gray-400'
+                              }`}>
+                                {reqItem.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => {
+                                  setSelectedContact(reqItem);
+                                  setContactNote(reqItem.adminNote || '');
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/15 border border-purple-500/20 text-purple-300 hover:bg-purple-600 hover:text-white transition-all"
+                              >
+                                View & Annotate
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 8: WEBSITE CONTENT EDITOR */}
+        {activeTab === 'site_editor' && (
+          <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-white/5">
+              <div className="flex items-center space-x-2.5">
+                <Edit2 className="w-5 h-5 text-purple-400" />
+                <div>
+                  <h3 className="font-outfit text-lg font-bold text-white">Website Content Editor</h3>
+                  <p className="text-gray-500 text-xs mt-0.5">Edit copy on the home page, about page, contact page, and footer live.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleSaveSiteConfigs}
+                disabled={configSaving}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow"
+              >
+                {configSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                <span>Save All Changes</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Home Page Copy */}
+              <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1">
+                <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400 border-b border-white/5 pb-2">Home Page Hero</h4>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Hero Main Title</label>
+                  <input
+                    type="text"
+                    value={configValues['landing_hero_title'] || 'The Ultimate Platform for Interactive Elections & Polls'}
+                    onChange={e => setConfigValues({ ...configValues, landing_hero_title: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Hero Subtitle</label>
+                  <textarea
+                    rows={3}
+                    value={configValues['landing_hero_subtitle'] || 'Create highly secure, real-time, and mobile-friendly polls. See live result charts, track voter groups, count ranked choices, and view voter maps instantly.'}
+                    onChange={e => setConfigValues({ ...configValues, landing_hero_subtitle: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* About Us Page Copy */}
+              <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1">
+                <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400 border-b border-white/5 pb-2">About Page Content</h4>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Company Mission Statement</label>
+                  <textarea
+                    rows={3}
+                    value={configValues['about_company_mission'] || 'At Pollstar, our mission is to empower teams, organizations, and educators with beautifully simple yet highly sophisticated voting and evaluation tools.'}
+                    onChange={e => setConfigValues({ ...configValues, about_company_mission: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Company History Copy</label>
+                  <textarea
+                    rows={2}
+                    value={configValues['about_history'] || 'Founded in 2026, Pollstar was built by engineers frustrated by archaic, complex survey systems.'}
+                    onChange={e => setConfigValues({ ...configValues, about_history: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Us Info */}
+              <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1">
+                <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400 border-b border-white/5 pb-2">Contact Details</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Contact Email</label>
+                    <input
+                      type="text"
+                      value={configValues['contact_email'] || 'support@pollstar.com'}
+                      onChange={e => setConfigValues({ ...configValues, contact_email: e.target.value })}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Contact Phone</label>
+                    <input
+                      type="text"
+                      value={configValues['contact_phone'] || '+1 (555) 019-2834'}
+                      onChange={e => setConfigValues({ ...configValues, contact_phone: e.target.value })}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">HQ Address</label>
+                  <input
+                    type="text"
+                    value={configValues['contact_address'] || '100 Innovation Way, Suite 400, San Francisco, CA'}
+                    onChange={e => setConfigValues({ ...configValues, contact_address: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Footer Text */}
+              <div className="space-y-4 border border-white/5 rounded-2xl p-5 bg-white/1">
+                <h4 className="text-xs font-extrabold uppercase tracking-widest text-purple-400 border-b border-white/5 pb-2">Footer Details</h4>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Footer Tagline</label>
+                  <input
+                    type="text"
+                    value={configValues['footer_tagline'] || 'The premium platform for real-time polls, surveys & exams.'}
+                    onChange={e => setConfigValues({ ...configValues, footer_tagline: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Copyright Text</label>
+                  <input
+                    type="text"
+                    value={configValues['footer_copyright'] || '© 2026 Pollstar. All rights reserved.'}
+                    onChange={e => setConfigValues({ ...configValues, footer_copyright: e.target.value })}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1467,7 +2301,7 @@ export default function AdminPortal() {
       {/* ── PLANS CREATE / EDIT FORM MODAL ────────────────────────────── */}
       {showPlanForm && (
         <div className="fixed inset-0 bg-[#020612]/90 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-2xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-6 animate-fade-in">
+          <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-4xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-6 animate-fade-in">
             <button
               onClick={() => setShowPlanForm(false)}
               className="absolute top-6 right-6 text-gray-400 hover:text-white transition-all p-1 bg-white/5 rounded-lg border border-white/5"
@@ -1490,49 +2324,279 @@ export default function AdminPortal() {
             )}
 
             <form onSubmit={handleSavePlan} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Row 1: Name, Plan Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Plan Name Label</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Standard, Creator Pro"
+                    placeholder="e.g. Standard, Creator Pro, 10 Polls Pack"
                     value={planName}
                     onChange={e => setPlanName(e.target.value)}
                     className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                   />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Plan Type</label>
+                  <select
+                    value={planType}
+                    onChange={e => setPlanType(e.target.value)}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  >
+                    <option value="SUBSCRIPTION">Recurring Subscription Tier</option>
+                    <option value="POLL_PACK">Individual Polls Pack</option>
+                    <option value="SURVEY_PACK">Individual Surveys Pack</option>
+                    <option value="EXAM_PACK">Individual Exams Pack</option>
+                    <option value="COMBO_PACK">Combo Feature Pack</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Price details */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5">
+                <div className="flex items-center space-x-2 pt-5">
+                  <input
+                    type="checkbox"
+                    id="planIsFreeCheckbox"
+                    checked={planIsFree}
+                    onChange={e => {
+                      setPlanIsFree(e.target.checked);
+                      if (e.target.checked) setPlanPrice('0.0');
+                    }}
+                    className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
+                  />
+                  <label htmlFor="planIsFreeCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                    Free Tier Plan
+                  </label>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    disabled={planIsFree}
+                    placeholder="e.g. 19.99"
+                    value={planPrice}
+                    onChange={e => setPlanPrice(e.target.value)}
+                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 disabled:opacity-40"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Currency Mode</label>
+                  <select
+                    value={planCurrency}
+                    onChange={e => setPlanCurrency(e.target.value)}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  >
+                    <option value="USD">USD ($ - Dollars)</option>
+                    <option value="INR">INR (₹ - Rupees)</option>
+                    <option value="EUR">EUR (€ - Euros)</option>
+                    <option value="GBP">GBP (£ - Pounds)</option>
+                    <option value="AUTO">AUTO (Local Geo-Currency)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Conditional Row 3: Pack Quantities, perks, combos */}
+              {planType !== 'SUBSCRIPTION' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5 animate-slide-in">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Price ($)</label>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pack Quantity</label>
                     <input
                       type="number"
-                      step="0.01"
+                      min="1"
                       required
-                      placeholder="e.g. 19.99"
-                      value={planPrice}
-                      onChange={e => setPlanPrice(e.target.value)}
+                      value={planPackQuantity}
+                      onChange={e => setPlanPackQuantity(e.target.value)}
                       className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                     />
                   </div>
+
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Cycle</label>
-                    <select
-                      value={planCycle}
-                      onChange={e => setPlanCycle(e.target.value)}
-                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                    >
-                      <option value="MONTHLY">Monthly</option>
-                      <option value="YEARLY">Yearly</option>
-                      <option value="PACK_5">5 Polls Pack</option>
-                      <option value="PACK_10">10 Polls Pack</option>
-                      <option value="ONE_TIME">One Time</option>
-                    </select>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Free Bonus Perks (e.g., 2 Free)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={planFreePerks}
+                      onChange={e => setPlanFreePerks(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  {planType === 'COMBO_PACK' && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Combo Types Included</label>
+                      <div className="flex items-center gap-3 pt-2">
+                        {['POLL', 'SURVEY', 'EXAM'].map(t => {
+                          const isSel = planComboTypes.includes(t);
+                          return (
+                            <button
+                              type="button"
+                              key={t}
+                              onClick={() => {
+                                if (isSel) {
+                                  setPlanComboTypes(planComboTypes.filter(x => x !== t));
+                                } else {
+                                  setPlanComboTypes([...planComboTypes, t]);
+                                }
+                              }}
+                              className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                                isSel ? 'bg-purple-500/20 border-purple-500 text-purple-300' : 'bg-white/2 border-white/5 text-gray-500 hover:border-white/10'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 4: Badge and Cycle Details */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billing Cycle</label>
+                  <select
+                    value={planCycle}
+                    onChange={e => setPlanCycle(e.target.value)}
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  >
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="YEARLY">Yearly</option>
+                    <option value="ONE_TIME">One Time</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Badge Label (User Tag)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pro, Educator, VIP"
+                    value={planBadgeLabel}
+                    onChange={e => setPlanBadgeLabel(e.target.value)}
+                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Badge Color Theme</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={planBadgeColor}
+                      onChange={e => setPlanBadgeColor(e.target.value)}
+                      className="bg-transparent border border-white/10 rounded-xl w-11 h-9.5 p-0.5 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={planBadgeColor}
+                      onChange={e => setPlanBadgeColor(e.target.value)}
+                      className="flex-1 bg-white/3 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500"
+                    />
                   </div>
                 </div>
               </div>
 
+              {/* Row 5: Free trial options */}
+              <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="planHasFreeTrialCheckbox"
+                      checked={planHasFreeTrial}
+                      onChange={e => setPlanHasFreeTrial(e.target.checked)}
+                      className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
+                    />
+                    <label htmlFor="planHasFreeTrialCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                      Offer Free Trial Period
+                    </label>
+                  </div>
+                  {planHasFreeTrial && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-gray-500">Trial Days:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={planFreeTrialDays}
+                        onChange={e => setPlanFreeTrialDays(e.target.value)}
+                        className="bg-[#030712] border border-white/10 rounded-lg w-16 px-2 py-1 text-xs text-white text-center outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {planHasFreeTrial && (
+                  <div className="space-y-2 animate-slide-in">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
+                      Free Trial Allowed Features
+                    </label>
+                    <div className="max-h-[140px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pr-2">
+                      {FEATURES_KEYS.map((item) => {
+                        const isChecked = planFreeTrialFeatures[item.key] || false;
+                        return (
+                          <div
+                            key={`trial-${item.key}`}
+                            onClick={() => setPlanFreeTrialFeatures({ ...planFreeTrialFeatures, [item.key]: !isChecked })}
+                            className={`p-2 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                              isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                            }`}
+                          >
+                            <span className="text-[10px] text-gray-300 truncate">{item.label}</span>
+                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                              isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                            }`}>
+                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 6: Poll subtypes allowed */}
+              <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
+                  Allowed Poll Subtypes
+                </label>
+                <div className="flex flex-wrap gap-4 pt-1">
+                  {[
+                    { key: 'mcq', label: 'MCQ (Single Correct)' },
+                    { key: 'ranked', label: 'Ranked Choice Poll' },
+                    { key: 'multi', label: 'Multiple Correct (Checkboxes)' },
+                    { key: 'knockout', label: 'Knockout Bracket Tournament' }
+                  ].map(subtype => {
+                    const isChecked = planPollSubtypes[subtype.key] || false;
+                    return (
+                      <div
+                        key={subtype.key}
+                        onClick={() => setPlanPollSubtypes({ ...planPollSubtypes, [subtype.key]: !isChecked })}
+                        className="flex items-center space-x-2 cursor-pointer select-none"
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                          isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20 bg-white/3'
+                        }`}>
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <span className="text-xs text-gray-300 font-medium">{subtype.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Row 7: Description text */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Description / Tagline</label>
                 <textarea
@@ -1544,21 +2608,51 @@ export default function AdminPortal() {
                 />
               </div>
 
+              {/* Row 8: Features list checkboxes */}
               <div className="space-y-3">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">Toggle Features Allowed (13 Toggles)</label>
+                <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                    Toggle Features Allowed ({FEATURES_KEYS.length} Features)
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allTrue: Record<string, boolean> = {};
+                        FEATURES_KEYS.forEach(f => { allTrue[f.key] = true; });
+                        setPlanFeatures(allTrue);
+                      }}
+                      className="text-[9px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-600 text-[10px]">•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allFalse: Record<string, boolean> = {};
+                        FEATURES_KEYS.forEach(f => { allFalse[f.key] = false; });
+                        setPlanFeatures(allFalse);
+                      }}
+                      className="text-[9px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-400"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="max-h-[260px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pr-2">
                   {FEATURES_KEYS.map((item) => {
                     const isChecked = planFeatures[item.key] || false;
                     return (
                       <div
                         key={item.key}
                         onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                        className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                        className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-colors ${
                           isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
                         }`}
                       >
-                        <span className="text-[11px] text-gray-300 font-medium">{item.label}</span>
+                        <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
                         <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
                           isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
                         }`}>
@@ -1568,6 +2662,20 @@ export default function AdminPortal() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Row 9: Status Toggle */}
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="planIsActiveCheckbox"
+                  checked={planIsActive}
+                  onChange={e => setPlanIsActive(e.target.checked)}
+                  className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
+                />
+                <label htmlFor="planIsActiveCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                  Plan is Active (Available for Users)
+                </label>
               </div>
 
               <div className="flex gap-4 pt-4 border-t border-white/5">
@@ -1584,10 +2692,68 @@ export default function AdminPortal() {
                   className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow"
                 >
                   {planFormLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  <span>{editingPlan ? 'Save Subscription' : 'Create Subscription'}</span>
+                  <span>{editingPlan ? 'Save Plan Changes' : 'Create Custom Plan'}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Contact Inquiry Annotation Modal Overlay */}
+      {selectedContact && (
+        <div className="fixed inset-0 bg-[#030712]/90 backdrop-blur-md flex items-center justify-center p-6 z-50 overflow-y-auto animate-fade-in">
+          <div className="glass-card rounded-3xl w-full max-w-xl p-8 border border-white/5 bg-[#080d1a] relative space-y-6">
+            <button
+              onClick={() => setSelectedContact(null)}
+              className="absolute top-6 right-6 p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b border-white/5 pb-4 space-y-1">
+              <span className="text-[10px] text-purple-400 font-extrabold uppercase tracking-widest">Inquiry Details</span>
+              <h3 className="font-outfit text-xl font-bold text-white">{selectedContact.subject}</h3>
+              <p className="text-gray-400 text-xs">From: <strong>{selectedContact.name}</strong> ({selectedContact.email})</p>
+              <p className="text-gray-500 text-[10px] font-mono">Date: {new Date(selectedContact.createdAt).toLocaleString()}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Sender's Message:</label>
+              <p className="p-4 rounded-2xl bg-white/2 border border-white/5 text-gray-300 text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                {selectedContact.message}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Administrator Action Notes:</label>
+              <textarea
+                placeholder="Enter resolutions, response notes, or administrative reminders here..."
+                value={contactNote}
+                onChange={e => setContactNote(e.target.value)}
+                rows={3}
+                className="w-full bg-[#030712] border border-white/10 text-white placeholder-gray-500 text-xs rounded-xl p-3 focus:outline-none focus:border-purple-500 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedContact(null)}
+                className="flex-1 py-2.5 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveContactNote}
+                disabled={contactNoteLoading}
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow"
+              >
+                {contactNoteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                <span>Save Annotations</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

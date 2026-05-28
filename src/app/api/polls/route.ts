@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { sendPollInvitationEmail } from '@/lib/nodemailer';
+import { moderateContent } from '@/lib/contentModerator';
+import { checkFeatureAccess, checkPollSubtypeAccess } from '@/lib/featureGate';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -152,6 +154,35 @@ export async function POST(req: Request) {
         { error: 'Missing compulsory poll creation parameters' },
         { status: 400 }
       );
+    }
+
+    // Plan Gating Checks
+    if (user.role !== 'ADMIN') {
+      const typeKey = pollType === 'SURVEY' ? 'multipageSurveys' : pollType === 'EXAM' ? 'teacherGradebook' : 'openPublicPolls';
+      const access = await checkFeatureAccess(user.id, typeKey);
+      if (!access.allowed) {
+        return NextResponse.json({ error: access.reason || 'Feature not allowed on your plan.' }, { status: 403 });
+      }
+
+      // Check poll subtype permissions for each question
+      for (const q of questions) {
+        if (q.type === 'RANKED') {
+          const ok = await checkPollSubtypeAccess(user.id, 'ranked');
+          if (!ok) return NextResponse.json({ error: 'Ranked Choice Polls are not allowed on your current plan.' }, { status: 403 });
+        }
+        if (q.type === 'KNOCKOUT') {
+          const ok = await checkPollSubtypeAccess(user.id, 'knockout');
+          if (!ok) return NextResponse.json({ error: 'Knockout Bracket Tournaments are not allowed on your current plan.' }, { status: 403 });
+        }
+        if (q.type === 'MULTI_SELECT') {
+          const ok = await checkPollSubtypeAccess(user.id, 'multi');
+          if (!ok) return NextResponse.json({ error: 'Multiple Correct Choice questions are not allowed on your current plan.' }, { status: 403 });
+        }
+        if (q.type === 'FILE_UPLOAD') {
+          const res = await checkFeatureAccess(user.id, 'fileUploadQuestions');
+          if (!res.allowed) return NextResponse.json({ error: 'File Upload Questions are not allowed on your current plan.' }, { status: 403 });
+        }
+      }
     }
 
     // Execute atomic transaction to write all layers of the poll
@@ -321,6 +352,42 @@ export async function POST(req: Request) {
 
       return poll;
     });
+
+    // Content Moderation: scan for explicit/offensive content
+    const moderationResult = moderateContent({
+      title,
+      description,
+      questions: questions.map((q: any) => ({
+        questionText: q.questionText || q.text || '',
+        options: (q.options || []).map((o: any) => ({ text: typeof o === 'string' ? o : o.text || '' })),
+        correctAnswer: q.correctAnswer || undefined,
+      })),
+    });
+
+    if (moderationResult.flagged) {
+      // Set poll to ON_HOLD
+      await prisma.poll.update({
+        where: { id: newPoll.id },
+        data: { status: 'ON_HOLD' },
+      });
+
+      // Create moderation record
+      await prisma.contentModeration.create({
+        data: {
+          pollId: newPoll.id,
+          reason: moderationResult.reasons.join('; '),
+          flaggedText: moderationResult.flaggedTexts.join(' | '),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Your content has been put on hold for review. It contains language that requires administrator approval before publishing.',
+        pollId: newPoll.id,
+        moderated: true,
+        reasons: moderationResult.reasons,
+      });
+    }
 
     // If published immediately (ACTIVE) and closed voting, invite voters via email in background
     if (newPoll.status === 'ACTIVE' && !isOpenVoting && allowedVoters && allowedVoters.length) {

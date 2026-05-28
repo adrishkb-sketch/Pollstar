@@ -8,7 +8,26 @@ import {
   GraduationCap, Building2, TrendingUp
 } from 'lucide-react';
 
+import { useState, useEffect } from 'react';
+
 export default function AboutPage() {
+  const [mission, setMission] = useState("At Pollstar, our mission is to empower teams, organizations, and educators with beautifully simple yet highly sophisticated voting and evaluation tools. We believe every organization — from a classroom to a multinational enterprise — deserves tools that ensure fair, transparent, and engaging participation.");
+  const [history, setHistory] = useState("Pollstar was born from a simple frustration — existing polling tools were either too basic, too insecure, or too ugly. We set out to build the most comprehensive, secure, and beautifully designed voting platform on the internet.");
+
+  useEffect(() => {
+    fetch('/api/admin/site-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.configs) {
+          const m = data.configs.find((c: any) => c.key === 'about_company_mission')?.value;
+          const h = data.configs.find((c: any) => c.key === 'about_history')?.value;
+          if (m) setMission(m);
+          if (h) setHistory(h);
+        }
+      })
+      .catch(e => console.error(e));
+  }, []);
+
   const stats = [
     { value: '10K+', label: 'Polls Created', icon: BarChart3 },
     { value: '500K+', label: 'Votes Cast', icon: Vote },
@@ -107,8 +126,7 @@ export default function AboutPage() {
           <span className="gradient-text"> Every Voice Count</span>
         </h1>
         <p className="text-gray-400 text-base sm:text-lg max-w-3xl mx-auto leading-relaxed">
-          Pollstar was born from a simple frustration — existing polling tools were either too basic, too insecure, or too ugly.
-          We set out to build the most comprehensive, secure, and beautifully designed voting platform on the internet.
+          {history}
         </p>
       </section>
 
@@ -138,9 +156,7 @@ export default function AboutPage() {
             </div>
             <h2 className="font-outfit text-2xl font-bold text-white mb-4">Our Mission</h2>
             <p className="text-gray-400 text-sm leading-relaxed">
-              To democratize decision-making by providing the world&apos;s most powerful, secure, and accessible
-              polling and assessment platform. We believe every organization — from a single classroom to a
-              multinational enterprise — deserves tools that ensure fair, transparent, and engaging participation.
+              {mission}
             </p>
           </div>
           <div className="glass-card rounded-2xl p-8 sm:p-10">

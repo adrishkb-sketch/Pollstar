@@ -17,6 +17,7 @@ enum PollStatus {
   DRAFT
   ACTIVE
   ENDED
+  ON_HOLD
 }
 
 enum PollType {
@@ -116,6 +117,7 @@ model Poll {
   messages        DirectMessage[]
   collaborators   PollCollaborator[]
   auditLogs       AuditLog[]
+  moderations     ContentModeration[]
   createdAt       DateTime       @default(now())
 }
 
@@ -309,15 +311,60 @@ model AuditLog {
 }
 
 model Plan {
-  id           String   @id @default(uuid())
-  name         String   @unique
-  description  String?
-  price        Float    @default(0.0)
-  billingCycle String   @default("MONTHLY") // MONTHLY, YEARLY, PACK_5, PACK_10, etc.
-  features     Json     // JSON object with 13 boolean flags
-  users        User[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  price           Float    @default(0.0)
+  isFree          Boolean  @default(false)
+  currency        String   @default("USD") // USD, INR, EUR, GBP, AUTO
+  billingCycle    String   @default("MONTHLY") // MONTHLY, YEARLY, ONE_TIME
+  planType        String   @default("SUBSCRIPTION") // SUBSCRIPTION, POLL_PACK, SURVEY_PACK, EXAM_PACK, COMBO_PACK
+  packQuantity    Int?     // Number of items in pack
+  freePerks       Int      @default(0) // Bonus free items with pack
+  comboTypes      Json?    // For COMBO_PACK: ["POLL","SURVEY","EXAM"]
+  badgeColor      String   @default("#a855f7") // Hex color for user badge
+  badgeLabel      String?  // Custom badge text e.g. "Pro", "Enterprise"
+  hasFreeTrial    Boolean  @default(false)
+  freeTrialDays   Int?     // Trial duration in days
+  freeTrialFeatures Json?  // Features available during trial
+  pollSubtypes    Json?    // For POLL_PACK: ["MCQ","RANKED","KNOCKOUT","MULTIPLE_CORRECT"]
+  isActive        Boolean  @default(true) // Admin can deactivate plans
+  features        Json     // JSON object with feature boolean flags
+  users           User[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ContactRequest {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String   @db.Text
+  status    String   @default("UNREAD") // UNREAD, READ, REPLIED, ARCHIVED
+  adminNote String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContentModeration {
+  id          String   @id @default(uuid())
+  pollId      String
+  poll        Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  reason      String   // e.g. "Explicit language detected"
+  flaggedText String   @db.Text
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SiteConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedBy String?
+  updatedAt DateTime @updatedAt
 }
 
 model SupportIssue {

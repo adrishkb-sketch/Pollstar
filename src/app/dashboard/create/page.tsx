@@ -218,8 +218,19 @@ export default function CreatePoll() {
     setKnockoutFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const [userPlan, setUserPlan] = useState<any>(null);
+
   // Initialize date defaults in Indian Standard Time (IST)
   useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success && data.user) {
+          setUserPlan(data.user.plan);
+        }
+      })
+      .catch((e) => console.error(e));
+
     const start = new Date();
     const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days later
     
@@ -2667,7 +2678,16 @@ export default function CreatePoll() {
                 )}
 
                 {/* Premium White-Label Custom Branding Card */}
-                <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up mt-6">
+                <div className="glass-card rounded-2xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in-up mt-6 relative overflow-hidden">
+                  {userPlan && userPlan.features && !userPlan.features['customBranding'] && (
+                    <div className="absolute inset-0 bg-[#030712]/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4 z-20 animate-fade-in">
+                      <Shield className="w-8 h-8 text-purple-400 mb-2 animate-pulse-glow" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">🔒 Upgrade Plan Required</span>
+                      <p className="text-[10px] text-gray-400 max-w-xs mt-1">
+                        White-Label Custom Branding is locked under your current "{userPlan.name}" plan.
+                      </p>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="font-outfit font-bold text-white text-sm">White-Label Custom Branding</h4>

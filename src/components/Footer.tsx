@@ -1,10 +1,27 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Vote, Mail, ArrowRight, Globe2, AtSign, ExternalLink } from 'lucide-react';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const [tagline, setTagline] = useState("The premium platform for real-time polls, surveys & exams. Trusted by educators, teams, and organizations worldwide.");
+  const [copyright, setCopyright] = useState(`© ${new Date().getFullYear()} Pollstar. All rights reserved.`);
+
+  useEffect(() => {
+    fetch('/api/admin/site-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.configs) {
+          const tag = data.configs.find((c: any) => c.key === 'footer_tagline')?.value;
+          const copy = data.configs.find((c: any) => c.key === 'footer_copyright')?.value;
+          if (tag) setTagline(tag);
+          if (copy) setCopyright(copy);
+        }
+      })
+      .catch(e => console.error(e));
+  }, []);
 
   const productLinks = [
     { label: 'Features', href: '/features' },
@@ -70,7 +87,7 @@ export default function Footer() {
             </span>
           </Link>
           <p className="text-gray-500 text-sm leading-relaxed max-w-xs mb-6">
-            The premium platform for real-time polls, surveys &amp; exams. Trusted by educators, teams, and organizations worldwide.
+            {tagline}
           </p>
           <div className="flex items-center gap-3">
             <a
@@ -158,7 +175,7 @@ export default function Footer() {
       {/* Bottom bar */}
       <div className="max-w-7xl mx-auto px-6 py-5 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-gray-600 text-xs">
-          © {currentYear} Pollstar. All rights reserved.
+          {copyright}
         </p>
         <p className="text-gray-700 text-xs">
           Made with ❤️ by Adrish &amp; the Pollstar team
