@@ -195,7 +195,19 @@ export default function PlansPage() {
       const plansRes = await fetch('/api/plans');
       if (plansRes.ok) {
         const plansData = await plansRes.json();
-        setPlans(plansData.plans || []);
+        const rawPlans = plansData.plans || [];
+        
+        // Sort so that the user's active plan is placed first (on the left)
+        const userPlanId = data.user?.planId;
+        const sortedPlans = [...rawPlans].sort((a, b) => {
+          const aActive = userPlanId === a.id || (a.name === 'Free' && !userPlanId);
+          const bActive = userPlanId === b.id || (b.name === 'Free' && !userPlanId);
+          if (aActive && !bActive) return -1;
+          if (!aActive && bActive) return 1;
+          return a.price - b.price;
+        });
+        
+        setPlans(sortedPlans);
       }
 
       // Fetch user invoices
@@ -314,15 +326,15 @@ export default function PlansPage() {
                   <div className="space-y-6">
                     {/* Header */}
                     <div className="space-y-2">
-                      <div className="flex justify-between items-start">
+                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
                         <span 
-                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
+                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
                           style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
                         >
                           {p.badgeLabel || p.name}
                         </span>
                         {isActivePlan && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0">
                             Active
                           </span>
                         )}
@@ -398,8 +410,8 @@ export default function PlansPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
+            <table className="min-w-[650px] w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
                   <th className="pb-3 pr-2">Billing Date</th>
@@ -503,8 +515,8 @@ export default function PlansPage() {
                 </div>
 
                 {/* Purchase Items Table */}
-                <div className="border border-gray-100 rounded-2xl overflow-hidden text-xs">
-                  <table className="w-full text-left">
+                <div className="border border-gray-100 rounded-2xl overflow-x-auto w-full scrollbar-thin text-xs">
+                  <table className="min-w-[450px] w-full text-left">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
                         <th className="p-3">Subscription Description</th>

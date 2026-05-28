@@ -337,8 +337,8 @@ function CheckoutContent() {
                 </div>
 
                 {/* Purchase Items Table */}
-                <div className="border border-gray-100 rounded-2xl overflow-hidden text-xs">
-                  <table className="w-full text-left">
+                <div className="border border-gray-100 rounded-2xl overflow-x-auto w-full scrollbar-thin text-xs">
+                  <table className="min-w-[500px] w-full text-left">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
                         <th className="p-3">Subscription Description</th>

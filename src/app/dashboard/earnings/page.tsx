@@ -504,8 +504,8 @@ export default function EarningsPage() {
                   <span>Wallet Transaction Ledger</span>
                 </h3>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
+                  <table className="min-w-[500px] w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
                         <th className="pb-3 pr-2">Date</th>
@@ -547,8 +547,8 @@ export default function EarningsPage() {
                   <span>Withdrawal Requests History</span>
                 </h3>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
+                  <table className="min-w-[550px] w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
                         <th className="pb-3 pr-2">Requested</th>
