@@ -23,6 +23,10 @@ function LoginForm() {
   const [newPassword, setNewPassword] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState('');
 
+  // 2-Step Verification states
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [twoFactorOtp, setTwoFactorOtp] = useState('');
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -38,6 +42,37 @@ function LoginForm() {
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to login');
+      }
+
+      if (data.twoFactorRequired) {
+        setTwoFactorRequired(true);
+        setError('');
+        return;
+      }
+
+      router.push(callbackUrl);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyTwoFactor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp: twoFactorOtp }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to verify secure code');
       }
 
       router.push(callbackUrl);
@@ -126,7 +161,56 @@ function LoginForm() {
         </div>
       )}
 
-      {!isResetMode ? (
+      {twoFactorRequired ? (
+        <form onSubmit={handleVerifyTwoFactor} className="space-y-6 animate-fade-in">
+          <div>
+            <h3 className="font-outfit text-base font-bold text-white mb-1">🔒 2-Step Verification Required</h3>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Optional two-step verification is enabled for your account. Please enter the 6-digit secure login code sent to your email.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+              6-Digit Verification Code
+            </label>
+            <input
+              type="text"
+              required
+              maxLength={6}
+              value={twoFactorOtp}
+              onChange={(e) => setTwoFactorOtp(e.target.value)}
+              placeholder="e.g. 123456"
+              className="w-full text-center glass-input placeholder-gray-600 text-sm py-2.5 font-bold tracking-widest font-mono focus:border-indigo-500/50"
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setTwoFactorRequired(false);
+                setTwoFactorOtp('');
+                setError('');
+              }}
+              className="flex-1 py-3 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-bold transition-all text-center block bg-white/3"
+            >
+              Back
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all text-xs flex items-center justify-center space-x-2"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <span>Verify & Login</span>
+              )}
+            </button>
+          </div>
+        </form>
+      ) : !isResetMode ? (
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">

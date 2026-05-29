@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, ArrowLeft, Mail, Lock, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Mail, Lock, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -12,6 +12,41 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const secret = params.get('secret');
+    if (secret === 'pollstar_admin_secure_7781') {
+      setIsAuthorized(true);
+    } else {
+      setIsAuthorized(false);
+    }
+  }, []);
+
+  if (isAuthorized === null) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex flex-col justify-center items-center">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isAuthorized === false) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex flex-col justify-center items-center p-6 text-center space-y-4 font-outfit">
+        <h1 className="text-9xl font-black text-white/5 tracking-tighter">404</h1>
+        <h2 className="text-xl font-bold text-white tracking-tight">Page Not Found</h2>
+        <p className="text-gray-500 text-xs max-w-xs leading-relaxed">
+          The page you are looking for does not exist or has been moved.
+        </p>
+        <Link href="/" className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-semibold text-gray-300 transition-all">
+          Back to Home
+        </Link>
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

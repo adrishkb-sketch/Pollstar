@@ -32,6 +32,33 @@ export default function ProfilePage() {
   const [editSuccess, setEditSuccess] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
+  // 2FA Security states
+  const [toggling2FA, setToggling2FA] = useState(false);
+  const [toggling2FAMSG, setToggling2FAMSG] = useState('');
+
+  const handleToggle2FA = async () => {
+    if (!user) return;
+    setToggling2FA(true);
+    setToggling2FAMSG('');
+    try {
+      const nextVal = !user.twoFactorEnabled;
+      const res = await fetch('/api/auth/toggle-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ twoFactorEnabled: nextVal })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update security settings.');
+      
+      setUser((prev: any) => ({ ...prev, twoFactorEnabled: nextVal }));
+      setToggling2FAMSG(nextVal ? '2-Step Verification activated! 🔒' : '2-Step Verification deactivated.');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setToggling2FA(false);
+    }
+  };
+
   // Edit fields
   const [fullName, setFullName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
@@ -606,6 +633,83 @@ export default function ProfilePage() {
                   <span className="px-2 py-0.5 rounded font-bold uppercase text-[9px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
                     {user?.plan?.name || 'Free'}
                   </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Settings: 2FA */}
+            <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+              <div className="flex items-center space-x-2 border-b border-white/5 pb-4">
+                <ShieldCheck className="w-5 h-5 text-purple-400" />
+                <h3 className="font-outfit text-base font-bold text-white">🔒 Security Controls</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-gray-200 font-bold block">2-Step Verification (Optional)</span>
+                    <p className="text-gray-500 text-[10px] leading-relaxed">Require a 6-digit OTP code sent to your email on every login attempt.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                    <input 
+                      type="checkbox" 
+                      checked={user?.twoFactorEnabled || false} 
+                      onChange={handleToggle2FA}
+                      disabled={toggling2FA}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+                  </label>
+                </div>
+                
+                {toggling2FAMSG && (
+                  <p className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1.5 rounded-xl">{toggling2FAMSG}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Logo and Favicon Downloads */}
+            <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+              <div className="flex items-center space-x-2 border-b border-white/5 pb-4">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-outfit text-base font-bold text-white">🎨 Brand Assets Downloads</h3>
+              </div>
+
+              <div className="space-y-3.5 text-xs text-gray-400">
+                <p className="leading-relaxed text-[11px] text-gray-500">Download high-fidelity official Pollstar brand assets to embed on your voting pages, email rosters, or presentations.</p>
+                
+                <div className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-[#0b0f19] border border-white/5 p-1 flex items-center justify-center font-black text-emerald-400 text-[10px]">Logo</div>
+                    <div>
+                      <span className="text-white block font-bold text-[11px]">Official Logo</span>
+                      <span className="text-[9px] text-gray-500">High-Res PNG</span>
+                    </div>
+                  </div>
+                  <a 
+                    href="/logo.png" 
+                    download="pollstar_logo.png"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold transition-all"
+                  >
+                    Download
+                  </a>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-[#0b0f19] border border-white/5 p-1 flex items-center justify-center font-black text-indigo-400 text-[10px]">Icon</div>
+                    <div>
+                      <span className="text-white block font-bold text-[11px]">Favicon Icon</span>
+                      <span className="text-[9px] text-gray-500">Standard PNG</span>
+                    </div>
+                  </div>
+                  <a 
+                    href="/favicon.png" 
+                    download="pollstar_favicon.png"
+                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold transition-all"
+                  >
+                    Download
+                  </a>
                 </div>
               </div>
             </div>

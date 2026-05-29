@@ -81,6 +81,7 @@ model User {
   suspensionUntil      DateTime?
   suspensionReason     String?
   isActivityRestricted Boolean     @default(false)
+  twoFactorEnabled     Boolean     @default(false)
 
   // Subscriptions & Plans
   planId               String?

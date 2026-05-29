@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import prisma from '@/lib/prisma';
 import { generateAccessToken, generateRefreshToken } from '@/lib/jwt';
+import { sendOTPEmail } from '@/lib/nodemailer';
 
 export async function POST(req: Request) {
   try {
@@ -79,6 +80,26 @@ export async function POST(req: Request) {
         { error: 'Invalid email or password' },
         { status: 401 }
       );
+    }
+
+    // Intercept with 2-Step Verification optional flow
+    if (user.twoFactorEnabled) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
+
+      await prisma.oTP.upsert({
+        where: { email: user.email },
+        create: { email: user.email, otp, expiresAt },
+        update: { otp, expiresAt }
+      });
+
+      await sendOTPEmail(user.email, otp);
+
+      return NextResponse.json({
+        success: true,
+        twoFactorRequired: true,
+        email: user.email
+      });
     }
 
     // Create session payloads

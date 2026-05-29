@@ -180,6 +180,7 @@ export async function GET() {
         isActivityRestricted: user.isActivityRestricted,
         plan: user.plan,
         referralCode: user.referralCode,
+        twoFactorEnabled: user.twoFactorEnabled,
       },
     });
 
