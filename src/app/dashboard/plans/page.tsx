@@ -179,6 +179,7 @@ export default function PlansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCycle, setSelectedCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'TWO_YEARS' | 'LIFETIME'>('MONTHLY');
+  const [selectedDurs, setSelectedDurs] = useState<Record<string, string>>({});
 
   const getPlanPricing = (p: any, cycle: string) => {
     let price = p.price;
@@ -331,41 +332,6 @@ export default function PlansPage() {
           </div>
         </div>
 
-        {/* Billing cycle selector tab */}
-        {activeCategory === 'SUBSCRIPTION' && (
-          <div className="flex justify-center">
-            <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
-              {[
-                { key: 'MONTHLY', label: 'Monthly' },
-                { key: 'QUARTERLY', label: 'Quarterly', badge: 'Save 15%' },
-                { key: 'YEARLY', label: 'Yearly', badge: 'Save 25%' },
-                { key: 'TWO_YEARS', label: '2 Years', badge: 'Save 35%' },
-                { key: 'LIFETIME', label: 'Lifetime', badge: 'Best Value' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setSelectedCycle(tab.key as any)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all relative flex items-center gap-1.5 whitespace-nowrap ${
-                    selectedCycle === tab.key
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
-                      selectedCycle === tab.key ? 'bg-white/20 text-white' : 'bg-purple-500/20 text-purple-300'
-                    }`}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Dynamic sliding cards system for subscription options */}
         <div className="relative space-y-4">
           <div className="flex justify-between items-center md:hidden">
@@ -395,7 +361,6 @@ export default function PlansPage() {
           >
             {activeCategory === 'SUBSCRIPTION' && plans.map((p) => {
               const isActivePlan = user?.plan?.id === p.id || (p.name === 'Free' && !user?.plan?.id);
-              const { price, originalPrice, cycleLabel, isOfferActive } = getPlanPricing(p, selectedCycle);
               
               return (
                 <div 
@@ -436,33 +401,142 @@ export default function PlansPage() {
                       <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
                     </div>
 
-                    {/* Active Offer Countdown notification ticker */}
-                    {isOfferActive && (
-                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-between gap-2 animate-pulse-glow">
-                        <span className="flex items-center gap-1">⚡ Limited Time Offer active!</span>
-                        <span className="font-mono text-[9px]">Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
+                    {/* Durations Segment Toggles if configured */}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      if (enabledDurs.length <= 1) return null;
 
-                    {/* Price Tag */}
-                    <div className="border-t border-b border-white/5 py-4 space-y-1">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-3xl font-black text-white font-outfit">
-                          {price === 0 && originalPrice && originalPrice > 0 ? (
-                            <span className="text-emerald-400 font-black">FREE Offer!</span>
-                          ) : (
-                            `${getCurrencySymbol(p.currency)}${price.toFixed(2)}`
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+
+                      return (
+                        <div className="p-1 bg-white/2 border border-white/5 rounded-xl flex flex-wrap gap-1">
+                          {enabledDurs.map((dur) => {
+                            const cfg = dursConfig[dur];
+                            const isSelected = activeDur === dur;
+                            let discountText = '';
+                            if (dur !== 'MONTHLY' && dursConfig['MONTHLY']?.enabled) {
+                              const mPrice = parseFloat(dursConfig['MONTHLY'].price || '0');
+                              const dPrice = parseFloat(cfg.price || '0');
+                              let factor = 1;
+                              if (dur === 'QUARTERLY') factor = 3;
+                              else if (dur === 'YEARLY') factor = 12;
+                              else if (dur === 'TWO_YEARS') factor = 24;
+                              if (mPrice > 0) {
+                                const fullCost = mPrice * factor;
+                                const savings = ((fullCost - dPrice) / fullCost) * 100;
+                                if (savings > 0) discountText = `Save ${Math.round(savings)}%`;
+                              }
+                            }
+                            return (
+                              <button
+                                type="button"
+                                key={dur}
+                                onClick={() => setSelectedDurs(prev => ({ ...prev, [p.id]: dur }))}
+                                className={`flex-1 py-1.5 px-2 rounded-lg text-[8px] font-bold uppercase transition-all flex flex-col items-center justify-center ${
+                                  isSelected 
+                                    ? 'bg-purple-500/20 border border-purple-500/30 text-purple-300' 
+                                    : 'bg-transparent border border-transparent text-gray-500 hover:text-gray-300'
+                                }`}
+                              >
+                                <span>{dur.replace('_', ' ')}</span>
+                                {discountText && <span className="text-[7px] text-emerald-400 font-extrabold">{discountText}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
+                      
+                      let displayPrice = p.price;
+                      let displayOriginalPrice = p.originalPrice;
+                      let cycleName = p.billingCycle.toLowerCase();
+                      let offerEndDate = p.offerEndDate;
+
+                      if (enabledDurs.length > 0 && durConfig) {
+                        displayPrice = parseFloat(durConfig.price || '0');
+                        displayOriginalPrice = parseFloat(durConfig.originalPrice || '0');
+                        cycleName = activeDur.toLowerCase();
+                        offerEndDate = durConfig.offerEndDate || null;
+                      }
+
+                      const hasSlashPrice = displayOriginalPrice && displayOriginalPrice > displayPrice;
+                      
+                      // Classification
+                      let offerType = 'NORMAL';
+                      let offerLabel = '';
+                      if (displayPrice === 0 && displayOriginalPrice === 0) {
+                        offerType = 'FREE_PLAN';
+                        offerLabel = 'General Free Plan';
+                      } else if (displayPrice === 0 && displayOriginalPrice > 0) {
+                        offerType = 'FREE_OFFER';
+                        offerLabel = 'FREE Offer!';
+                      } else if (displayOriginalPrice > displayPrice && displayPrice > 0 && displayOriginalPrice > 0) {
+                        offerType = 'OFFER';
+                        offerLabel = 'Offer';
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Active Offer Banner */}
+                          {offerLabel && (
+                            <div className={`p-2.5 rounded-xl text-[10px] font-bold flex items-center justify-between gap-2 border ${
+                              offerType === 'FREE_PLAN' 
+                                ? 'bg-white/2 border-white/5 text-gray-400' 
+                                : offerType === 'FREE_OFFER'
+                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 animate-pulse-glow'
+                                  : 'bg-purple-500/10 border-purple-500/20 text-purple-300 animate-pulse-glow'
+                            }`}>
+                              <span className="flex items-center gap-1">⚡ {offerLabel}</span>
+                              {offerEndDate && (
+                                <span className="font-mono text-[9px]">Ends: {new Date(offerEndDate).toLocaleDateString()}</span>
+                              )}
+                            </div>
                           )}
-                        </span>
-                        {originalPrice && originalPrice > price && (
-                          <span className="text-sm text-red-400/70 font-semibold line-through">
-                            {getCurrencySymbol(p.currency)}{originalPrice.toFixed(2)}
-                          </span>
-                        )}
-                        <span className="text-xs text-gray-500 font-semibold">/{cycleLabel.toLowerCase()}</span>
-                      </div>
-                    </div>
+
+                          {/* Price Tag */}
+                          <div className="border-t border-b border-white/5 py-4 space-y-1">
+                            <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              <span className="text-3xl font-black text-white font-outfit">
+                                {offerType === 'FREE_PLAN' ? (
+                                  <span className="text-gray-400">General Free Plan</span>
+                                ) : offerType === 'FREE_OFFER' ? (
+                                  <span className="text-emerald-400">FREE Offer!</span>
+                                ) : (
+                                  `${getCurrencySymbol(p.currency)}${displayPrice.toFixed(2)}`
+                                )}
+                              </span>
+                              {hasSlashPrice && (
+                                <span className="text-sm text-red-400/70 font-semibold line-through">
+                                  {getCurrencySymbol(p.currency)}{displayOriginalPrice.toFixed(2)}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
+                            </div>
+                            
+                            {/* Validity date below the price */}
+                            {offerEndDate && (
+                              <div className="text-[10px] font-bold text-purple-400/90 flex items-center gap-1.5 pt-1.5 animate-pulse-glow">
+                                📅 Redeem before: <span className="text-purple-300 underline">{new Date(offerEndDate).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Checklists features details */}
                     <div className="space-y-3">
@@ -498,16 +572,32 @@ export default function PlansPage() {
                         Currently Subscribed
                       </button>
                     ) : (
-                      <Link
-                        href={p.hasFreeTrial 
-                          ? `/checkout?planId=${p.id}&trial=true` 
-                          : `/checkout?planId=${p.id}&duration=${cycleLabel}`}
-                        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                      >
-                        {p.hasFreeTrial 
-                          ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
-                          : (price > 0 ? `Get Upgrade (${formatBillingCycle(cycleLabel)})` : 'Activate Free Tier')}
-                      </Link>
+                      (() => {
+                        const dursConfig = p.durations ? (p.durations as any) : null;
+                        const enabledDurs = dursConfig 
+                          ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                          : [];
+                        const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                        const durConfig = dursConfig?.[activeDur] || null;
+                        
+                        let displayPrice = p.price;
+                        if (enabledDurs.length > 0 && durConfig) {
+                          displayPrice = parseFloat(durConfig.price || '0');
+                        }
+
+                        return (
+                          <Link
+                            href={p.hasFreeTrial 
+                              ? `/checkout?planId=${p.id}&trial=true` 
+                              : `/checkout?planId=${p.id}&duration=${activeDur}`}
+                            className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                          >
+                            {p.hasFreeTrial 
+                              ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
+                              : (displayPrice > 0 ? `Get Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
+                          </Link>
+                        );
+                      })()
                     )}
                   </div>
                 </div>

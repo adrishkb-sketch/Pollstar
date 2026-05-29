@@ -372,52 +372,92 @@ export default function PublicPlansPage() {
                       );
                     })()}
 
-                    {/* Active Offer Countdown notification ticker */}
-                    {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
-                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-between gap-2 animate-pulse-glow">
-                        <span className="flex items-center gap-1">⚡ Limited Time Offer active!</span>
-                        <span className="font-mono text-[9px]">Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
+                      
+                      let displayPrice = p.price;
+                      let displayOriginalPrice = p.originalPrice;
+                      let cycleName = p.billingCycle.toLowerCase();
+                      let offerEndDate = p.offerEndDate;
 
-                    {/* Price Tag */}
-                    <div className="border-t border-b border-white/5 py-4 space-y-1">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
-                      {(() => {
-                        const dursConfig = p.durations ? (p.durations as any) : null;
-                        const enabledDurs = dursConfig 
-                          ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
-                          : [];
-                        
-                        const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
-                        
-                        let displayPrice = p.price;
-                        let displayOriginalPrice = p.originalPrice;
-                        let cycleName = p.billingCycle.toLowerCase();
+                      if (enabledDurs.length > 0 && durConfig) {
+                        displayPrice = parseFloat(durConfig.price || '0');
+                        displayOriginalPrice = parseFloat(durConfig.originalPrice || '0');
+                        cycleName = activeDur.toLowerCase();
+                        offerEndDate = durConfig.offerEndDate || null;
+                      }
 
-                        if (enabledDurs.length > 0 && dursConfig[activeDur]) {
-                          displayPrice = parseFloat(dursConfig[activeDur].price || '0');
-                          displayOriginalPrice = parseFloat(dursConfig[activeDur].originalPrice || '0');
-                          cycleName = activeDur.toLowerCase();
-                        }
+                      const hasSlashPrice = displayOriginalPrice && displayOriginalPrice > displayPrice;
+                      
+                      // Classification
+                      let offerType = 'NORMAL';
+                      let offerLabel = '';
+                      if (displayPrice === 0 && displayOriginalPrice === 0) {
+                        offerType = 'FREE_PLAN';
+                        offerLabel = 'General Free Plan';
+                      } else if (displayPrice === 0 && displayOriginalPrice > 0) {
+                        offerType = 'FREE_OFFER';
+                        offerLabel = 'FREE Offer!';
+                      } else if (displayOriginalPrice > displayPrice && displayPrice > 0 && displayOriginalPrice > 0) {
+                        offerType = 'OFFER';
+                        offerLabel = 'Offer';
+                      }
 
-                        const hasSlashPrice = displayOriginalPrice && displayOriginalPrice > displayPrice;
+                      return (
+                        <div className="space-y-4">
+                          {/* Active Offer Banner */}
+                          {offerLabel && (
+                            <div className={`p-2.5 rounded-xl text-[10px] font-bold flex items-center justify-between gap-2 border ${
+                              offerType === 'FREE_PLAN' 
+                                ? 'bg-white/2 border-white/5 text-gray-400' 
+                                : offerType === 'FREE_OFFER'
+                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 animate-pulse-glow'
+                                  : 'bg-purple-500/10 border-purple-500/20 text-purple-300 animate-pulse-glow'
+                            }`}>
+                              <span className="flex items-center gap-1">⚡ {offerLabel}</span>
+                              {offerEndDate && (
+                                <span className="font-mono text-[9px]">Ends: {new Date(offerEndDate).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                          )}
 
-                        return (
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-3xl font-black text-white font-outfit">
-                              {getCurrencySymbol(p.currency)}{displayPrice.toFixed(2)}
-                            </span>
-                            {hasSlashPrice && (
-                              <span className="text-sm text-red-400/70 font-semibold line-through">
-                                {getCurrencySymbol(p.currency)}{displayOriginalPrice!.toFixed(2)}
+                          {/* Price Tag */}
+                          <div className="border-t border-b border-white/5 py-4 space-y-1">
+                            <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              <span className="text-3xl font-black text-white font-outfit">
+                                {offerType === 'FREE_PLAN' ? (
+                                  <span className="text-gray-400">General Free Plan</span>
+                                ) : offerType === 'FREE_OFFER' ? (
+                                  <span className="text-emerald-400">FREE Offer!</span>
+                                ) : (
+                                  `${getCurrencySymbol(p.currency)}${displayPrice.toFixed(2)}`
+                                )}
                               </span>
+                              {hasSlashPrice && (
+                                <span className="text-sm text-red-400/70 font-semibold line-through">
+                                  {getCurrencySymbol(p.currency)}{displayOriginalPrice!.toFixed(2)}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
+                            </div>
+                            
+                            {/* Validity date below the price */}
+                            {offerEndDate && (
+                              <div className="text-[10px] font-bold text-purple-400/90 flex items-center gap-1.5 pt-1.5">
+                                📅 Redeem before: <span className="text-purple-300 underline">{new Date(offerEndDate).toLocaleDateString()}</span>
+                              </div>
                             )}
-                            <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
                           </div>
-                        );
-                      })()}
-                    </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Limits Display */}
                     <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1 font-outfit">

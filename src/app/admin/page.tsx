@@ -1232,7 +1232,7 @@ export default function AdminPortal() {
       name: planName,
       description: planDesc,
       price: resolvedPrice,
-      isFree: planIsFree,
+      isFree: planType === 'SUBSCRIPTION' ? (resolvedPrice === 0) : (parseFloat(planPrice || '0') === 0),
       currency: planCurrency,
       billingCycle: resolvedCycle,
       planType,
@@ -4410,23 +4410,7 @@ export default function AdminPortal() {
 
               {/* Row 2: Price details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5">
-                {planType === 'SUBSCRIPTION' && (
-                  <div className="flex items-center space-x-2 pt-5">
-                    <input
-                      type="checkbox"
-                      id="planIsFreeCheckbox"
-                      checked={planIsFree}
-                      onChange={e => {
-                        setPlanIsFree(e.target.checked);
-                        if (e.target.checked) setPlanPrice('0.0');
-                      }}
-                      className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
-                    />
-                    <label htmlFor="planIsFreeCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
-                      Free Tier Plan
-                    </label>
-                  </div>
-                )}
+
 
                 {planType !== 'SUBSCRIPTION' && (
                   <div className="space-y-1.5">
@@ -4549,6 +4533,20 @@ export default function AdminPortal() {
                                 />
                               </div>
                               <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Offer End Date / Validity</span>
+                                <input
+                                  type="date"
+                                  value={config.offerEndDate || ''}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, offerEndDate: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
                                 <span className="text-[8px] text-purple-400 font-bold uppercase block">Razorpay Plan ID</span>
                                 <input
                                   type="text"
@@ -4563,6 +4561,19 @@ export default function AdminPortal() {
                                   className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
                                 />
                               </div>
+                              {(() => {
+                                const pPrice = parseFloat(config.price || '0');
+                                const pOriginalPrice = parseFloat(config.originalPrice || '0');
+                                if (pPrice === 0 && pOriginalPrice === 0) {
+                                  return <span className="text-[7px] text-gray-400 block font-bold uppercase tracking-wider">General Free Plan</span>;
+                                } else if (pPrice === 0 && pOriginalPrice > 0) {
+                                  return <span className="text-[7px] text-emerald-400 block font-bold uppercase tracking-wider animate-pulse">FREE Offer! (Date req.)</span>;
+                                } else if (pOriginalPrice > pPrice && pPrice > 0 && pOriginalPrice > 0) {
+                                  return <span className="text-[7px] text-purple-300 block font-bold uppercase tracking-wider">Offer Mode (Date req.)</span>;
+                                } else {
+                                  return <span className="text-[7px] text-gray-500 block font-semibold uppercase tracking-wider">Normal Plan</span>;
+                                }
+                              })()}
                             </div>
                           )}
                         </div>
