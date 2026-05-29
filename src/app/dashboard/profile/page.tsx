@@ -752,53 +752,7 @@ export default function ProfilePage() {
                   <p className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1.5 rounded-xl">{toggling2FAMSG}</p>
                 )}
               </div>
-            </div>
-
-            {/* Logo and Favicon Downloads */}
-            <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
-              <div className="flex items-center space-x-2 border-b border-white/5 pb-4">
-                <FileText className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-outfit text-base font-bold text-white">🎨 Brand Assets Downloads</h3>
-              </div>
-
-              <div className="space-y-3.5 text-xs text-gray-400">
-                <p className="leading-relaxed text-[11px] text-gray-500">Download high-fidelity official Pollstar brand assets to embed on your voting pages, email rosters, or presentations.</p>
-                
-                <div className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded bg-[#0b0f19] border border-white/5 p-1 flex items-center justify-center font-black text-emerald-400 text-[10px]">Logo</div>
-                    <div>
-                      <span className="text-white block font-bold text-[11px]">Official Logo</span>
-                      <span className="text-[9px] text-gray-500">High-Res PNG</span>
-                    </div>
-                  </div>
-                  <a 
-                    href="/logo.png" 
-                    download="pollstar_logo.png"
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold transition-all"
-                  >
-                    Download
-                  </a>
                 </div>
-
-                <div className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded bg-[#0b0f19] border border-white/5 p-1 flex items-center justify-center font-black text-indigo-400 text-[10px]">Icon</div>
-                    <div>
-                      <span className="text-white block font-bold text-[11px]">Favicon Icon</span>
-                      <span className="text-[9px] text-gray-500">Standard PNG</span>
-                    </div>
-                  </div>
-                  <a 
-                    href="/favicon.png" 
-                    download="pollstar_favicon.png"
-                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold transition-all"
-                  >
-                    Download
-                  </a>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
