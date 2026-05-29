@@ -20,10 +20,11 @@ export const metadata: Metadata = {
   title: "Pollstar | Premium Real-Time Voting Platform",
   description: "A secure, beautiful, real-time voting platform supporting Borda count ranked choices, closed voter verification, map analytics, and anti-fraud protections.",
   icons: {
-    icon: "/favicon.png?v=2",
-    shortcut: "/favicon.png?v=2",
-    apple: "/favicon.png?v=2",
+    icon: "/favicon.png?v=4",
+    shortcut: "/favicon.png?v=4",
+    apple: "/favicon.png?v=4",
   },
+
 };
 
 export const viewport: Viewport = {
