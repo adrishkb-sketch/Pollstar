@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { 
+    const {
       planId, 
       couponCode, 
       billingName, 
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
       billingPhone,
       duration,       // user-selected billing cycle: MONTHLY | QUARTERLY | YEARLY | TWO_YEAR | LIFETIME
       isAddon,        // boolean: true if purchasing an add-on plan
+      trial,          // boolean: true if starting a free trial
     } = await req.json();
 
     if (!planId) {
@@ -67,25 +68,46 @@ export async function POST(req: Request) {
     let basePrice = plan.price;
     let selectedBillingCycle = duration || plan.billingCycle;
 
-    if (duration && plan.durations) {
-      const durationsConfig = plan.durations as any;
-      if (durationsConfig[duration] && durationsConfig[duration].enabled) {
-        basePrice = parseFloat(durationsConfig[duration].price || '0');
-        selectedBillingCycle = duration;
+    if (trial) {
+      if (!plan.hasFreeTrial) {
+        return NextResponse.json({ error: 'This plan does not support a free trial.' }, { status: 400 });
       }
-    }
 
-    // For free or one-time plans, use plan's billing cycle
-    if (plan.isFree) {
+      // Prevent trial abuse: Check if user already activated a trial for this plan
+      const existingTrial = await prisma.invoice.findFirst({
+        where: {
+          userId: user.id,
+          planId: plan.id,
+          notes: { contains: 'Free Trial' }
+        }
+      });
+      if (existingTrial) {
+        return NextResponse.json({ error: 'You have already redeemed the free trial for this plan.' }, { status: 400 });
+      }
+
       basePrice = 0;
-      selectedBillingCycle = 'LIFETIME';
+      selectedBillingCycle = 'TRIAL';
+    } else {
+      if (duration && plan.durations) {
+        const durationsConfig = plan.durations as any;
+        if (durationsConfig[duration] && durationsConfig[duration].enabled) {
+          basePrice = parseFloat(durationsConfig[duration].price || '0');
+          selectedBillingCycle = duration;
+        }
+      }
+
+      // For free or one-time plans, use plan's billing cycle
+      if (plan.isFree) {
+        basePrice = 0;
+        selectedBillingCycle = 'LIFETIME';
+      }
     }
 
     let finalPrice = basePrice;
     let discountAmount = 0;
 
-    // Apply coupon discount if provided
-    if (couponCode) {
+    // Apply coupon discount if provided (only for paid plans, non-trial)
+    if (couponCode && !trial) {
       const formattedCode = couponCode.trim().toUpperCase();
       const coupon = await prisma.coupon.findUnique({
         where: { code: formattedCode }
@@ -124,17 +146,36 @@ export async function POST(req: Request) {
     }
 
     // Determine plan expiry based on billing cycle
-    const isLifetime = selectedBillingCycle === 'LIFETIME' || selectedBillingCycle === 'ONE_TIME';
-    const planExpiresAt = isLifetime ? null : computePlanExpiresAt(selectedBillingCycle);
+    let isLifetime = selectedBillingCycle === 'LIFETIME' || selectedBillingCycle === 'ONE_TIME';
+    let planExpiresAt = isLifetime ? null : computePlanExpiresAt(selectedBillingCycle);
+    
+    if (trial) {
+      isLifetime = false;
+      const trialDays = plan.freeTrialDays || 7;
+      planExpiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+    }
+
     const isAddonPlan = !!(isAddon || plan.planType === 'ADDON' || plan.planType === 'POLL_PACK' || plan.planType === 'SURVEY_PACK' || plan.planType === 'EXAM_PACK' || plan.planType === 'COMBO_PACK');
 
     // Build invoice notes
-    const billingCycleLabel = formatBillingCycle(selectedBillingCycle);
-    let invoiceNotes = `Plan: ${plan.name} | Billing: ${billingCycleLabel}`;
+    const billingCycleLabel = trial ? `Free Trial (${plan.freeTrialDays} Days)` : formatBillingCycle(selectedBillingCycle);
+    let invoiceNotes = trial 
+      ? `Free Trial: ${plan.name} | Duration: ${plan.freeTrialDays || 7} Days`
+      : `Plan: ${plan.name} | Billing: ${billingCycleLabel}`;
+      
     if (isLifetime) invoiceNotes += ' | Lifetime Access — No future renewals required';
     if (planExpiresAt) invoiceNotes += ` | Valid until: ${planExpiresAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
     if (discountAmount > 0 && couponCode) invoiceNotes += ` | Coupon: ${couponCode.toUpperCase()} (saved ${plan.currency === 'INR' ? '₹' : plan.currency === 'EUR' ? '€' : '$'}${discountAmount.toFixed(2)})`;
     if (isAddonPlan) invoiceNotes += ' | Add-On Plan';
+
+    let upgradeNote = '';
+    if (!isAddonPlan && user.planId && user.planId !== plan.id) {
+      const oldPlan = await prisma.plan.findUnique({ where: { id: user.planId } });
+      if (oldPlan && oldPlan.price > 0) {
+        upgradeNote = ` | Plan Upgrade: Terminated previous ${oldPlan.name} tier`;
+      }
+    }
+    if (upgradeNote) invoiceNotes += upgradeNote;
 
     // Update user plan (only for non-add-on subscription plans)
     if (!isAddonPlan) {

@@ -158,6 +158,9 @@ const getHasFeature = (features: any, key: string): boolean => {
 
 export default function PublicPlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
+  const [entityPlans, setEntityPlans] = useState<any[]>([]);
+  const [addonPlans, setAddonPlans] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ENTITY' | 'ADDON'>('SUBSCRIPTION');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedDurs, setSelectedDurs] = useState<Record<string, string>>({});
@@ -169,6 +172,8 @@ export default function PublicPlansPage() {
       if (res.ok) {
         const data = await res.json();
         setPlans(data.plans || []);
+        setEntityPlans(data.entityPlans || []);
+        setAddonPlans(data.addonPlans || []);
       }
     } catch (err) {
       setError('Failed to fetch pricing configurations.');
@@ -240,10 +245,34 @@ export default function PublicPlansPage() {
           </div>
         )}
 
-        {/* Dynamic sliding cards system for subscription options */}
+        {/* Category Toggles */}
+        <div className="flex justify-center pt-2">
+          <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
+            {[
+              { key: 'SUBSCRIPTION', label: 'Electoral Subscriptions' },
+              { key: 'ENTITY', label: 'Entity Credit Packs' },
+              { key: 'ADDON', label: 'Premium Add-Ons' }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveCategory(tab.key as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all relative flex items-center gap-1.5 whitespace-nowrap ${
+                  activeCategory === tab.key
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Dynamic sliding cards system for selected category */}
         <div className="relative space-y-4">
           <div className="flex justify-between items-center md:hidden">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold">Slide to view Plans</span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold">Slide to view options</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -267,7 +296,7 @@ export default function PublicPlansPage() {
             ref={scrollRef}
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
-            {plans.map((p) => {
+            {activeCategory === 'SUBSCRIPTION' && plans.map((p) => {
               return (
                 <div 
                   key={p.id}
@@ -283,6 +312,11 @@ export default function PublicPlansPage() {
                         >
                           {p.badgeLabel || p.name}
                         </span>
+                        {p.hasFreeTrial && (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider block shrink-0 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 animate-pulse">
+                            {p.freeTrialDays || 7} Days Trial
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
                       <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
@@ -437,12 +471,19 @@ export default function PublicPlansPage() {
                         displayPrice = parseFloat(dursConfig[activeDur].price || '0');
                       }
 
+                      const linkUrl = p.hasFreeTrial 
+                        ? `/signup?planId=${p.id}&trial=true`
+                        : `/signup?planId=${p.id}&duration=${activeDur}`;
+                      const buttonLabel = p.hasFreeTrial 
+                        ? `Start ${p.freeTrialDays || 7}-Day Free Trial`
+                        : (displayPrice > 0 ? 'Sign Up & Subscribe' : 'Register Free');
+
                       return (
                         <Link
-                          href={`/signup?planId=${p.id}&duration=${activeDur}`}
+                          href={linkUrl}
                           className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                         >
-                          {displayPrice > 0 ? 'Sign Up & Subscribe' : 'Register Free'}
+                          {buttonLabel}
                         </Link>
                       );
                     })()}
@@ -450,6 +491,106 @@ export default function PublicPlansPage() {
                 </div>
               );
             })}
+
+            {activeCategory === 'ENTITY' && entityPlans.map((p) => {
+              return (
+                <div 
+                  key={p.id}
+                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
+                >
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
+                        <span 
+                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
+                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
+                        >
+                          {p.badgeLabel || p.planType.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
+                    </div>
+
+                    <div className="border-t border-b border-white/5 py-4 space-y-1">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">One-Off Price</span>
+                      <span className="text-3xl font-black text-white font-outfit">
+                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
+                      <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 bg-white/2 border border-white/5 p-3 rounded-xl">
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>
+                          {p.planType === 'POLL_PACK' && `Adds ${p.packQuantity} Premium Poll creation credits`}
+                          {p.planType === 'SURVEY_PACK' && `Adds ${p.packQuantity} Premium Survey creation credits`}
+                          {p.planType === 'EXAM_PACK' && `Adds ${p.packQuantity} Premium Exam creation credits`}
+                          {p.planType === 'COMBO_PACK' && `Adds ${p.packQuantity} Combo entity creation credits`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 mt-6 border-t border-white/5">
+                    <Link
+                      href={`/signup?planId=${p.id}&isAddon=true`}
+                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                    >
+                      Buy Credit Pack
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+
+            {activeCategory === 'ADDON' && addonPlans.map((p) => {
+              return (
+                <div 
+                  key={p.id}
+                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
+                >
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
+                        <span 
+                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
+                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
+                        >
+                          Advanced Add-On
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
+                    </div>
+
+                    <div className="border-t border-b border-white/5 py-4 space-y-1">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Add-On Base Price</span>
+                      <span className="text-3xl font-black text-white font-outfit">
+                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Pre-Requisite</span>
+                      <div className="text-[10px] text-purple-300 font-semibold bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl leading-relaxed">
+                        ⚠️ **Requires paid subscription**: This package functions as an overlay and can only be active alongside a running paid subscription.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 mt-6 border-t border-white/5">
+                    <Link
+                      href={`/signup?planId=${p.id}&isAddon=true`}
+                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                    >
+                      Buy Add-On Feature
+                    </Link>
+                  </div>
+                </div>
+                );
+              })}
           </div>
         </div>
       </main>

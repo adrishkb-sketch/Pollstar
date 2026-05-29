@@ -172,11 +172,13 @@ export default function PlansPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
+  const [entityPlans, setEntityPlans] = useState<any[]>([]);
   const [addonPlans, setAddonPlans] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ENTITY' | 'ADDON'>('SUBSCRIPTION');
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedCycle, setSelectedCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'TWO_YEARS'>('MONTHLY');
+  const [selectedCycle, setSelectedCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'TWO_YEARS' | 'LIFETIME'>('MONTHLY');
 
   const getPlanPricing = (p: any, cycle: string) => {
     let price = p.price;
@@ -219,6 +221,7 @@ export default function PlansPage() {
         const plansData = await plansRes.json();
         const rawPlans = plansData.plans || [];
         const rawAddons = plansData.addonPlans || [];
+        const rawEntity = plansData.entityPlans || [];
         
         // Sort so that the user's active plan is placed first (on the left)
         const userPlanId = data.user?.plan?.id;
@@ -231,6 +234,7 @@ export default function PlansPage() {
         });
         
         setPlans(sortedPlans);
+        setEntityPlans(rawEntity);
         setAddonPlans(rawAddons);
       }
 
@@ -303,37 +307,64 @@ export default function PlansPage() {
           </div>
         )}
 
-        {/* Billing cycle selector tab */}
-        <div className="flex justify-center">
+        {/* Category Toggles */}
+        <div className="flex justify-center mb-6 pt-2">
           <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
             {[
-              { key: 'MONTHLY', label: 'Monthly' },
-              { key: 'QUARTERLY', label: 'Quarterly', badge: 'Save 15%' },
-              { key: 'YEARLY', label: 'Yearly', badge: 'Save 25%' },
-              { key: 'TWO_YEARS', label: '2 Years', badge: 'Save 35%' }
+              { key: 'SUBSCRIPTION', label: 'Electoral Subscriptions' },
+              { key: 'ENTITY', label: 'Individual Entity Packs' },
+              { key: 'ADDON', label: 'Premium Add-Ons' }
             ].map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setSelectedCycle(tab.key as any)}
+                onClick={() => setActiveCategory(tab.key as any)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all relative flex items-center gap-1.5 whitespace-nowrap ${
-                  selectedCycle === tab.key
+                  activeCategory === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <span>{tab.label}</span>
-                {tab.badge && (
-                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
-                    selectedCycle === tab.key ? 'bg-white/20 text-white' : 'bg-purple-500/20 text-purple-300'
-                  }`}>
-                    {tab.badge}
-                  </span>
-                )}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Billing cycle selector tab */}
+        {activeCategory === 'SUBSCRIPTION' && (
+          <div className="flex justify-center">
+            <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
+              {[
+                { key: 'MONTHLY', label: 'Monthly' },
+                { key: 'QUARTERLY', label: 'Quarterly', badge: 'Save 15%' },
+                { key: 'YEARLY', label: 'Yearly', badge: 'Save 25%' },
+                { key: 'TWO_YEARS', label: '2 Years', badge: 'Save 35%' },
+                { key: 'LIFETIME', label: 'Lifetime', badge: 'Best Value' }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setSelectedCycle(tab.key as any)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all relative flex items-center gap-1.5 whitespace-nowrap ${
+                    selectedCycle === tab.key
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
+                      selectedCycle === tab.key ? 'bg-white/20 text-white' : 'bg-purple-500/20 text-purple-300'
+                    }`}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Dynamic sliding cards system for subscription options */}
         <div className="relative space-y-4">
@@ -362,7 +393,7 @@ export default function PlansPage() {
             ref={scrollRef}
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
-            {plans.map((p) => {
+            {activeCategory === 'SUBSCRIPTION' && plans.map((p) => {
               const isActivePlan = user?.plan?.id === p.id || (p.name === 'Free' && !user?.plan?.id);
               const { price, originalPrice, cycleLabel, isOfferActive } = getPlanPricing(p, selectedCycle);
               
@@ -393,6 +424,11 @@ export default function PlansPage() {
                         {isActivePlan && (
                           <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0">
                             Active
+                          </span>
+                        )}
+                        {p.hasFreeTrial && !isActivePlan && (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider block shrink-0 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 animate-pulse">
+                            {p.freeTrialDays || 7} Days Trial
                           </span>
                         )}
                       </div>
@@ -463,42 +499,30 @@ export default function PlansPage() {
                       </button>
                     ) : (
                       <Link
-                        href={`/checkout?planId=${p.id}&duration=${cycleLabel}`}
+                        href={p.hasFreeTrial 
+                          ? `/checkout?planId=${p.id}&trial=true` 
+                          : `/checkout?planId=${p.id}&duration=${cycleLabel}`}
                         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                       >
-                        {price > 0 ? `Get Upgrade (${formatBillingCycle(cycleLabel)})` : 'Activate Free Tier'}
+                        {p.hasFreeTrial 
+                          ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
+                          : (price > 0 ? `Get Upgrade (${formatBillingCycle(cycleLabel)})` : 'Activate Free Tier')}
                       </Link>
                     )}
                   </div>
                 </div>
               );
             })}
-          </div>
-        </div>
 
-        {/* Add-on plans section */}
-        {addonPlans.length > 0 && (
-          <div className="space-y-6 pt-8 border-t border-white/5 text-left">
-            <div>
-              <h2 className="text-2xl font-black bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-400 bg-clip-text text-transparent font-outfit">
-                Advanced Feature Add-Ons & Packs
-              </h2>
-              <p className="text-gray-500 text-xs mt-1">
-                Complement your active premium subscription with feature expansion packs. Add-on purchases are one-time or separate packages.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
-              {addonPlans.map((p) => {
-                const hasActiveSub = user?.planId && !user?.plan?.isFree && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
-
-                return (
-                  <div 
-                    key={p.id}
-                    className="glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-300"
-                  >
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
+            {activeCategory === 'ENTITY' && entityPlans.map((p) => {
+              return (
+                <div 
+                  key={p.id}
+                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
+                >
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
                         <span 
                           className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
                           style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
@@ -506,56 +530,103 @@ export default function PlansPage() {
                           {p.badgeLabel || p.planType.replace('_', ' ')}
                         </span>
                       </div>
-                      
-                      <h3 className="text-lg font-bold text-white font-outfit">{p.name}</h3>
-                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[36px]">{p.description}</p>
-                      
-                      <div className="border-t border-b border-white/5 py-3 flex justify-between items-baseline">
-                        <span className="text-2xl font-black text-white font-outfit">
-                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                        </span>
-                        <span className="text-[10px] text-gray-500 uppercase tracking-widest">{p.currency}</span>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
-                        <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>
-                            {p.planType === 'POLL_PACK' && `Grants ${p.packQuantity} premium polls`}
-                            {p.planType === 'SURVEY_PACK' && `Grants ${p.packQuantity} premium surveys`}
-                            {p.planType === 'EXAM_PACK' && `Grants ${p.packQuantity} premium exams`}
-                            {p.planType === 'COMBO_PACK' && `Grants ${p.packQuantity} premium features combo`}
-                            {p.planType === 'ADDON' && `Feature Expansion Pack`}
-                          </span>
-                        </div>
-                      </div>
+                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
                     </div>
 
-                    <div className="pt-4 mt-4 border-t border-white/5">
-                      {hasActiveSub ? (
-                        <Link
-                          href={`/checkout?planId=${p.id}&isAddon=true`}
-                          className="w-full py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white text-xs border border-indigo-400/20 shadow-md active:scale-95 transition-all text-center block"
-                        >
-                          Buy Add-On Pack
-                        </Link>
-                      ) : (
-                        <button
-                          disabled
-                          title="Requires an active paid subscription tier first."
-                          className="w-full py-2.5 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
-                        >
-                          Requires Active Subscription
-                        </button>
-                      )}
+                    <div className="border-t border-b border-white/5 py-4 space-y-1">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">One-Off Price</span>
+                      <span className="text-3xl font-black text-white font-outfit">
+                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
+                      <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 bg-white/2 border border-white/5 p-3 rounded-xl">
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>
+                          {p.planType === 'POLL_PACK' && `Adds ${p.packQuantity} Premium Poll creation credits`}
+                          {p.planType === 'SURVEY_PACK' && `Adds ${p.packQuantity} Premium Survey creation credits`}
+                          {p.planType === 'EXAM_PACK' && `Adds ${p.packQuantity} Premium Exam creation credits`}
+                          {p.planType === 'COMBO_PACK' && `Adds ${p.packQuantity} Combo entity creation credits`}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="pt-6 mt-6 border-t border-white/5">
+                    <Link
+                      href={`/checkout?planId=${p.id}&isAddon=true`}
+                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                    >
+                      Buy Credit Pack
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+
+            {activeCategory === 'ADDON' && addonPlans.map((p) => {
+              const hasActiveSub = user?.planId && !user?.plan?.isFree && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
+
+              return (
+                <div 
+                  key={p.id}
+                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
+                >
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
+                        <span 
+                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
+                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
+                        >
+                          Advanced Add-On
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
+                    </div>
+
+                    <div className="border-t border-b border-white/5 py-4 space-y-1">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Add-On Base Price</span>
+                      <span className="text-3xl font-black text-white font-outfit">
+                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Pre-Requisite</span>
+                      <div className="text-[10px] text-purple-300 font-semibold bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl leading-relaxed">
+                        ⚠️ **Requires active subscription**: This package functions as an overlay and can only be active alongside a running paid subscription.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 mt-6 border-t border-white/5">
+                    {hasActiveSub ? (
+                      <Link
+                        href={`/checkout?planId=${p.id}&isAddon=true`}
+                        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                      >
+                        Buy Add-On Feature
+                      </Link>
+                    ) : (
+                      <button
+                        disabled
+                        title="Requires an active paid subscription tier first."
+                        className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
+                      >
+                        Requires Active Paid Subscription
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         {/* Invoice Purchase Ledger history */}
         <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6">

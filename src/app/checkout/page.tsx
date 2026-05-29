@@ -33,6 +33,8 @@ interface Plan {
   currency: string;
   billingCycle: string;
   badgeColor: string;
+  hasFreeTrial?: boolean;
+  freeTrialDays?: number | null;
 }
 
 function CheckoutContent() {
@@ -40,6 +42,7 @@ function CheckoutContent() {
   const router = useRouter();
   const planId = searchParams.get('planId');
   const selectedDuration = searchParams.get('duration') || 'MONTHLY';
+  const isTrial = searchParams.get('trial') === 'true';
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -100,12 +103,17 @@ function CheckoutContent() {
         const planRes = await fetch('/api/plans');
         if (planRes.ok) {
           const planData = await planRes.json();
-          if (planData.success && planData.plans) {
-            const matchedPlan = planData.plans.find((p: Plan) => p.id === planId);
+          if (planData.success) {
+            const matchedPlan = 
+              (planData.plans || []).find((p: Plan) => p.id === planId) ||
+              (planData.entityPlans || []).find((p: Plan) => p.id === planId) ||
+              (planData.addonPlans || []).find((p: Plan) => p.id === planId);
             if (matchedPlan) {
               setPlan(matchedPlan);
               let computedBasePrice = matchedPlan.price;
-              if (selectedDuration && (matchedPlan as any).durations) {
+              if (isTrial) {
+                computedBasePrice = 0;
+              } else if (selectedDuration && (matchedPlan as any).durations) {
                 const durationsConfig = (matchedPlan as any).durations as any;
                 if (durationsConfig[selectedDuration] && durationsConfig[selectedDuration].enabled) {
                   computedBasePrice = parseFloat(durationsConfig[selectedDuration].price || '0');
@@ -131,7 +139,7 @@ function CheckoutContent() {
     }
 
     loadCheckoutData();
-  }, [planId]);
+  }, [planId, selectedDuration, isTrial]);
 
   const [generatedInvoice, setGeneratedInvoice] = useState<any | null>(null);
 
@@ -195,7 +203,8 @@ function CheckoutContent() {
           billingCity: city || 'N/A',
           billingZip: zipCode || 'N/A',
           billingPhone: phone || null,
-          duration: selectedDuration
+          duration: selectedDuration,
+          trial: isTrial
         })
       });
       const data = await res.json();
@@ -707,11 +716,11 @@ function CheckoutContent() {
                 <div className="flex items-center justify-between border border-white/5 rounded-2xl bg-white/[0.02] p-4">
                   <div>
                     <h4 className="font-extrabold text-lg text-purple-300">{plan.name}</h4>
-                    <p className="text-xs text-gray-500 font-semibold uppercase">{selectedDuration} Access</p>
+                    <p className="text-xs text-gray-500 font-semibold uppercase">{isTrial ? `Free Trial (${plan.freeTrialDays || 7} Days)` : `${selectedDuration} Access`}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-2xl font-black text-white">{getCurrencySymbol(plan.currency)}{basePrice.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">{plan.currency}</p>
+                    <span className="text-2xl font-black text-white">{isTrial ? 'FREE' : `${getCurrencySymbol(plan.currency)}${basePrice.toFixed(2)}`}</span>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">{isTrial ? 'Trial' : plan.currency}</p>
                   </div>
                 </div>
 
@@ -719,65 +728,69 @@ function CheckoutContent() {
                 <div className="border border-purple-500/20 bg-purple-500/5 rounded-2xl p-4 text-xs text-purple-300 leading-relaxed space-y-1">
                   <div className="font-bold flex items-center gap-1">⚡ Plan Validity Period</div>
                   <p>
-                    {selectedDuration === 'LIFETIME' 
-                      ? 'Lifetime Plan: Enjoy permanent premium access. No renewals, no future charges.' 
-                      : `Your plan features will remain active for exactly ${
-                          selectedDuration === 'QUARTERLY' ? '90 days' : selectedDuration === 'YEARLY' ? '365 days' : selectedDuration === 'TWO_YEAR' ? '730 days' : '30 days'
-                        }. After this duration, it will auto-expire and revert to the default Free plan.`}
+                    {isTrial 
+                      ? `Free Trial: Enjoy full premium access to "${plan.name}" features for exactly ${plan.freeTrialDays || 7} days. No charges, no payment credentials required. It will automatically revert to the Free plan afterwards.`
+                      : selectedDuration === 'LIFETIME' 
+                        ? 'Lifetime Plan: Enjoy permanent premium access. No renewals, no future charges.' 
+                        : `Your plan features will remain active for exactly ${
+                            selectedDuration === 'QUARTERLY' ? '90 days' : selectedDuration === 'YEARLY' ? '365 days' : (selectedDuration === 'TWO_YEAR' || selectedDuration === 'TWO_YEARS') ? '730 days' : '30 days'
+                          }. After this duration, it will auto-expire and revert to the default Free plan.`}
                   </p>
                 </div>
 
                 {/* Apply Coupon Promo Code */}
-                <form onSubmit={handleApplyCoupon} className="space-y-2 pt-2">
-                  <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Have a promo code?</label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Percent className="absolute left-3.5 top-3.5 w-4 h-4 text-purple-400" />
-                      <input
-                        type="text"
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value)}
-                        placeholder="ENTER COUPON CODE"
-                        disabled={couponApplied}
-                        className="w-full glass-input text-xs font-semibold !pl-10 !pr-4 py-3.5"
-                      />
+                {!isTrial && (
+                  <form onSubmit={handleApplyCoupon} className="space-y-2 pt-2">
+                    <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Have a promo code?</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Percent className="absolute left-3.5 top-3.5 w-4 h-4 text-purple-400" />
+                        <input
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          placeholder="ENTER COUPON CODE"
+                          disabled={couponApplied}
+                          className="w-full glass-input text-xs font-semibold !pl-10 !pr-4 py-3.5"
+                        />
+                      </div>
+                      {couponApplied ? (
+                        <button
+                          type="button"
+                          onClick={handleClearCoupon}
+                          className="py-3 px-4 rounded-xl border border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs font-bold transition-all active:scale-95"
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={applyingCoupon || !couponCode.trim()}
+                          className="py-3 px-5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all border border-purple-400/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {applyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                        </button>
+                      )}
                     </div>
-                    {couponApplied ? (
-                      <button
-                        type="button"
-                        onClick={handleClearCoupon}
-                        className="py-3 px-4 rounded-xl border border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs font-bold transition-all active:scale-95"
-                      >
-                        Remove
-                      </button>
-                    ) : (
-                      <button
-                        type="submit"
-                        disabled={applyingCoupon || !couponCode.trim()}
-                        className="py-3 px-5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all border border-purple-400/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {applyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-                      </button>
+                    {couponError && (
+                      <p className="text-xs text-red-400 font-semibold">{couponError}</p>
                     )}
-                  </div>
-                  {couponError && (
-                    <p className="text-xs text-red-400 font-semibold">{couponError}</p>
-                  )}
-                  {couponApplied && (
-                    <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 animate-bounce" />
-                      <span>Coupon applied successfully!</span>
-                    </p>
-                  )}
-                </form>
+                    {couponApplied && (
+                      <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 animate-bounce" />
+                        <span>Coupon applied successfully!</span>
+                      </p>
+                    )}
+                  </form>
+                )}
 
                 {/* Pricing Line ledger */}
                 <div className="border-t border-white/5 pt-5 space-y-3.5 text-sm">
                   <div className="flex justify-between text-gray-400">
                     <span>Base Price</span>
-                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}{basePrice.toFixed(2)}</span>
+                    <span className="font-semibold text-white">{isTrial ? 'Free ($0.00)' : `${getCurrencySymbol(plan.currency)}${basePrice.toFixed(2)}`}</span>
                   </div>
-                  {discountAmount > 0 && (
+                  {discountAmount > 0 && !isTrial && (
                     <div className="flex justify-between text-emerald-400 font-semibold">
                       <span>Promo Coupon Discount</span>
                       <span>-{getCurrencySymbol(plan.currency)}{discountAmount.toFixed(2)}</span>
@@ -796,7 +809,7 @@ function CheckoutContent() {
                     <span className="text-base font-bold">Total Amount Due</span>
                     <div className="text-right">
                       <span className="text-3xl font-black bg-gradient-to-r from-purple-400 to-indigo-300 bg-clip-text text-transparent">
-                        {getCurrencySymbol(plan.currency)}{finalPrice.toFixed(2)}
+                        {isTrial ? 'Free Trial ($0.00)' : `${getCurrencySymbol(plan.currency)}${finalPrice.toFixed(2)}`}
                       </span>
                     </div>
                   </div>

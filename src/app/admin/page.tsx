@@ -1211,14 +1211,30 @@ export default function AdminPortal() {
       return;
     }
 
+    let resolvedPrice = planIsFree ? 0 : parseFloat(planPrice || '0');
+    let resolvedOriginalPrice = parseFloat(planOriginalPrice || '0');
+    const resolvedCycle = planType === 'SUBSCRIPTION' 
+      ? (Object.keys(planDurations).find(k => planDurations[k]?.enabled) || 'MONTHLY') 
+      : 'LIFETIME';
+
+    if (planType === 'SUBSCRIPTION') {
+      const monthlyConfig = planDurations['MONTHLY']?.enabled 
+        ? planDurations['MONTHLY'] 
+        : Object.values(planDurations).find((d: any) => d.enabled);
+      if (monthlyConfig) {
+        resolvedPrice = parseFloat(monthlyConfig.price || '0');
+        resolvedOriginalPrice = parseFloat(monthlyConfig.originalPrice || '0');
+      }
+    }
+
     const payload = {
       planId: editingPlan?.id,
       name: planName,
       description: planDesc,
-      price: planIsFree ? 0 : parseFloat(planPrice),
+      price: resolvedPrice,
       isFree: planIsFree,
       currency: planCurrency,
-      billingCycle: planCycle,
+      billingCycle: resolvedCycle,
       planType,
       packQuantity: planType !== 'SUBSCRIPTION' ? parseInt(planPackQuantity) : null,
       freePerks: parseInt(planFreePerks) || 0,
@@ -1234,7 +1250,7 @@ export default function AdminPortal() {
       maxPolls: planMaxPolls,
       maxSurveys: planMaxSurveys,
       maxExams: planMaxExams,
-      originalPrice: parseFloat(planOriginalPrice || '0'),
+      originalPrice: resolvedOriginalPrice,
       offerEndDate: planOfferEndDate || null,
       durations: planDurations,
     };
@@ -4394,35 +4410,39 @@ export default function AdminPortal() {
 
               {/* Row 2: Price details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5">
-                <div className="flex items-center space-x-2 pt-5">
-                  <input
-                    type="checkbox"
-                    id="planIsFreeCheckbox"
-                    checked={planIsFree}
-                    onChange={e => {
-                      setPlanIsFree(e.target.checked);
-                      if (e.target.checked) setPlanPrice('0.0');
-                    }}
-                    className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
-                  />
-                  <label htmlFor="planIsFreeCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
-                    Free Tier Plan
-                  </label>
-                </div>
+                {planType === 'SUBSCRIPTION' && (
+                  <div className="flex items-center space-x-2 pt-5">
+                    <input
+                      type="checkbox"
+                      id="planIsFreeCheckbox"
+                      checked={planIsFree}
+                      onChange={e => {
+                        setPlanIsFree(e.target.checked);
+                        if (e.target.checked) setPlanPrice('0.0');
+                      }}
+                      className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
+                    />
+                    <label htmlFor="planIsFreeCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                      Free Tier Plan
+                    </label>
+                  </div>
+                )}
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Price</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    disabled={planIsFree}
-                    placeholder="e.g. 19.99"
-                    value={planPrice}
-                    onChange={e => setPlanPrice(e.target.value)}
-                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 disabled:opacity-40"
-                  />
-                </div>
+                {planType !== 'SUBSCRIPTION' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Price</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      disabled={planIsFree}
+                      placeholder="e.g. 19.99"
+                      value={planPrice}
+                      onChange={e => setPlanPrice(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 disabled:opacity-40"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Currency Mode</label>
@@ -4441,29 +4461,31 @@ export default function AdminPortal() {
               </div>
 
               {/* Row 2.5: Price Slashes & Expirations */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Original Slashed Price (e.g. 29.99)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 29.99"
-                    value={planOriginalPrice}
-                    onChange={e => setPlanOriginalPrice(e.target.value)}
-                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                  />
-                </div>
+              {planType !== 'SUBSCRIPTION' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Original Slashed Price (e.g. 29.99)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 29.99"
+                      value={planOriginalPrice}
+                      onChange={e => setPlanOriginalPrice(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Offer End Date (Staging countdown)</label>
-                  <input
-                    type="datetime-local"
-                    value={planOfferEndDate}
-                    onChange={e => setPlanOfferEndDate(e.target.value)}
-                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                  />
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Offer End Date (Staging countdown)</label>
+                    <input
+                      type="datetime-local"
+                      value={planOfferEndDate}
+                      onChange={e => setPlanOfferEndDate(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Row 2.6: Durations Pricing Matrix */}
               <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
@@ -4523,6 +4545,21 @@ export default function AdminPortal() {
                                   });
                                 }}
                                 className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[8px] text-purple-400 font-bold uppercase block">Razorpay Plan ID</span>
+                              <input
+                                type="text"
+                                placeholder="plan_HNw..."
+                                value={config.razorpayPlanId || ''}
+                                onChange={e => {
+                                  setPlanDurations({
+                                    ...planDurations,
+                                    [dur]: { ...config, razorpayPlanId: e.target.value }
+                                  });
+                                }}
+                                className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
                               />
                             </div>
                           </div>
@@ -4591,20 +4628,8 @@ export default function AdminPortal() {
                 </div>
               )}
 
-              {/* Row 4: Badge and Cycle Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billing Cycle</label>
-                  <select
-                    value={planCycle}
-                    onChange={e => setPlanCycle(e.target.value)}
-                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                  >
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="YEARLY">Yearly</option>
-                    <option value="ONE_TIME">One Time</option>
-                  </select>
-                </div>
+              {/* Row 4: Badge Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Badge Label (User Tag)</label>
