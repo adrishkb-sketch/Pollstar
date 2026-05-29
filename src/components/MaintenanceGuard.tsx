@@ -17,9 +17,9 @@ export default function MaintenanceGuard({ children }: MaintenanceGuardProps) {
   useEffect(() => {
     // 1. Bypass check for admin pages entirely
     const bypassPaths = ['/admin', '/admin-login', '/api/admin'];
-    const isBypassed = bypassPaths.some(
+    const isBypassed = pathname ? bypassPaths.some(
       (path) => pathname === path || pathname.startsWith(path + '/')
-    );
+    ) : false;
 
     if (isBypassed) {
       setIsLoading(false);
