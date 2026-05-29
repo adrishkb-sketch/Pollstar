@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken, generateAccessToken } from '@/lib/jwt';
+import { checkAndExpirePlan } from '@/lib/planExpiry';
 
 export async function GET() {
   try {
@@ -84,6 +85,15 @@ export async function GET() {
       );
     }
 
+    // Check and auto-revert expired plans (non-fatal)
+    await checkAndExpirePlan(user.id);
+
+    // Re-fetch user after potential plan expiry revert
+    user = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { plan: true },
+    }) || user;
+
     // Auto-heal missing referral code
     if (!user.referralCode) {
       const uniqueReferralCode = 'ref_' + Math.random().toString(36).substring(2, 9);
@@ -109,9 +119,23 @@ export async function GET() {
     }
 
     if (autoUpgradePlan && (!user.planId || user.plan?.name === 'Free') && user.planId !== autoUpgradePlan.id) {
+      // Compute domain plan expiry if durationMonths is set on the mapping
+      const matchingMapping = mappings.find(m => {
+        const ds = m.domain.startsWith('@') ? m.domain : `@${m.domain}`;
+        return user!.email.toLowerCase().endsWith(ds.toLowerCase());
+      });
+      const domainExpiry = matchingMapping?.durationMonths
+        ? new Date(Date.now() + matchingMapping.durationMonths * 30 * 24 * 60 * 60 * 1000)
+        : null;
+
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { planId: autoUpgradePlan.id },
+        data: {
+          planId: autoUpgradePlan.id,
+          domainPlanExpiry: domainExpiry,
+          planBillingCycle: domainExpiry ? 'MONTHLY' : 'LIFETIME',
+          isLifetimePlan: !domainExpiry,
+        },
         include: { plan: true }
       });
     }
@@ -181,6 +205,10 @@ export async function GET() {
         plan: user.plan,
         referralCode: user.referralCode,
         twoFactorEnabled: user.twoFactorEnabled,
+        planExpiresAt: user.planExpiresAt,
+        planBillingCycle: user.planBillingCycle,
+        isLifetimePlan: user.isLifetimePlan,
+        domainPlanExpiry: user.domainPlanExpiry,
       },
     });
 

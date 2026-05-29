@@ -8,7 +8,7 @@ import {
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
   Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
   ExternalLink, User, HelpCircle, Tag, Globe, Coins, Settings, Mail, Send,
-  Briefcase, Megaphone
+  Briefcase, Megaphone, Sparkles
 } from 'lucide-react';
 
 const POLL_FEATURES = [
@@ -176,6 +176,7 @@ export default function AdminPortal() {
   // Whitelist Form
   const [whitelistDomain, setWhitelistDomain] = useState('');
   const [whitelistPlanId, setWhitelistPlanId] = useState('');
+  const [whitelistDuration, setWhitelistDuration] = useState('');
   const [whitelistError, setWhitelistError] = useState<string | null>(null);
   const [whitelistSuccess, setWhitelistSuccess] = useState<string | null>(null);
 
@@ -561,19 +562,37 @@ export default function AdminPortal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           domain: whitelistDomain,
-          planId: whitelistPlanId
+          planId: whitelistPlanId,
+          durationMonths: whitelistDuration ? parseInt(whitelistDuration) : null
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setWhitelistSuccess(`Successfully mapped @${whitelistDomain.toLowerCase()} suffix!`);
         setWhitelistDomain('');
+        setWhitelistDuration('');
         fetchDomainMappings();
       } else {
         setWhitelistError(data.error || 'Failed to create whitelisted mapping.');
       }
     } catch (err) {
       setWhitelistError('Connection error saving whitelist.');
+    }
+  };
+
+  const handleMigrateEliteUsers = async () => {
+    if (!confirm('Are you sure you want to upgrade all active Elite subscribers to LIFETIME status? This will wipe out their plan expiration and prevent future recurring billing.')) return;
+    try {
+      const res = await fetch('/api/admin/migrate-elite', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message);
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to migrate Elite users.');
+      }
+    } catch (e) {
+      alert('Connection error performing migration.');
     }
   };
 
@@ -1771,8 +1790,8 @@ export default function AdminPortal() {
         {/* TAB 1: USERS MANAGEMENT */}
         {activeTab === 'users' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="relative flex-1 max-w-md w-full">
                 <input
                   type="text"
                   placeholder="Search user email or legal name..."
@@ -1781,6 +1800,14 @@ export default function AdminPortal() {
                   className="w-full bg-white/5 border border-white/8 hover:border-white/15 focus:border-purple-500/60 rounded-xl pl-4 pr-10 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all"
                 />
               </div>
+              <button
+                type="button"
+                onClick={handleMigrateEliteUsers}
+                className="px-4 py-2.5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs border border-purple-400/20 active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
+              >
+                <Sparkles className="w-4 h-4 text-yellow-300" />
+                <span>Migrate Elite Users to Lifetime</span>
+              </button>
             </div>
 
             {/* Bulk Actions Bar */}
@@ -3031,6 +3058,21 @@ export default function AdminPortal() {
                     </select>
                   </div>
 
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Validity Duration (Months)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={whitelistDuration}
+                      onChange={e => setWhitelistDuration(e.target.value)}
+                      placeholder="e.g. 3, 6, 12 (leave blank for indefinite)"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                    />
+                    <span className="text-[9px] text-gray-500 leading-relaxed block">
+                      Leave empty to grant lifetime or permanent access. If set, features revert to standard Free tier after X months.
+                    </span>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white text-xs transition-all border border-indigo-400/20 active:scale-95 flex items-center justify-center gap-1.5"
@@ -3121,17 +3163,18 @@ export default function AdminPortal() {
                       <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
                         <th className="pb-3 pr-2">Suffix</th>
                         <th className="pb-3 pr-2">Target Plan</th>
+                        <th className="pb-3 pr-2">Validity</th>
                         <th className="pb-3 pr-2 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {loadingMappings ? (
                         <tr>
-                          <td colSpan={3} className="py-6 text-center text-gray-500">Loading whitelist...</td>
+                          <td colSpan={4} className="py-6 text-center text-gray-500">Loading whitelist...</td>
                         </tr>
                       ) : domainMappings.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="py-6 text-center text-gray-500">No domain whitelists set up.</td>
+                          <td colSpan={4} className="py-6 text-center text-gray-500">No domain whitelists set up.</td>
                         </tr>
                       ) : (
                         domainMappings.map((m) => (
@@ -3148,6 +3191,9 @@ export default function AdminPortal() {
                                   {m.plan.name}
                                 </span>
                               )}
+                            </td>
+                            <td className="py-3 pr-2 text-[10px] font-bold">
+                              {m.durationMonths ? `${m.durationMonths} Months` : <span className="text-gray-500">Indefinite</span>}
                             </td>
                             <td className="py-3 pr-2 text-right">
                               <button
@@ -4334,9 +4380,10 @@ export default function AdminPortal() {
                   <select
                     value={planType}
                     onChange={e => setPlanType(e.target.value)}
-                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500 font-semibold"
                   >
                     <option value="SUBSCRIPTION">Recurring Subscription Tier</option>
+                    <option value="ADDON">Add-On Pack/Plan</option>
                     <option value="POLL_PACK">Individual Polls Pack</option>
                     <option value="SURVEY_PACK">Individual Surveys Pack</option>
                     <option value="EXAM_PACK">Individual Exams Pack</option>

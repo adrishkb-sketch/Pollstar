@@ -386,6 +386,7 @@ export async function POST(req: Request) {
             email: voter.email,
             phone: voter.phone || null,
             password: voter.password || null,
+            voterAuthType: voter.voterAuthType || 'GLOBAL',
           })),
         });
       }

@@ -86,6 +86,10 @@ model User {
   // Subscriptions & Plans
   planId               String?
   plan                 Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planExpiresAt        DateTime?   // null = lifetime or free
+  planBillingCycle     String      @default("MONTHLY") // MONTHLY | QUARTERLY | YEARLY | TWO_YEAR | LIFETIME | ONE_TIME
+  isLifetimePlan       Boolean     @default(false)
+  domainPlanExpiry     DateTime?   // Set when auto-enrolled via email domain suffix
 
   // Referral & Wallets System
   referralCode         String?     @unique
@@ -186,6 +190,7 @@ model AllowedVoter {
   voted           Boolean   @default(false)
   bypassOtpUntil  DateTime?
   bypassRequested Boolean   @default(false)
+  voterAuthType   String    @default("GLOBAL") // GLOBAL | EMAIL_OTP | EMAIL_PASSWORD | PHONE_PASSWORD
 }
 
 model DirectMessage {
@@ -453,11 +458,12 @@ model Coupon {
 }
 
 model EmailDomainMapping {
-  id        String   @id @default(uuid())
-  domain    String   @unique // e.g. "school.edu"
-  planId    String
-  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  domain         String   @unique // e.g. "school.edu"
+  planId         String
+  plan           Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  durationMonths Int?     // null = indefinite; set to give time-limited plan access
+  createdAt      DateTime @default(now())
 }
 
 model Invoice {
@@ -474,6 +480,9 @@ model Invoice {
   billingZip     String
   billingPhone   String?
   billingCycle   String   @default("MONTHLY")
+  isAddon        Boolean  @default(false)   // true if this invoice is for an add-on plan
+  planExpiresAt  DateTime?                  // when the plan purchased here expires
+  notes          String?                    // extra notes e.g. "Lifetime upgrade"
   createdAt      DateTime @default(now())
 }
 

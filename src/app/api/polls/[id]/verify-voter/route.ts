@@ -70,6 +70,20 @@ export async function POST(
         }
       }
 
+      const perVoterAuthType = allowedVoter.voterAuthType || 'GLOBAL';
+      let verificationMethod = poll.settings?.verificationMethod || 'EMAIL';
+      let verificationType = poll.settings?.verificationType || 'OTP';
+      if (perVoterAuthType === 'EMAIL_OTP') {
+        verificationMethod = 'EMAIL';
+        verificationType = 'OTP';
+      } else if (perVoterAuthType === 'EMAIL_PASSWORD') {
+        verificationMethod = 'EMAIL';
+        verificationType = 'PASSWORD';
+      } else if (perVoterAuthType === 'PHONE_PASSWORD') {
+        verificationMethod = 'PHONE';
+        verificationType = 'PASSWORD';
+      }
+
       return NextResponse.json({
         success: true,
         voterId: allowedVoter.id,
@@ -77,8 +91,9 @@ export async function POST(
         confirmer2Value: allowedVoter.confirmer2 || '',
         emailValue: allowedVoter.email,
         phoneValue: allowedVoter.phone || '',
-        verificationMethod: poll.settings?.verificationMethod || 'EMAIL',
-        verificationType: poll.settings?.verificationType || 'OTP',
+        voterAuthType: allowedVoter.voterAuthType || 'GLOBAL',
+        verificationMethod,
+        verificationType,
         labels: {
           identifierLabel: poll.settings?.identifierLabel || 'Roll Number',
           confirmer1Label: poll.settings?.confirmer1Label || 'Student Name',
@@ -90,8 +105,34 @@ export async function POST(
     // Step 1: Check identifier/confirmers and request OTP
     if (step === 'REQUEST_OTP') {
       const { identifier, confirmer1, confirmer2, email, phone, password, voterId } = body;
-      const verificationMethod = poll.settings?.verificationMethod || 'EMAIL';
-      const verificationType = poll.settings?.verificationType || 'OTP';
+      
+      // Determine effective verification method/type:
+      // Per-voter authType takes priority over poll-level setting
+      const globalVerificationMethod = poll.settings?.verificationMethod || 'EMAIL';
+      const globalVerificationType = poll.settings?.verificationType || 'OTP';
+
+      // We'll figure out the effective settings after looking up the voter
+      // First, look up the voter to get their individual authType
+      let prelimVoter = null;
+      if (identifier) {
+        prelimVoter = await prisma.allowedVoter.findFirst({
+          where: {
+            pollId,
+            ...(voterId ? { id: voterId } : {}),
+            identifier: { equals: identifier.trim(), mode: 'insensitive' },
+          },
+        });
+      }
+
+      const perVoterAuthType = prelimVoter?.voterAuthType || 'GLOBAL';
+      
+      // Map per-voter authType to method/type
+      let verificationMethod = globalVerificationMethod;
+      let verificationType = globalVerificationType;
+      if (perVoterAuthType === 'EMAIL_OTP') { verificationMethod = 'EMAIL'; verificationType = 'OTP'; }
+      else if (perVoterAuthType === 'EMAIL_PASSWORD') { verificationMethod = 'EMAIL'; verificationType = 'PASSWORD'; }
+      else if (perVoterAuthType === 'PHONE_PASSWORD') { verificationMethod = 'PHONE'; verificationType = 'PASSWORD'; }
+      
       const isPhoneMethod = verificationMethod === 'PHONE';
 
       if (!identifier || !confirmer1 || (isPhoneMethod ? !phone : !email)) {

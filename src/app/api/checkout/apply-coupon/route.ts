@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { couponCode, planId } = await req.json();
+    const { couponCode, planId, duration } = await req.json();
 
     if (!couponCode || !planId) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -76,7 +76,14 @@ export async function POST(req: Request) {
 
     // Calculate discount
     let discountAmount = 0;
-    const planPrice = plan.price;
+    let planPrice = plan.price;
+
+    if (duration && plan.durations) {
+      const durationsConfig = plan.durations as any;
+      if (durationsConfig[duration] && durationsConfig[duration].enabled) {
+        planPrice = parseFloat(durationsConfig[duration].price || '0');
+      }
+    }
 
     if (coupon.discountType === 'FREE') {
       discountAmount = planPrice;

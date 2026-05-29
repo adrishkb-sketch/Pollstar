@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { domain, planId } = await req.json();
+    const { domain, planId, durationMonths } = await req.json();
 
     if (!domain || !planId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -79,7 +79,8 @@ export async function POST(req: Request) {
     const mapping = await prisma.emailDomainMapping.create({
       data: {
         domain: cleanDomain,
-        planId
+        planId,
+        durationMonths: durationMonths ? parseInt(durationMonths) : null,
       },
       include: {
         plan: {

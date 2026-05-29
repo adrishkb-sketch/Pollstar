@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, LogOut, Loader2, User, Phone, Briefcase, GraduationCap, School, 
   FlaskConical, HelpCircle, Check, AlertTriangle, ShieldCheck, FileText, 
-  ExternalLink, Send, ArrowRight, Calendar, Edit2, X
+  ExternalLink, Send, ArrowRight, Calendar, Edit2, X, Sparkles
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 
@@ -634,6 +634,92 @@ export default function ProfilePage() {
                     {user?.plan?.name || 'Free'}
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* TAB: Premium Plan Badge & Status */}
+            <div className="glass-card rounded-3xl p-6 border border-indigo-500/20 bg-indigo-500/5 space-y-4 text-left">
+              <div className="flex items-center space-x-2 border-b border-white/5 pb-4">
+                <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse animate-duration-2000" />
+                <h3 className="font-outfit text-base font-bold text-white">⭐ Subscription Status</h3>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                {/* Colored Badge */}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 font-semibold">Active Tier</span>
+                  <span 
+                    className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider block font-mono"
+                    style={{ 
+                      color: user?.plan?.badgeColor || '#a855f7', 
+                      backgroundColor: `${user?.plan?.badgeColor || '#a855f7'}15`, 
+                      border: `1px solid ${user?.plan?.badgeColor || '#a855f7'}30` 
+                    }}
+                  >
+                    {user?.plan?.badgeLabel || user?.plan?.name || 'Free'}
+                  </span>
+                </div>
+
+                {/* Billing Cycle */}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 font-semibold">Billing Cycle</span>
+                  <span className="text-gray-200 font-bold uppercase tracking-wider font-mono">
+                    {user?.isLifetimePlan ? 'Lifetime Access' : (user?.planBillingCycle || 'Monthly')}
+                  </span>
+                </div>
+
+                {/* Expiry Countdown */}
+                {user?.planExpiresAt && !user?.isLifetimePlan && (
+                  <div className="space-y-2 p-3 rounded-2xl bg-white/2 border border-white/5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-gray-400">Expiration Date</span>
+                      <span className="text-gray-300 font-semibold font-mono">
+                        {new Date(user.planExpiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-gray-400">Remaining Time</span>
+                      <span className="text-purple-400 font-bold font-mono">
+                        {(() => {
+                          const diffTime = Math.max(0, new Date(user.planExpiresAt).getTime() - new Date().getTime());
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          return diffDays > 0 ? `${diffDays} Days` : 'Expires Today';
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Domain Plan Expiry Details */}
+                {user?.domainPlanExpiry && (
+                  <div className="space-y-2 p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-300">
+                    <div className="text-[10px] font-bold">🎓 Corporate / School Suffix Auto-Upgrade</div>
+                    <div className="flex justify-between items-center text-[9px]">
+                      <span>Domain Expiration</span>
+                      <span className="font-mono">
+                        {new Date(user.domainPlanExpiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lifetime highlight */}
+                {user?.isLifetimePlan && (
+                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-semibold flex items-center gap-1.5 leading-relaxed">
+                    <span>👑 Permanent Lifetime Membership: No future billing actions required. Enjoy full access forever!</span>
+                  </div>
+                )}
+
+                {/* Upgrade Button */}
+                {(!user?.planId || user?.plan?.isFree) && (
+                  <Link 
+                    href="/dashboard/plans"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 text-center block"
+                  >
+                    <span>Upgrade to Premium Tier</span>
+                    <ArrowRight className="w-3.5 h-3.5 inline" />
+                  </Link>
+                )}
               </div>
             </div>
 

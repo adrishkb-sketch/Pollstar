@@ -1016,32 +1016,36 @@ export default function CreatePoll() {
       }
     }
     if (currentStep === 4 && !isOpenVoting) {
-      // Verify closed voters email addresses
-      const invalidEmails = allowedVoters.some(
-        (v) => !v.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())
-      );
-      if (invalidEmails) {
-        setError('Please enter valid email addresses for all rows in the voter table.');
-        return false;
-      }
-      if (verificationMethod === 'PHONE') {
-        const invalidPhones = allowedVoters.some(v => !v.phone || !v.phone.trim());
-        if (invalidPhones) {
-          setError('Please enter valid phone numbers for all rows in the voter table.');
+      // Validate per-voter based on their effective auth type
+      for (let i = 0; i < allowedVoters.length; i++) {
+        const v = allowedVoters[i];
+        const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+        
+        if (!v.identifier?.trim() || !v.confirmer1?.trim()) {
+          setError(`Row ${i + 1}: Compulsory cells (${identifierLabel} and ${confirmer1Label}) cannot be left blank.`);
           return false;
         }
-      }
-      if (verificationType === 'PASSWORD') {
-        const invalidPasswords = allowedVoters.some(v => !v.password || !v.password.trim());
-        if (invalidPasswords) {
-          setError('Please enter valid passwords for all rows in the voter table.');
-          return false;
+
+        if (authType === 'EMAIL_OTP' || authType === 'EMAIL_PASSWORD') {
+          if (!v.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) {
+            setError(`Row ${i + 1}: Please enter a valid email address.`);
+            return false;
+          }
         }
-      }
-      const missingIdentifiers = allowedVoters.some((v) => !v.identifier.trim() || !v.confirmer1.trim());
-      if (missingIdentifiers) {
-        setError(`Compulsory spreadsheet cells (${identifierLabel} and ${confirmer1Label}) cannot be left blank.`);
-        return false;
+
+        if (authType === 'EMAIL_PASSWORD' || authType === 'PHONE_PASSWORD') {
+          if (!v.password || !v.password.trim()) {
+            setError(`Row ${i + 1}: Password is required for this auth type.`);
+            return false;
+          }
+        }
+
+        if (authType === 'PHONE_PASSWORD') {
+          if (!v.phone || !v.phone.trim()) {
+            setError(`Row ${i + 1}: Phone number is required for phone + password auth.`);
+            return false;
+          }
+        }
       }
     }
     return true;
@@ -1167,14 +1171,19 @@ export default function CreatePoll() {
       },
       allowedVoters: isOpenVoting 
         ? [] 
-        : allowedVoters.map(v => ({
-            identifier: v.identifier,
-            confirmer1: v.confirmer1,
-            confirmer2: useConfirmer2 ? v.confirmer2 : '',
-            email: v.email,
-            phone: v.phone || null,
-            password: v.password || null,
-          })),
+        : allowedVoters.map(v => {
+            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+            const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            return {
+              identifier: v.identifier,
+              confirmer1: v.confirmer1,
+              confirmer2: useConfirmer2 ? v.confirmer2 : '',
+              email: cleanEmail,
+              phone: v.phone || null,
+              password: v.password || null,
+              voterAuthType: v.voterAuthType || 'GLOBAL',
+            };
+          }),
       identifierLabel: isOpenVoting ? 'Roll Number' : identifierLabel,
       confirmer1Label: isOpenVoting ? 'Student Name' : confirmer1Label,
       confirmer2Label: isOpenVoting ? 'Parent Name' : (useConfirmer2 ? confirmer2Label : ''),
@@ -1204,6 +1213,9 @@ export default function CreatePoll() {
     : pollType === 'SURVEY'
       ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
       : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
+
+  const showPhoneColumn = verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
+  const showPasswordColumn = verificationType === 'PASSWORD' || allowedVoters.some(v => v.voterAuthType === 'EMAIL_PASSWORD' || v.voterAuthType === 'PHONE_PASSWORD');
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -2372,9 +2384,10 @@ export default function CreatePoll() {
                             <th className="py-3.5 px-4 min-w-[120px]">{identifierLabel} <span className="text-red-400">*</span></th>
                             <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
                             {useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>}
+                            <th className="py-3.5 px-4 min-w-[130px]">Auth Type</th>
                             <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
-                            {verificationMethod === 'PHONE' && <th className="py-3.5 px-4 min-w-[150px]">Phone Number <span className="text-red-400">*</span></th>}
-                            {verificationType === 'PASSWORD' && <th className="py-3.5 px-4 min-w-[150px]">Password <span className="text-red-400">*</span></th>}
+                            {showPhoneColumn && <th className="py-3.5 px-4 min-w-[150px]">Phone Number <span className="text-red-400">*</span></th>}
+                            {showPasswordColumn && <th className="py-3.5 px-4 min-w-[150px]">Password <span className="text-red-400">*</span></th>}
                             <th className="py-3.5 px-4 w-16 text-center">Action</th>
                           </tr>
                         </thead>
@@ -2420,22 +2433,34 @@ export default function CreatePoll() {
                                 </td>
                               )}
                               <td className="py-2.5 px-2">
+                                <select
+                                  value={voter.voterAuthType || 'GLOBAL'}
+                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'voterAuthType')}
+                                  className="w-full bg-[#030712] border border-white/10 rounded-xl px-2 py-1 text-white outline-none focus:border-purple-500 font-semibold"
+                                >
+                                  <option value="GLOBAL">Global (Inherit)</option>
+                                  <option value="EMAIL_OTP">Email + OTP</option>
+                                  <option value="EMAIL_PASSWORD">Email + Password</option>
+                                  <option value="PHONE_PASSWORD">Phone + Password</option>
+                                </select>
+                              </td>
+                              <td className="py-2.5 px-2">
                                 <input
                                   type="email"
-                                  required
+                                  required={voter.voterAuthType !== 'PHONE_PASSWORD'}
                                   value={voter.email}
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'email')}
                                   data-row-idx={idx}
                                   data-field-key="email"
-                                  placeholder="e.g. adrish@banerjee.edu"
+                                  placeholder={voter.voterAuthType === 'PHONE_PASSWORD' ? 'Optional email' : 'e.g. adrish@banerjee.edu'}
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
                               </td>
-                              {verificationMethod === 'PHONE' && (
+                              {showPhoneColumn && (
                                 <td className="py-2.5 px-2">
                                   <input
                                     type="text"
-                                    required
+                                    required={voter.voterAuthType === 'PHONE_PASSWORD'}
                                     value={voter.phone || ''}
                                     onChange={(e) => handleVoterCellChange(e.target.value, idx, 'phone')}
                                     data-row-idx={idx}
@@ -2445,11 +2470,11 @@ export default function CreatePoll() {
                                   />
                                 </td>
                               )}
-                              {verificationType === 'PASSWORD' && (
+                              {showPasswordColumn && (
                                 <td className="py-2.5 px-2">
                                   <input
                                     type="text"
-                                    required
+                                    required={voter.voterAuthType === 'EMAIL_PASSWORD' || voter.voterAuthType === 'PHONE_PASSWORD'}
                                     value={voter.password || ''}
                                     onChange={(e) => handleVoterCellChange(e.target.value, idx, 'password')}
                                     data-row-idx={idx}

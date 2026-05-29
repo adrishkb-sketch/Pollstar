@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
+import { formatBillingCycle } from '@/lib/planExpiry';
 
 const FEATURES_INFO = [
   // 1. Poll Features (19)
@@ -171,9 +172,29 @@ export default function PlansPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
+  const [addonPlans, setAddonPlans] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedCycle, setSelectedCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'TWO_YEARS'>('MONTHLY');
+
+  const getPlanPricing = (p: any, cycle: string) => {
+    let price = p.price;
+    let originalPrice = p.originalPrice;
+    let cycleLabel = p.billingCycle;
+    let isOfferActive = p.offerEndDate && new Date(p.offerEndDate) > new Date();
+
+    if (p.durations) {
+      const durConfig = p.durations as any;
+      if (durConfig[cycle] && durConfig[cycle].enabled) {
+        price = parseFloat(durConfig[cycle].price || '0');
+        originalPrice = parseFloat(durConfig[cycle].originalPrice || '0');
+        cycleLabel = cycle;
+      }
+    }
+    
+    return { price, originalPrice, cycleLabel, isOfferActive };
+  };
 
   // Invoice display states
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
@@ -197,6 +218,7 @@ export default function PlansPage() {
       if (plansRes.ok) {
         const plansData = await plansRes.json();
         const rawPlans = plansData.plans || [];
+        const rawAddons = plansData.addonPlans || [];
         
         // Sort so that the user's active plan is placed first (on the left)
         const userPlanId = data.user?.plan?.id;
@@ -209,6 +231,7 @@ export default function PlansPage() {
         });
         
         setPlans(sortedPlans);
+        setAddonPlans(rawAddons);
       }
 
       // Fetch user invoices
@@ -280,6 +303,38 @@ export default function PlansPage() {
           </div>
         )}
 
+        {/* Billing cycle selector tab */}
+        <div className="flex justify-center">
+          <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
+            {[
+              { key: 'MONTHLY', label: 'Monthly' },
+              { key: 'QUARTERLY', label: 'Quarterly', badge: 'Save 15%' },
+              { key: 'YEARLY', label: 'Yearly', badge: 'Save 25%' },
+              { key: 'TWO_YEARS', label: '2 Years', badge: 'Save 35%' }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedCycle(tab.key as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all relative flex items-center gap-1.5 whitespace-nowrap ${
+                  selectedCycle === tab.key
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
+                    selectedCycle === tab.key ? 'bg-white/20 text-white' : 'bg-purple-500/20 text-purple-300'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Dynamic sliding cards system for subscription options */}
         <div className="relative space-y-4">
           <div className="flex justify-between items-center md:hidden">
@@ -309,6 +364,7 @@ export default function PlansPage() {
           >
             {plans.map((p) => {
               const isActivePlan = user?.plan?.id === p.id || (p.name === 'Free' && !user?.plan?.id);
+              const { price, originalPrice, cycleLabel, isOfferActive } = getPlanPricing(p, selectedCycle);
               
               return (
                 <div 
@@ -345,7 +401,7 @@ export default function PlansPage() {
                     </div>
 
                     {/* Active Offer Countdown notification ticker */}
-                    {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                    {isOfferActive && (
                       <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-between gap-2 animate-pulse-glow">
                         <span className="flex items-center gap-1">⚡ Limited Time Offer active!</span>
                         <span className="font-mono text-[9px]">Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
@@ -357,14 +413,18 @@ export default function PlansPage() {
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-3xl font-black text-white font-outfit">
-                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                          {price === 0 && originalPrice && originalPrice > 0 ? (
+                            <span className="text-emerald-400 font-black">FREE Offer!</span>
+                          ) : (
+                            `${getCurrencySymbol(p.currency)}${price.toFixed(2)}`
+                          )}
                         </span>
-                        {p.originalPrice && p.originalPrice > p.price && (
+                        {originalPrice && originalPrice > price && (
                           <span className="text-sm text-red-400/70 font-semibold line-through">
-                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
+                            {getCurrencySymbol(p.currency)}{originalPrice.toFixed(2)}
                           </span>
                         )}
-                        <span className="text-xs text-gray-500 font-semibold">/{p.billingCycle.toLowerCase()}</span>
+                        <span className="text-xs text-gray-500 font-semibold">/{cycleLabel.toLowerCase()}</span>
                       </div>
                     </div>
 
@@ -403,10 +463,10 @@ export default function PlansPage() {
                       </button>
                     ) : (
                       <Link
-                        href={`/checkout?planId=${p.id}`}
+                        href={`/checkout?planId=${p.id}&duration=${cycleLabel}`}
                         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                       >
-                        {p.price > 0 ? `Get Upgrade (${p.billingCycle})` : 'Activate Free Tier'}
+                        {price > 0 ? `Get Upgrade (${formatBillingCycle(cycleLabel)})` : 'Activate Free Tier'}
                       </Link>
                     )}
                   </div>
@@ -415,6 +475,87 @@ export default function PlansPage() {
             })}
           </div>
         </div>
+
+        {/* Add-on plans section */}
+        {addonPlans.length > 0 && (
+          <div className="space-y-6 pt-8 border-t border-white/5 text-left">
+            <div>
+              <h2 className="text-2xl font-black bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-400 bg-clip-text text-transparent font-outfit">
+                Advanced Feature Add-Ons & Packs
+              </h2>
+              <p className="text-gray-500 text-xs mt-1">
+                Complement your active premium subscription with feature expansion packs. Add-on purchases are one-time or separate packages.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
+              {addonPlans.map((p) => {
+                const hasActiveSub = user?.planId && !user?.plan?.isFree && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
+
+                return (
+                  <div 
+                    key={p.id}
+                    className="glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-300"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span 
+                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
+                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
+                        >
+                          {p.badgeLabel || p.planType.replace('_', ' ')}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-lg font-bold text-white font-outfit">{p.name}</h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[36px]">{p.description}</p>
+                      
+                      <div className="border-t border-b border-white/5 py-3 flex justify-between items-baseline">
+                        <span className="text-2xl font-black text-white font-outfit">
+                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-widest">{p.currency}</span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
+                        <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>
+                            {p.planType === 'POLL_PACK' && `Grants ${p.packQuantity} premium polls`}
+                            {p.planType === 'SURVEY_PACK' && `Grants ${p.packQuantity} premium surveys`}
+                            {p.planType === 'EXAM_PACK' && `Grants ${p.packQuantity} premium exams`}
+                            {p.planType === 'COMBO_PACK' && `Grants ${p.packQuantity} premium features combo`}
+                            {p.planType === 'ADDON' && `Feature Expansion Pack`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-white/5">
+                      {hasActiveSub ? (
+                        <Link
+                          href={`/checkout?planId=${p.id}&isAddon=true`}
+                          className="w-full py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white text-xs border border-indigo-400/20 shadow-md active:scale-95 transition-all text-center block"
+                        >
+                          Buy Add-On Pack
+                        </Link>
+                      ) : (
+                        <button
+                          disabled
+                          title="Requires an active paid subscription tier first."
+                          className="w-full py-2.5 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
+                        >
+                          Requires Active Subscription
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Invoice Purchase Ledger history */}
         <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6">

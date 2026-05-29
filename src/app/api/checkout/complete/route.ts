@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+import { computePlanExpiresAt, formatBillingCycle } from '@/lib/planExpiry';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -19,6 +20,7 @@ async function getAuthUser() {
 
   return prisma.user.findUnique({
     where: { id: payload.userId },
+    include: { plan: true }
   });
 }
 
@@ -37,7 +39,8 @@ export async function POST(req: Request) {
       billingCity, 
       billingZip, 
       billingPhone,
-      duration
+      duration,       // user-selected billing cycle: MONTHLY | QUARTERLY | YEARLY | TWO_YEAR | LIFETIME
+      isAddon,        // boolean: true if purchasing an add-on plan
     } = await req.json();
 
     if (!planId) {
@@ -52,8 +55,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
+    // Enforce: Add-ons require an active recurring (non-free) subscription
+    if (isAddon || plan.planType === 'ADDON') {
+      const hasActiveSub = user.planId && !user.plan?.isFree && (user.isLifetimePlan || (user.planExpiresAt && user.planExpiresAt > new Date()));
+      if (!hasActiveSub) {
+        return NextResponse.json({ error: 'Add-on plans require an active paid subscription.' }, { status: 403 });
+      }
+    }
+
+    // Determine effective billing cycle and base price
     let basePrice = plan.price;
-    let selectedBillingCycle = plan.billingCycle;
+    let selectedBillingCycle = duration || plan.billingCycle;
 
     if (duration && plan.durations) {
       const durationsConfig = plan.durations as any;
@@ -61,6 +73,12 @@ export async function POST(req: Request) {
         basePrice = parseFloat(durationsConfig[duration].price || '0');
         selectedBillingCycle = duration;
       }
+    }
+
+    // For free or one-time plans, use plan's billing cycle
+    if (plan.isFree) {
+      basePrice = 0;
+      selectedBillingCycle = 'LIFETIME';
     }
 
     let finalPrice = basePrice;
@@ -105,11 +123,31 @@ export async function POST(req: Request) {
       }
     }
 
-    // Process upgrade in DB
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { planId: plan.id }
-    });
+    // Determine plan expiry based on billing cycle
+    const isLifetime = selectedBillingCycle === 'LIFETIME' || selectedBillingCycle === 'ONE_TIME';
+    const planExpiresAt = isLifetime ? null : computePlanExpiresAt(selectedBillingCycle);
+    const isAddonPlan = !!(isAddon || plan.planType === 'ADDON' || plan.planType === 'POLL_PACK' || plan.planType === 'SURVEY_PACK' || plan.planType === 'EXAM_PACK' || plan.planType === 'COMBO_PACK');
+
+    // Build invoice notes
+    const billingCycleLabel = formatBillingCycle(selectedBillingCycle);
+    let invoiceNotes = `Plan: ${plan.name} | Billing: ${billingCycleLabel}`;
+    if (isLifetime) invoiceNotes += ' | Lifetime Access — No future renewals required';
+    if (planExpiresAt) invoiceNotes += ` | Valid until: ${planExpiresAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+    if (discountAmount > 0 && couponCode) invoiceNotes += ` | Coupon: ${couponCode.toUpperCase()} (saved ${plan.currency === 'INR' ? '₹' : plan.currency === 'EUR' ? '€' : '$'}${discountAmount.toFixed(2)})`;
+    if (isAddonPlan) invoiceNotes += ' | Add-On Plan';
+
+    // Update user plan (only for non-add-on subscription plans)
+    if (!isAddonPlan) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          planId: plan.id,
+          planExpiresAt,
+          planBillingCycle: selectedBillingCycle,
+          isLifetimePlan: isLifetime,
+        }
+      });
+    }
 
     // Create Invoice
     const invoice = await prisma.invoice.create({
@@ -123,7 +161,10 @@ export async function POST(req: Request) {
         billingCity: billingCity || 'N/A',
         billingZip: billingZip || 'N/A',
         billingPhone: billingPhone || null,
-        billingCycle: selectedBillingCycle
+        billingCycle: selectedBillingCycle,
+        isAddon: isAddonPlan,
+        planExpiresAt,
+        notes: invoiceNotes,
       }
     });
 
@@ -132,16 +173,22 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully subscribed to ${plan.name} Plan!`,
+      message: isLifetime
+        ? `🎉 Welcome to ${plan.name} — Lifetime Access Activated!`
+        : `Successfully subscribed to ${plan.name} (${billingCycleLabel})!`,
       planName: plan.name,
       finalPricePaid: finalPrice,
-      billingCycle: selectedBillingCycle
+      billingCycle: selectedBillingCycle,
+      planExpiresAt,
+      isLifetime,
+      invoiceId: invoice.id,
     });
   } catch (error: any) {
     console.error('Checkout Complete Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
 
 async function distributeCommissions(userId: string, finalPrice: number) {
   if (finalPrice <= 0) return;

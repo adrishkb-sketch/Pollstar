@@ -62,6 +62,7 @@ function CheckoutContent() {
 
   // Pricing calculation
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [basePrice, setBasePrice] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
 
@@ -103,14 +104,15 @@ function CheckoutContent() {
             const matchedPlan = planData.plans.find((p: Plan) => p.id === planId);
             if (matchedPlan) {
               setPlan(matchedPlan);
-              let basePrice = matchedPlan.price;
+              let computedBasePrice = matchedPlan.price;
               if (selectedDuration && (matchedPlan as any).durations) {
                 const durationsConfig = (matchedPlan as any).durations as any;
                 if (durationsConfig[selectedDuration] && durationsConfig[selectedDuration].enabled) {
-                  basePrice = parseFloat(durationsConfig[selectedDuration].price || '0');
+                  computedBasePrice = parseFloat(durationsConfig[selectedDuration].price || '0');
                 }
               }
-              setFinalPrice(basePrice);
+              setBasePrice(computedBasePrice);
+              setFinalPrice(computedBasePrice);
             } else {
               setError('Selected plan could not be found.');
             }
@@ -144,7 +146,7 @@ function CheckoutContent() {
       const res = await fetch('/api/checkout/apply-coupon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ couponCode, planId })
+        body: JSON.stringify({ couponCode, planId, duration: selectedDuration })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -167,9 +169,7 @@ function CheckoutContent() {
     setCouponApplied(null);
     setDiscountAmount(0);
     setCouponCode('');
-    if (plan) {
-      setFinalPrice(plan.price);
-    }
+    setFinalPrice(basePrice);
   };
 
   // Submit secure simulated transaction
@@ -707,12 +707,24 @@ function CheckoutContent() {
                 <div className="flex items-center justify-between border border-white/5 rounded-2xl bg-white/[0.02] p-4">
                   <div>
                     <h4 className="font-extrabold text-lg text-purple-300">{plan.name}</h4>
-                    <p className="text-xs text-gray-500">{plan.billingCycle} Subscription</p>
+                    <p className="text-xs text-gray-500 font-semibold uppercase">{selectedDuration} Access</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-2xl font-black text-white">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-white">{getCurrencySymbol(plan.currency)}{basePrice.toFixed(2)}</span>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest">{plan.currency}</p>
                   </div>
+                </div>
+
+                {/* Validity Period Callout Block */}
+                <div className="border border-purple-500/20 bg-purple-500/5 rounded-2xl p-4 text-xs text-purple-300 leading-relaxed space-y-1">
+                  <div className="font-bold flex items-center gap-1">⚡ Plan Validity Period</div>
+                  <p>
+                    {selectedDuration === 'LIFETIME' 
+                      ? 'Lifetime Plan: Enjoy permanent premium access. No renewals, no future charges.' 
+                      : `Your plan features will remain active for exactly ${
+                          selectedDuration === 'QUARTERLY' ? '90 days' : selectedDuration === 'YEARLY' ? '365 days' : selectedDuration === 'TWO_YEAR' ? '730 days' : '30 days'
+                        }. After this duration, it will auto-expire and revert to the default Free plan.`}
+                  </p>
                 </div>
 
                 {/* Apply Coupon Promo Code */}
@@ -763,7 +775,7 @@ function CheckoutContent() {
                 <div className="border-t border-white/5 pt-5 space-y-3.5 text-sm">
                   <div className="flex justify-between text-gray-400">
                     <span>Base Price</span>
-                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
+                    <span className="font-semibold text-white">{getCurrencySymbol(plan.currency)}{basePrice.toFixed(2)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-400 font-semibold">
