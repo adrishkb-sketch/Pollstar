@@ -11,9 +11,9 @@ import {
   Send, 
   Loader2, 
   CheckCircle2, 
-  Vote,
   AlertCircle
 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function CareersPage() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -93,13 +93,8 @@ export default function CareersPage() {
       {/* Header */}
       <header className="border-b border-white/5 py-5 px-6 bg-[#030712]/50 backdrop-blur z-20 sticky top-0">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link href="/" className="flex items-center space-x-2.5">
-            <div className="p-2 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
-              <Vote className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-outfit text-xl font-bold tracking-tight text-white">
-              Poll<span className="text-emerald-400">star</span>
-            </span>
+          <Link href="/">
+            <BrandLogo iconSize={20} textSize="text-xl" />
           </Link>
           <div className="flex gap-4">
             <Link href="/login" className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all">Sign In</Link>

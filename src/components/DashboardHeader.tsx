@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Vote, Menu, X, LogOut, Check } from 'lucide-react';
+import { Menu, X, LogOut, Check } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 interface DashboardHeaderProps {
   user: any;
@@ -32,13 +33,8 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
     <header className="w-full border-b border-white/5 bg-[#080d1a]/80 backdrop-blur-md sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-8">
-          <Link href="/dashboard" className="flex items-center space-x-2.5">
-            <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400">
-              <Vote className="w-6 h-6" />
-            </div>
-            <span className="font-outfit text-xl font-bold tracking-tight text-white">
-              Poll<span className="text-indigo-400">star</span>
-            </span>
+          <Link href="/dashboard">
+            <BrandLogo iconSize={22} textSize="text-xl" />
           </Link>
 
           {/* Desktop Navigation Links */}

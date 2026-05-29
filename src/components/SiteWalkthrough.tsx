@@ -128,7 +128,7 @@ export default function SiteWalkthrough() {
     if (pathname === "/") {
       return [
         {
-          selector: "#hero-section",
+          selector: "#hero-title",
           title: "Welcome to Pollstar!",
           description: "Hey there! Welcome to Pollstar, a modern real-time secure voting platform. Let us show you around so you can get the absolute best out of your polls!"
         },

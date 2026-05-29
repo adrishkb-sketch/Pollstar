@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Vote, Mail, ArrowRight, Globe2, AtSign, ExternalLink } from 'lucide-react';
+import { Mail, ArrowRight, Globe2, AtSign, ExternalLink } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -110,13 +111,8 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-10">
         {/* Brand Column */}
         <div className="col-span-2">
-          <Link href="/" className="flex items-center space-x-2.5 mb-4">
-            <div className="p-2 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
-              <Vote className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-outfit text-xl font-bold tracking-tight text-white">
-              Poll<span className="text-emerald-400">star</span>
-            </span>
+          <Link href="/" className="mb-4 inline-block">
+            <BrandLogo iconSize={18} textSize="text-xl" />
           </Link>
           <p className="text-gray-500 text-sm leading-relaxed max-w-xs mb-6">
             {tagline}

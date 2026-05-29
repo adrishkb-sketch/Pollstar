@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import Footer from '@/components/Footer';
+import BrandLogo from '@/components/BrandLogo';
 import {
-  Vote, ArrowLeft, Sparkles, Shield, BarChart3, Globe, Zap, TrendingUp, Trophy, ArrowRightCircle,
+  ArrowLeft, Sparkles, Shield, BarChart3, Globe, Zap, TrendingUp, Trophy, ArrowRightCircle,
   // Polls
   Lock, Users, Timer, Eye, Shuffle, SlidersHorizontal, Hash, Palette,
   MonitorSmartphone, Share2, Code2, MessageSquare, ThumbsUp, ListOrdered,
@@ -18,7 +19,7 @@ import {
   Fingerprint, FileCheck, TrendingDown, HelpCircle, Settings, Mail,
   // Platform
   Moon, Cpu, RefreshCw, Webhook, KeyRound, Building2, HeartHandshake,
-  Accessibility, Search, Gauge
+  Accessibility, Search, Gauge, Vote
 } from 'lucide-react';
 
 type FeatureItem = {
@@ -216,13 +217,8 @@ export default function FeaturesPage() {
 
       {/* Navbar */}
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
-        <Link href="/" className="flex items-center space-x-2.5">
-          <div className="p-2.5 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
-            <Vote className="w-6 h-6 text-white" />
-          </div>
-          <span className="font-outfit text-2xl font-bold tracking-tight text-white">
-            Poll<span className="text-emerald-400">star</span>
-          </span>
+        <Link href="/">
+          <BrandLogo iconSize={22} textSize="text-2xl" />
         </Link>
         <Link
           href="/"

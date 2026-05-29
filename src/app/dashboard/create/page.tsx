@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import BrandLogo from '@/components/BrandLogo';
 import { 
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy, Lock,
@@ -1209,13 +1210,8 @@ export default function CreatePoll() {
       {/* Header */}
       <header className="w-full border-b border-white/5 bg-[#080d1a]/80 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center space-x-2.5">
-            <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400">
-              <Vote className="w-6 h-6" />
-            </div>
-            <span className="font-outfit text-xl font-bold tracking-tight text-white">
-              Poll<span className="text-indigo-400">star</span>
-            </span>
+          <Link href="/dashboard">
+            <BrandLogo iconSize={22} textSize="text-xl" />
           </Link>
 
           <Link

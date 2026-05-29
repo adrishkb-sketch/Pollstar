@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Vote, Shield, BarChart3, Globe, Award, Sparkles, ArrowRight } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import Footer from '@/components/Footer';
 import AdvertisementZone from '@/components/AdvertisementZone';
 
@@ -42,13 +43,8 @@ export default function Home() {
     <div className="flex-1 flex flex-col justify-between relative">
       {/* Header */}
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
-        <Link href="/" className="flex items-center space-x-2.5">
-          <div className="p-2.5 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
-            <Vote className="w-6 h-6 text-white" />
-          </div>
-          <span className="font-outfit text-2xl font-bold tracking-tight text-white">
-            Poll<span className="text-emerald-400">star</span>
-          </span>
+        <Link href="/">
+          <BrandLogo iconSize={22} textSize="text-2xl" />
         </Link>
         <div id="auth-buttons" className="flex items-center space-x-4">
           {loading ? (
@@ -88,7 +84,7 @@ export default function Home() {
           <span>Real-time Decisive Polls</span>
         </div>
 
-        <h1 className="font-outfit text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-tight mb-8">
+        <h1 id="hero-title" className="font-outfit text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-tight mb-8">
           {heroTitle}
         </h1>
 
