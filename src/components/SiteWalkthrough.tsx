@@ -260,13 +260,19 @@ export default function SiteWalkthrough() {
     }
   }, [pathname, wizardStep, steps.length]);
 
-  // Compute coordinates & popover styles dynamically
+  // Compute coordinates & popover styles dynamically (No infinite scroll loop)
   useEffect(() => {
     if (!isActive || !currentStep?.selector || isMobile) {
       setHighlightCoords(null);
       setPopoverStyle({});
       setArrowPath("");
       return;
+    }
+
+    // Scroll ONCE gently when the step updates, not inside scroll events!
+    const targetEl = document.querySelector(currentStep.selector!);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     const updateCoordinates = () => {
@@ -284,13 +290,12 @@ export default function SiteWalkthrough() {
         };
         
         setHighlightCoords(coords);
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
 
         // Calculate smart placement for the tooltip card
         const vpWidth = window.innerWidth;
         const vpHeight = window.innerHeight;
         const popoverWidth = 320;
-        const popoverHeight = 200;
+        const popoverHeight = 220;
 
         let placement: 'right' | 'left' | 'bottom' | 'top' = 'right';
 
@@ -365,7 +370,7 @@ export default function SiteWalkthrough() {
     };
 
     updateCoordinates();
-    const timer = setTimeout(updateCoordinates, 400);
+    const timer = setTimeout(updateCoordinates, 300);
     window.addEventListener("resize", updateCoordinates);
     window.addEventListener("scroll", updateCoordinates);
 
@@ -452,68 +457,21 @@ export default function SiteWalkthrough() {
         <span className="hidden sm:inline">Guide Tour</span>
       </button>
 
-      {/* 2. Walkthrough Tour Dialog Overlay */}
+      {/* 2. Walkthrough Tour Dialog Overlay (100% click-through, non-blocking) */}
       {isActive && (
         <div className="absolute inset-0 z-45 min-h-[3000px] pointer-events-none">
-          {/* Spotlight surrounding layout division overlays (Desktop Only) */}
-          {!isMobile && highlightCoords ? (
-            <>
-              {/* Top Mask */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: `${highlightCoords.top}px`,
-                  backgroundColor: 'rgba(3, 7, 18, 0.85)',
-                  zIndex: 45,
-                  pointerEvents: 'auto'
-                }}
-              />
-              {/* Bottom Mask */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: `${highlightCoords.top + highlightCoords.height}px`,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(3, 7, 18, 0.85)',
-                  zIndex: 45,
-                  pointerEvents: 'auto'
-                }}
-              />
-              {/* Left Mask */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: `${highlightCoords.top}px`,
-                  left: 0,
-                  width: `${highlightCoords.left}px`,
-                  height: `${highlightCoords.height}px`,
-                  backgroundColor: 'rgba(3, 7, 18, 0.85)',
-                  zIndex: 45,
-                  pointerEvents: 'auto'
-                }}
-              />
-              {/* Right Mask */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: `${highlightCoords.top}px`,
-                  left: `${highlightCoords.left + highlightCoords.width}px`,
-                  right: 0,
-                  height: `${highlightCoords.height}px`,
-                  backgroundColor: 'rgba(3, 7, 18, 0.85)',
-                  zIndex: 45,
-                  pointerEvents: 'auto'
-                }}
-              />
-            </>
-          ) : (
-            // Full Screen Blur Mask on Mobile or when target doesn't load
-            <div className="fixed inset-0 bg-[#030712]/90 backdrop-blur-sm pointer-events-auto z-45" />
+          {/* Subtle pulse glowing spotlight ring around the highlighted element */}
+          {!isMobile && highlightCoords && (
+            <div 
+              className="absolute pointer-events-none border-2 border-emerald-400 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all duration-300 animate-pulse"
+              style={{
+                top: `${highlightCoords.top}px`,
+                left: `${highlightCoords.left}px`,
+                width: `${highlightCoords.width}px`,
+                height: `${highlightCoords.height}px`,
+                zIndex: 48
+              }}
+            />
           )}
 
           {/* SVG curve line connector (Desktop Only) */}
@@ -543,7 +501,7 @@ export default function SiteWalkthrough() {
             </svg>
           )}
 
-          {/* Tooltip Content Popover Card */}
+          {/* Tooltip Content Popover Card (Interactive) */}
           <div 
             style={!isMobile && highlightCoords ? popoverStyle : {
               position: 'fixed',
