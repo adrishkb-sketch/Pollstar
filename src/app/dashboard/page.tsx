@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, Plus, LogOut, Loader2, AlertCircle, Calendar, 
   BarChart3, Users, CheckCircle, Copy, Check, Eye, Edit, Trash2, X, Upload,
-  Share2, Link as LinkIcon, Code2, Zap, ExternalLink, Settings, Mail, PlusCircle, Lock
+  Share2, Link as LinkIcon, Code2, Zap, ExternalLink, Settings, Mail, PlusCircle, Lock, Megaphone
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 import AdvertisementZone from '@/components/AdvertisementZone';
@@ -18,6 +18,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Notices states
+  const [notices, setNotices] = useState<any[]>([]);
+  const [dismissedNotices, setDismissedNotices] = useState<string[]>([]);
 
   // Share modal states
   const [sharePoll, setSharePoll] = useState<any>(null);
@@ -64,8 +68,18 @@ export default function Dashboard() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
 
-  // Load session and polls
+  // Load session, polls, and notices
   useEffect(() => {
+    // Load dismissed notices from localStorage
+    try {
+      const stored = localStorage.getItem('dismissed_notices');
+      if (stored) {
+        setDismissedNotices(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Error loading dismissed notices:', e);
+    }
+
     const loadDashboard = async () => {
       try {
         const userRes = await fetch('/api/auth/me');
@@ -89,6 +103,12 @@ export default function Dashboard() {
           const pollsData = await pollsRes.json();
           setPolls(pollsData.polls || []);
         }
+
+        const noticesRes = await fetch('/api/notices');
+        if (noticesRes.ok) {
+          const noticesData = await noticesRes.json();
+          setNotices(noticesData.notices || []);
+        }
       } catch (err) {
         setError('Failed to load dashboard data');
       } finally {
@@ -98,6 +118,29 @@ export default function Dashboard() {
 
     loadDashboard();
   }, []);
+
+  // Silent realtime background poller (workspace synchronization)
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(async () => {
+      try {
+        const pollsRes = await fetch('/api/polls');
+        if (pollsRes.ok) {
+          const pollsData = await pollsRes.json();
+          setPolls(pollsData.polls || []);
+        }
+        const noticesRes = await fetch('/api/notices');
+        if (noticesRes.ok) {
+          const noticesData = await noticesRes.json();
+          setNotices(noticesData.notices || []);
+        }
+      } catch (e) {
+        console.error('Real-time workspace sync error:', e);
+      }
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -508,6 +551,66 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 space-y-8">
         
+        {/* Dynamic Notices Board */}
+        {notices.length > 0 && notices.filter(n => !dismissedNotices.includes(n.id)).length > 0 && (
+          <div className="space-y-4">
+            {notices
+              .filter(n => !dismissedNotices.includes(n.id))
+              .map((n) => {
+                const borderColors = {
+                  HIGH: 'border-red-500/30 bg-red-500/5 text-red-400',
+                  MEDIUM: 'border-amber-500/20 bg-amber-500/5 text-amber-400',
+                  LOW: 'border-indigo-500/20 bg-indigo-500/5 text-indigo-400',
+                };
+                const tagColors = {
+                  HIGH: 'bg-red-500/10 border-red-500/20 text-red-300',
+                  MEDIUM: 'bg-amber-500/10 border-amber-500/20 text-amber-300',
+                  LOW: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300',
+                };
+                return (
+                  <div 
+                    key={n.id} 
+                    className={`glass-card rounded-3xl p-5 border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in relative overflow-hidden ${
+                      n.priority === 'HIGH' ? 'animate-pulse-glow ' : ''
+                    }${borderColors[n.priority as keyof typeof borderColors] || borderColors.LOW}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-2xl shrink-0 ${tagColors[n.priority as keyof typeof tagColors] || tagColors.LOW}`}>
+                        <Megaphone className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-outfit text-base font-bold text-white leading-snug">{n.title}</h4>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
+                            tagColors[n.priority as keyof typeof tagColors] || tagColors.LOW
+                          }`}>
+                            {n.priority} PRIORITY
+                          </span>
+                        </div>
+                        <p className="text-gray-300 text-xs leading-relaxed max-w-3xl whitespace-pre-wrap">{n.content}</p>
+                        {n.referencedNotice && (
+                          <div className="mt-2.5 p-2 bg-black/40 border border-white/5 rounded-xl text-[10px] text-purple-300 inline-block font-semibold">
+                            🔗 Mentions previous announcement: <strong className="text-white font-bold">"{n.referencedNotice.title}"</strong> (Published {new Date(n.referencedNotice.publishedAt).toLocaleDateString()})
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const nextDismissed = [...dismissedNotices, n.id];
+                        setDismissedNotices(nextDismissed);
+                        localStorage.setItem('dismissed_notices', JSON.stringify(nextDismissed));
+                      }}
+                      className="px-4 py-2 border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 self-start md:self-auto"
+                    >
+                      Dismiss Notice
+                    </button>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+        
         {/* Admin Approval Banner */}
         {user && !user.approved && user.role !== 'ADMIN' && (
           <div className="glass-card rounded-2xl p-6 border-amber-500/20 bg-amber-500/5 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-glow">
@@ -681,7 +784,7 @@ export default function Dashboard() {
                     {/* Status & Title */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${statusColors[poll.status as keyof typeof statusColors]}`}>
                             {poll.status}
                           </span>
@@ -692,6 +795,16 @@ export default function Dashboard() {
                           }`}>
                             {poll.pollType === 'SURVEY' ? '📋 Survey' : '🗳 Poll'}
                           </span>
+                          {poll.creatorId !== user?.id && (
+                            <span className="px-2 py-1 rounded-lg text-[10px] font-bold border bg-indigo-500/10 border-indigo-500/20 text-indigo-300">
+                              🤝 Shared Workspace
+                            </span>
+                          )}
+                          {poll.creatorId === user?.id && poll.collaborators && poll.collaborators.length > 0 && (
+                            <span className="px-2 py-1 rounded-lg text-[10px] font-bold border bg-purple-500/10 border-purple-500/20 text-purple-300">
+                              👥 Collaborative ({poll.collaborators.length})
+                            </span>
+                          )}
                         </div>
                         <span className="text-gray-500 text-xs flex items-center space-x-1 shrink-0">
                           <Calendar className="w-3.5 h-3.5" />
@@ -705,6 +818,20 @@ export default function Dashboard() {
                     <p className="text-gray-400 text-sm line-clamp-2 leading-relaxed">
                       {poll.description}
                     </p>
+                    {poll.collaborators && poll.collaborators.length > 0 && (
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Team:</span>
+                        {poll.collaborators.map((c: any) => (
+                          <span 
+                            key={c.user?.email || c.userId} 
+                            className="px-2 py-0.5 rounded-full bg-slate-900 border border-white/5 text-gray-400 text-[9px] font-semibold"
+                            title={c.user?.email || c.userId}
+                          >
+                            {c.user?.email ? c.user.email.split('@')[0] : 'Pending'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                     {/* Badges & Statistics */}
@@ -1246,7 +1373,14 @@ export default function Dashboard() {
             </button>
 
             <div>
-              <h2 className="font-outfit text-2xl font-bold text-white">Edit Poll Details</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-outfit text-2xl font-bold text-white">Edit Poll Details</h2>
+                {editingPoll.creatorId !== user?.id && (
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-extrabold uppercase animate-pulse">
+                    Collaborative Session Active 🟢
+                  </span>
+                )}
+              </div>
               <p className="text-gray-400 text-xs mt-1">Modify your poll's details, question, and candidate options.</p>
             </div>
 

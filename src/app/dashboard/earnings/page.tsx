@@ -44,12 +44,20 @@ interface Wallet {
   transactions: Transaction[];
 }
 
+const getCurrencySymbol = (code: string) => {
+  if (code === 'INR') return '₹';
+  if (code === 'EUR') return '€';
+  if (code === 'GBP') return '£';
+  return '$';
+};
+
 export default function EarningsPage() {
   const [user, setUser] = useState<any>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [displayCurrency, setDisplayCurrency] = useState('USD');
 
   // Copy states
   const [copiedLink, setCopiedLink] = useState(false);
@@ -71,6 +79,9 @@ export default function EarningsPage() {
         const meData = await meRes.json();
         if (meData.success && meData.user) {
           setUser(meData.user);
+          if (meData.globalDisplayCurrency) {
+            setDisplayCurrency(meData.globalDisplayCurrency);
+          }
         }
       }
 
@@ -218,9 +229,9 @@ export default function EarningsPage() {
                 <div className="space-y-2">
                   <span className="text-xs text-purple-300 font-semibold uppercase tracking-wider block">Withdrawable Balance</span>
                   <span className="text-4xl font-black bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    ${wallet.balance.toFixed(2)}
+                    {getCurrencySymbol(displayCurrency)}{wallet.balance.toFixed(2)}
                   </span>
-                  <span className="text-[10px] text-gray-500 block uppercase tracking-widest font-bold">USD Balance</span>
+                  <span className="text-[10px] text-gray-500 block uppercase tracking-widest font-bold">{displayCurrency} Balance</span>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400 shadow-xl shadow-purple-500/5">
                   <Coins className="w-7 h-7 animate-pulse" />
@@ -232,7 +243,7 @@ export default function EarningsPage() {
                 <div className="space-y-2">
                   <span className="text-xs text-emerald-400 font-semibold uppercase tracking-wider block">Life-Time Commissions</span>
                   <span className="text-4xl font-black text-emerald-400">
-                    ${wallet.totalEarned.toFixed(2)}
+                    {getCurrencySymbol(displayCurrency)}{wallet.totalEarned.toFixed(2)}
                   </span>
                   <span className="text-[10px] text-gray-500 block uppercase tracking-widest font-bold">Earned to Date</span>
                 </div>
@@ -246,7 +257,7 @@ export default function EarningsPage() {
                 <div className="space-y-2">
                   <span className="text-xs text-indigo-300 font-semibold uppercase tracking-wider block">Cleared Payouts</span>
                   <span className="text-4xl font-black text-indigo-300">
-                    ${wallet.totalWithdrawn.toFixed(2)}
+                    {getCurrencySymbol(displayCurrency)}{wallet.totalWithdrawn.toFixed(2)}
                   </span>
                   <span className="text-[10px] text-gray-500 block uppercase tracking-widest font-bold">Settled to bank</span>
                 </div>
@@ -398,7 +409,7 @@ export default function EarningsPage() {
 
                   <form onSubmit={handleSubmitWithdrawal} className="space-y-4 text-left">
                     <div className="space-y-1.5">
-                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Withdraw Amount ($)</label>
+                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Withdraw Amount ({getCurrencySymbol(displayCurrency)})</label>
                       <input
                         type="number"
                         required
@@ -407,7 +418,7 @@ export default function EarningsPage() {
                         placeholder="e.g. 50"
                         className="w-full glass-input text-sm px-4 py-3"
                       />
-                      <span className="text-[10px] text-gray-500">Available: ${wallet.balance.toFixed(2)}</span>
+                      <span className="text-[10px] text-gray-500">Available: {getCurrencySymbol(displayCurrency)}{wallet.balance.toFixed(2)}</span>
                     </div>
 
                     <div className="space-y-1.5">
@@ -530,7 +541,7 @@ export default function EarningsPage() {
                             <td className={`py-3.5 pr-2 text-right font-bold font-mono ${
                               tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'
                             }`}>
-                              {tx.amount >= 0 ? '+' : ''}${tx.amount.toFixed(2)}
+                              {tx.amount >= 0 ? '+' : ''}{getCurrencySymbol(displayCurrency)}{tx.amount.toFixed(2)}
                             </td>
                           </tr>
                         ))
@@ -573,7 +584,7 @@ export default function EarningsPage() {
                               <span className="text-[10px] text-gray-500 block truncate max-w-[120px]">{po.details}</span>
                             </td>
                             <td className="py-3.5 pr-2 font-bold font-mono text-white">
-                              ${po.amount.toFixed(2)}
+                              {getCurrencySymbol(displayCurrency)}{po.amount.toFixed(2)}
                             </td>
                             <td className="py-3.5 pr-2 text-right font-bold">
                               {po.status === 'PENDING' && (

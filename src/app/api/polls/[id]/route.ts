@@ -70,6 +70,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         settings: true,
         votes: true,
         allowedVoters: true,
+        collaborators: true,
       },
     });
 
@@ -110,8 +111,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       poll.status = 'ENDED';
     }
 
-    // Check if requester is creator or admin
-    const isCreatorOrAdmin = user && (poll.creatorId === user.id || user.role === 'ADMIN');
+    // Check if requester is creator, admin, or collaborator
+    const isCollaborator = user && poll.collaborators.some((c: any) => c.userId === user.id);
+    const isCreatorOrAdmin = user && (poll.creatorId === user.id || user.role === 'ADMIN' || isCollaborator);
 
     // Build statistics
     const stats: Record<string, any> = {};
@@ -235,13 +237,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
+      include: { collaborators: true }
     });
 
     if (!poll) {
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
-    if (poll.creatorId !== user.id && user.role !== 'ADMIN') {
+    const isCollaborator = poll.collaborators.some((c: any) => c.userId === user.id);
+    if (poll.creatorId !== user.id && user.role !== 'ADMIN' && !isCollaborator) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -283,15 +287,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      include: { allowedVoters: true, votes: true, settings: true },
+      include: { allowedVoters: true, votes: true, settings: true, collaborators: true },
     });
 
     if (!poll) {
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
-    // Only creator or admin can update status
-    if (poll.creatorId !== user.id && user.role !== 'ADMIN') {
+    // Only creator, admin, or collaborator can update status
+    const isCollaborator = poll.collaborators.some((c: any) => c.userId === user.id);
+    if (poll.creatorId !== user.id && user.role !== 'ADMIN' && !isCollaborator) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

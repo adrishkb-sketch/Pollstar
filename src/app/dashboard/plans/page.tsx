@@ -95,6 +95,7 @@ const FEATURES_INFO = [
   { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
   { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
   { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' },
+  { key: 'liveWebcamProctoring', label: 'Live Webcam Proctoring Dashboard' },
 
   // 4. Exam Question Types (10)
   { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
@@ -198,7 +199,7 @@ export default function PlansPage() {
         const rawPlans = plansData.plans || [];
         
         // Sort so that the user's active plan is placed first (on the left)
-        const userPlanId = data.user?.planId;
+        const userPlanId = data.user?.plan?.id;
         const sortedPlans = [...rawPlans].sort((a, b) => {
           const aActive = userPlanId === a.id || (a.name === 'Free' && !userPlanId);
           const bActive = userPlanId === b.id || (b.name === 'Free' && !userPlanId);
@@ -307,7 +308,7 @@ export default function PlansPage() {
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
             {plans.map((p) => {
-              const isActivePlan = user?.planId === p.id || (p.name === 'Free' && !user?.planId);
+              const isActivePlan = user?.plan?.id === p.id || (p.name === 'Free' && !user?.plan?.id);
               
               return (
                 <div 
@@ -501,8 +502,8 @@ export default function PlansPage() {
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Detail</span>
                     <div className="font-bold text-gray-800">Pollstar Inc.</div>
-                    <div className="text-gray-500">100 Tech Venture Way</div>
-                    <div className="text-gray-500">Silicon Valley, CA 94025</div>
+                    <div className="text-gray-500">Ramrajatala</div>
+                    <div className="text-gray-500">Howrah-711112, West Bengal, India</div>
                     <div className="text-gray-500">billing@pollstar.com</div>
                   </div>
                   <div>

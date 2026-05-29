@@ -635,3 +635,46 @@ export async function sendNewsletterBroadcastEmail(email: string, title: string,
 
   return true;
 }
+
+/**
+ * Sends an email notification to reset user account password.
+ */
+export async function sendResetPasswordEmail(email: string, otp: string): Promise<boolean> {
+  const subject = 'Reset Your Pollstar Password';
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 20px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <h2 style="text-align: center; color: #ef4444; font-size: 24px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.05em;">Reset Password Request</h2>
+      <p style="font-size: 15px; line-height: 24px; text-align: center; color: #9ca3af; margin-bottom: 32px;">Please use the 6-digit verification code below to reset your Pollstar account password. This code is active for 5 minutes.</p>
+      <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 16px; padding: 20px 12px; text-align: center; margin-bottom: 32px;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #f87171; display: inline-block; padding-left: 8px;">${otp}</span>
+      </div>
+      <p style="font-size: 12px; text-align: center; color: #4b5563; margin-top: 40px;">If you did not request a password reset, please ignore this email and verify your security settings.</p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending reset password email:', error);
+    }
+  }
+
+  // Debug Console Fallback
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Reset Password Request                        │`);
+  console.log(`│ Code:    ${otp.padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+

@@ -180,6 +180,55 @@ export default function CreatePoll() {
   const [brainLinks, setBrainLinks] = useState<{ id: string; label: string; url: string }[]>([]);
   const [newLinkLabel, setNewLinkLabel] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
+
+  // Draggable FAB Logic for Brain Board
+  const [brainDragOffset, setBrainDragOffset] = useState({ x: 0, y: 0 });
+  const [brainActiveDrag, setBrainActiveDrag] = useState(false);
+  const brainDragStartPos = useRef({ x: 0, y: 0 });
+
+  const onBrainDragStart = (clientX: number, clientY: number) => {
+    setBrainActiveDrag(true);
+    brainDragStartPos.current = {
+      x: clientX - brainDragOffset.x,
+      y: clientY - brainDragOffset.y
+    };
+  };
+
+  useEffect(() => {
+    const onDragMove = (e: MouseEvent) => {
+      if (!brainActiveDrag) return;
+      setBrainDragOffset({
+        x: e.clientX - brainDragStartPos.current.x,
+        y: e.clientY - brainDragStartPos.current.y
+      });
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!brainActiveDrag || !e.touches[0]) return;
+      setBrainDragOffset({
+        x: e.touches[0].clientX - brainDragStartPos.current.x,
+        y: e.touches[0].clientY - brainDragStartPos.current.y
+      });
+    };
+
+    const onDragEnd = () => {
+      setBrainActiveDrag(false);
+    };
+
+    if (brainActiveDrag) {
+      window.addEventListener('mousemove', onDragMove);
+      window.addEventListener('mouseup', onDragEnd);
+      window.addEventListener('touchmove', onTouchMove);
+      window.addEventListener('touchend', onDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onDragEnd);
+    };
+  }, [brainActiveDrag]);
   
   // Canvas State & Refs
   const [strokeColor, setStrokeColor] = useState('#6366f1'); // default indigo
@@ -1463,6 +1512,82 @@ export default function CreatePoll() {
                         <p className="text-[10px] text-gray-500 mt-1">
                           Specify points awarded for this question. Must be a multiple of 0.5 (e.g. 1.0, 1.5, 2.0).
                         </p>
+
+                        {/* Per-Question Negative Marking (Gated under plan features) */}
+                        {['SINGLE', 'MULTIPLE_CHOICE', 'MULTI_SELECT'].includes(q.type) && (() => {
+                          const isLocked = isFeatureLocked('negativeMarking');
+                          
+                          // Safely parse rules
+                          let rules: any = {};
+                          if (typeof q.logicRules === 'string') {
+                            try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {}
+                          } else if (q.logicRules && typeof q.logicRules === 'object') {
+                            rules = q.logicRules;
+                          }
+                          
+                          const enableNeg = !!rules.enableNegativeMarking;
+                          const penalty = typeof rules.negativeMarkingPenalty === 'number' ? rules.negativeMarkingPenalty : 0.25;
+                          
+                          const updateRules = (updates: any) => {
+                            const updated = [...questions];
+                            const currentRules = { ...rules, ...updates };
+                            updated[qIndex].logicRules = currentRules;
+                            setQuestions(updated);
+                          };
+                          
+                          return (
+                            <div className="mt-3 p-3.5 rounded-xl border border-white/5 bg-white/2 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
+                                  Negative Marking Penalty?
+                                  {isLocked && (
+                                    <span className="text-[8px] font-black text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded border border-indigo-400/25 flex items-center gap-1">
+                                      🔒 PRO
+                                    </span>
+                                  )}
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isLocked) {
+                                      router.push('/plans');
+                                      return;
+                                    }
+                                    updateRules({ enableNegativeMarking: !enableNeg });
+                                  }}
+                                  className={`w-10 h-5 rounded-full p-0.5 transition-all duration-300 ${
+                                    enableNeg ? 'bg-indigo-500 flex justify-end' : 'bg-white/10 flex justify-start'
+                                  }`}
+                                >
+                                  <div className="w-4 h-4 rounded-full bg-white shadow-md animate-fade-in" />
+                                </button>
+                              </div>
+                              
+                              {enableNeg && !isLocked && (
+                                <div className="space-y-1.5 animate-fade-in-up">
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Negative marking penalty</span>
+                                  <input
+                                    type="number"
+                                    step="0.05"
+                                    min="0.05"
+                                    max={q.marks || 1}
+                                    value={penalty}
+                                    onChange={(e) => {
+                                      let val = parseFloat(e.target.value) || 0.25;
+                                      if (val < 0.05) val = 0.05;
+                                      updateRules({ negativeMarkingPenalty: val });
+                                    }}
+                                    className="w-full glass-input text-xs py-1.5"
+                                    placeholder="e.g. 0.25"
+                                  />
+                                  <p className="text-[9px] text-gray-500 font-outfit block">
+                                    Points to deduct for wrong answers. Typically 0.25 or 0.33.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -1916,32 +2041,71 @@ export default function CreatePoll() {
                   />
                 </div>
 
-                <div className="flex justify-between items-center bg-white/3 border border-white/5 rounded-2xl p-4 gap-4">
-                  <div className="space-y-1">
-                    <span className="text-sm font-semibold text-gray-200 block font-outfit">Release Score Reports Immediately?</span>
-                    <span className="text-[10px] text-gray-500 block leading-relaxed font-outfit">
-                      If enabled, students can see their scorecards and analysis immediately upon finishing the exam. Otherwise, results are withheld until you release them manually.
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-1.5 bg-white/5 p-1 rounded-xl border border-white/5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setResultsReleased(true)}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                        resultsReleased ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      Yes, immediately
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setResultsReleased(false)}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                        !resultsReleased ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      No, withhold
-                    </button>
+                <div className="space-y-3">
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-1 font-outfit">
+                    Scorecard & Grade Release Mode
+                  </label>
+                  <div className="space-y-3">
+                    {[
+                      {
+                        id: 'immediate',
+                        title: 'Immediately upon submission',
+                        desc: 'Students can see their detailed gradecards, marks, and correct answer feedback the second they submit.',
+                        active: resultsReleased && enableInstantFeedback && !hideResultsUntilEnd,
+                        select: () => {
+                          setResultsReleased(true);
+                          setEnableInstantFeedback(true);
+                          setHideResultsUntilEnd(false);
+                        }
+                      },
+                      {
+                        id: 'ended',
+                        title: 'When the exam duration officially ends',
+                        desc: 'Withholds results during active testing. Scores and correct answer keys are released automatically once the countdown timer or overall exam window expires.',
+                        active: resultsReleased && !enableInstantFeedback && hideResultsUntilEnd,
+                        select: () => {
+                          setResultsReleased(true);
+                          setEnableInstantFeedback(false);
+                          setHideResultsUntilEnd(true);
+                        }
+                      },
+                      {
+                        id: 'manual',
+                        title: 'Manually by the teacher later',
+                        desc: 'Scores and answers are kept completely hidden. You can manually release them to the class from your gradebook when grading is fully complete.',
+                        active: !resultsReleased,
+                        select: () => {
+                          setResultsReleased(false);
+                          setEnableInstantFeedback(false);
+                          setHideResultsUntilEnd(true);
+                        }
+                      }
+                    ].map((opt) => (
+                      <div
+                        key={opt.id}
+                        onClick={opt.select}
+                        className={`glass-card rounded-2xl p-4 border cursor-pointer flex items-center justify-between transition-all hover:scale-[1.01] ${
+                          opt.active 
+                            ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' 
+                            : 'border-white/5 bg-white/2 hover:border-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className={`p-2.5 rounded-xl shrink-0 ${opt.active ? 'bg-indigo-500/20 text-indigo-400' : 'bg-white/5 text-gray-400'}`}>
+                            <Award className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="font-outfit font-bold text-white text-sm block">{opt.title}</span>
+                            <span className="text-gray-400 text-xs mt-0.5 block leading-relaxed font-outfit">{opt.desc}</span>
+                          </div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                          opt.active ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                        }`}>
+                          {opt.active && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -2977,30 +3141,7 @@ export default function CreatePoll() {
                     </div>
                   </div>
 
-                  {/* Hide results until end */}
-                  <div
-                    onClick={() => setHideResultsUntilEnd(!hideResultsUntilEnd)}
-                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
-                      hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
-                        <Shield className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-outfit font-bold text-white text-sm">Withhold Scores Until Exam Ends</h4>
-                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                          Students won't receive any score reports or correct answer guides until the entire exam window has officially closed.
-                        </p>
-                      </div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                      hideResultsUntilEnd ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
-                    }`}>
-                      {hideResultsUntilEnd && <Check className="w-3.5 h-3.5" />}
-                    </div>
-                  </div>
+                  {/* Redundant score withhold toggle removed for exams as it is consolidated in Step 3 */}
                 </div>
               </div>
             ) : (
@@ -3150,14 +3291,37 @@ export default function CreatePoll() {
                         { key: 'enableShuffleQuestions', setter: setEnableShuffleQuestions, val: enableShuffleQuestions, label: 'Randomize Question Order', desc: 'Show questions in a completely different, random order for each student to prevent copying.', gateKey: 'questionRandomizationSurvey' },
                         { key: 'enableShuffleOptions', setter: setEnableShuffleOptions, val: enableShuffleOptions, label: 'Randomize Multiple Choice Options', desc: 'Shuffle the choice options inside each question randomly for every student.', gateKey: 'dragAndDropQuestionOrderingExam' },
                         { key: 'enableCopyPasteBlock', setter: setEnableCopyPasteBlock, val: enableCopyPasteBlock, label: 'Disable Copying & Copy-Pasting', desc: 'Block copy-pasting, right-clicking, and text highlighting to secure your test content.', gateKey: 'copyPastePrevention' },
-                        { key: 'enableInstantFeedback', setter: setEnableInstantFeedback, val: enableInstantFeedback, label: 'Show Grades Instantly', desc: 'Let students see their marks and correct answers immediately after they finish the test.', gateKey: 'autoGradingEngine' },
-                        { key: 'enableNegativeMarking', setter: setEnableNegativeMarking, val: enableNegativeMarking, label: 'Penalty for Wrong Answers', desc: 'Deduct marks for incorrect answers on multiple-choice questions.', gateKey: 'negativeMarking' },
                         { key: 'enableCalculator', setter: setEnableCalculator, val: enableCalculator, label: 'Floating Scientific Calculator', desc: 'Provide a helpful popup calculator on the screen during the exam.', gateKey: 'inbuiltScientificCalculator' },
-                        { key: 'enableOtpBypass', setter: setEnableOtpBypass, val: enableOtpBypass, label: 'Password Logins (Skip Email Code)', desc: 'Allow registered students to enter instantly with a password instead of waiting for an email or phone code.', gateKey: 'studentRosterManagement' },
+                        {
+                          key: 'enableOtpBypass',
+                          setter: setEnableOtpBypass,
+                          val: enableOtpBypass,
+                          label: 'Password Logins (Skip Email Code)',
+                          desc: 'Allow registered students to enter instantly with a password instead of waiting for an email or phone code.',
+                          gateKey: 'studentRosterManagement',
+                          customClick: () => {
+                            if (isOpenVoting) {
+                              alert("Password Logins require Closed Audience Access. Please select 'Closed Vote/Survey' in Step 4 first!");
+                              return;
+                            }
+                            const hasEmptyPasswords = allowedVoters.some(v => !v.password || !v.password.trim());
+                            if (hasEmptyPasswords) {
+                              alert("Password Logins require passwords to be configured for all students in the Step 4 closed roster. Please fill in passwords in the spreadsheet table first!");
+                              return;
+                            }
+                            const nextVal = !enableOtpBypass;
+                            setEnableOtpBypass(nextVal);
+                            if (nextVal) {
+                              setVerificationType('PASSWORD');
+                            } else {
+                              setVerificationType('OTP');
+                            }
+                          }
+                        },
                         { key: 'enableStrictTimeBuffer', setter: setEnableStrictTimeBuffer, val: enableStrictTimeBuffer, label: 'Strict Timer Cutoff', desc: 'Forcefully submit the test the exact second the countdown timer hits zero.', gateKey: 'timedExams' },
                         { key: 'enableProctorCamera', setter: setEnableProctorCamera, val: enableProctorCamera, label: 'Monitor via Webcam snap', desc: 'Automatically check student presence and capture periodic screenshots through the camera to stop cheating.', gateKey: 'fullScreenLockdown' },
                         { key: 'enableTabDepartureSound', setter: setEnableTabDepartureSound, val: enableTabDepartureSound, label: 'Alert Sound on Switch Tab', desc: 'Play a loud warning buzzer sound if the student switches tabs or exits the exam window.', gateKey: 'tabSwitchDetection' }
-                      ].map((item) => {
+                      ].map((item: any) => {
                         const isVal = item.val;
                         const isLocked = isFeatureLocked(item.gateKey);
                         return (
@@ -3169,7 +3333,11 @@ export default function CreatePoll() {
                                 router.push('/plans');
                                 return;
                               }
-                              item.setter(!isVal);
+                              if (item.customClick) {
+                                item.customClick();
+                              } else {
+                                item.setter(!isVal);
+                              }
                             }}
                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 relative overflow-hidden ${
                               isLocked 
@@ -3518,8 +3686,22 @@ export default function CreatePoll() {
       <button
         type="button"
         onClick={() => setBrainBoardOpen(true)}
+        style={{
+          transform: `translate(${brainDragOffset.x}px, ${brainDragOffset.y}px)`,
+          touchAction: 'none',
+          cursor: brainActiveDrag ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          onBrainDragStart(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          if (e.touches[0]) {
+            onBrainDragStart(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
         className="fixed z-40 p-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl transition-all border border-indigo-400/30 hover:scale-110 active:scale-95 group animate-pulse-glow bottom-36 right-6 sm:bottom-6 sm:right-[335px]"
-        title="Open Brain Board & Sketch Canvas"
+        title="Open Brain Board & Sketch Canvas (Draggable)"
       >
         <Brain className="w-6 h-6 animate-pulse" />
         <span className="absolute right-14 top-1/2 -translate-y-1/2 bg-[#080d1a]/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">

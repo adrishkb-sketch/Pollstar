@@ -361,14 +361,32 @@ export async function POST(
         let feedback = "No answer provided.";
         let isAIGraded = true;
 
+        // Safely parse question's logicRules for negative marking
+        let rules: any = {};
+        if (typeof q.logicRules === 'string') {
+          try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {}
+        } else if (q.logicRules && typeof q.logicRules === 'object') {
+          rules = q.logicRules;
+        }
+        const enableNegativeMark = !!rules.enableNegativeMarking;
+        const negPenalty = typeof rules.negativeMarkingPenalty === 'number' ? rules.negativeMarkingPenalty : 0.25;
+
         if (userAns !== undefined && userAns !== null) {
           if (q.type === 'SINGLE') {
             // Single MCQ
             const isCorrect = String(userAns) === String(q.correctAnswer);
-            marksAwarded = isCorrect ? maxMarks : 0.0;
-            feedback = isCorrect 
-              ? "Correct answer selected! Full marks awarded." 
-              : `Incorrect selection. Correct answer was option ID: ${q.correctAnswer}.`;
+            if (isCorrect) {
+              marksAwarded = maxMarks;
+              feedback = "Correct answer selected! Full marks awarded.";
+            } else {
+              if (enableNegativeMark) {
+                marksAwarded = -negPenalty;
+                feedback = `Incorrect selection. Correct answer was option ID: ${q.correctAnswer}. Negative penalty of -${negPenalty} applied.`;
+              } else {
+                marksAwarded = 0.0;
+                feedback = `Incorrect selection. Correct answer was option ID: ${q.correctAnswer}.`;
+              }
+            }
           } else if (q.type === 'MULTI_SELECT' || q.type === 'MULTIPLE_CHOICE') {
             // Multi MCQ
             let correctList: string[] = [];
@@ -391,17 +409,32 @@ export async function POST(
               feedback = "All correct options selected! Full marks awarded.";
             } else {
               let correctSelected = 0;
+              let incorrectSelectedCount = 0;
               userList.forEach(id => {
-                if (correctSet.has(id)) correctSelected++;
-                else correctSelected--; // penalty for wrong options selected
+                if (correctSet.has(id)) {
+                  correctSelected++;
+                } else {
+                  correctSelected--; // penalty for wrong options selected
+                  incorrectSelectedCount++;
+                }
               });
+
+              let baseMarks = 0.0;
               if (correctSelected > 0 && correctList.length > 0) {
                 const rawMarks = (correctSelected / correctList.length) * maxMarks;
-                marksAwarded = Math.round(rawMarks * 2) / 2;
+                baseMarks = Math.round(rawMarks * 2) / 2;
                 feedback = `Partial selection correct (${correctSelected}/${correctList.length} options). Partial credit awarded.`;
               } else {
-                marksAwarded = 0.0;
+                baseMarks = 0.0;
                 feedback = "Incorrect options selected. No marks awarded.";
+              }
+
+              if (enableNegativeMark && incorrectSelectedCount > 0) {
+                const penaltyAmount = incorrectSelectedCount * negPenalty;
+                marksAwarded = baseMarks - penaltyAmount;
+                feedback += ` Negative penalty of -${penaltyAmount} applied for ${incorrectSelectedCount} wrong options.`;
+              } else {
+                marksAwarded = baseMarks;
               }
             }
           } else if (q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') {

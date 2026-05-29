@@ -87,6 +87,7 @@ const FEATURES_INFO = [
   { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
   { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
   { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' },
+  { key: 'liveWebcamProctoring', label: 'Live Webcam Proctoring Dashboard' },
 
   // 4. Exam Question Types (10)
   { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },

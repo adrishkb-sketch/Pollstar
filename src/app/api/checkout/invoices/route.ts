@@ -33,7 +33,7 @@ export async function GET() {
       where: { userId: user.id },
       include: {
         plan: {
-          select: { name: true, badgeColor: true }
+          select: { name: true, badgeColor: true, currency: true }
         }
       },
       orderBy: { createdAt: 'desc' }

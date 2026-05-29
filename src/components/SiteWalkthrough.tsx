@@ -333,6 +333,55 @@ export default function SiteWalkthrough() {
     setIsActive(true);
   };
 
+  // Draggable FAB Logic
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [activeDrag, setActiveDrag] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  const onDragStart = (clientX: number, clientY: number) => {
+    setActiveDrag(true);
+    dragStartPos.current = {
+      x: clientX - dragOffset.x,
+      y: clientY - dragOffset.y
+    };
+  };
+
+  useEffect(() => {
+    const onDragMove = (e: MouseEvent) => {
+      if (!activeDrag) return;
+      setDragOffset({
+        x: e.clientX - dragStartPos.current.x,
+        y: e.clientY - dragStartPos.current.y
+      });
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!activeDrag || !e.touches[0]) return;
+      setDragOffset({
+        x: e.touches[0].clientX - dragStartPos.current.x,
+        y: e.touches[0].clientY - dragStartPos.current.y
+      });
+    };
+
+    const onDragEnd = () => {
+      setActiveDrag(false);
+    };
+
+    if (activeDrag) {
+      window.addEventListener('mousemove', onDragMove);
+      window.addEventListener('mouseup', onDragEnd);
+      window.addEventListener('touchmove', onTouchMove);
+      window.addEventListener('touchend', onDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onDragEnd);
+    };
+  }, [activeDrag]);
+
   if (steps.length === 0) return null;
 
   return (
@@ -340,12 +389,27 @@ export default function SiteWalkthrough() {
       {/* 1. Permanent Help FAB Launcher (Bottom Right corner) */}
       <button
         onClick={handleStartManualTour}
-        className="fixed z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-all transform hover:scale-105 active:scale-95 animate-pulse-glow bottom-20 right-6 sm:bottom-6 sm:right-[175px]"
-        title="Need help? Start the Page Tour Guide!"
+        style={{
+          transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+          touchAction: 'none',
+          cursor: activeDrag ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          onDragStart(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          if (e.touches[0]) {
+            onDragStart(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
+        className="fixed z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-transform transform hover:scale-105 active:scale-95 bottom-20 right-6 sm:bottom-6 sm:right-[175px]"
+        title="Need help? Start the Page Tour Guide! (Draggable)"
       >
         <HelpCircle className="w-5 h-5 shrink-0" />
         <span className="hidden sm:inline">Guide Tour</span>
       </button>
+
 
       {/* 2. Walkthrough Tour Dialog Overlay */}
       {isActive && (

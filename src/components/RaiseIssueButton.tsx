@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, X, CheckCircle, Loader2 } from 'lucide-react';
 
 export default function RaiseIssueButton() {
@@ -55,13 +55,76 @@ export default function RaiseIssueButton() {
     }
   };
 
+  // Draggable FAB Logic
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [activeDrag, setActiveDrag] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  const onDragStart = (clientX: number, clientY: number) => {
+    setActiveDrag(true);
+    dragStartPos.current = {
+      x: clientX - dragOffset.x,
+      y: clientY - dragOffset.y
+    };
+  };
+
+  useEffect(() => {
+    const onDragMove = (e: MouseEvent) => {
+      if (!activeDrag) return;
+      setDragOffset({
+        x: e.clientX - dragStartPos.current.x,
+        y: e.clientY - dragStartPos.current.y
+      });
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!activeDrag || !e.touches[0]) return;
+      setDragOffset({
+        x: e.touches[0].clientX - dragStartPos.current.x,
+        y: e.touches[0].clientY - dragStartPos.current.y
+      });
+    };
+
+    const onDragEnd = () => {
+      setActiveDrag(false);
+    };
+
+    if (activeDrag) {
+      window.addEventListener('mousemove', onDragMove);
+      window.addEventListener('mouseup', onDragEnd);
+      window.addEventListener('touchmove', onTouchMove);
+      window.addEventListener('touchend', onDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onDragEnd);
+    };
+  }, [activeDrag]);
+
   return (
     <>
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 p-3.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-full shadow-lg shadow-red-500/20 hover:scale-105 active:scale-95 transition-all duration-300 flex items-center space-x-1.5 border border-red-400/20 font-bold text-xs"
-        title="Report an Issue"
+        style={{
+          transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+          touchAction: 'none',
+          cursor: activeDrag ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          onDragStart(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          if (e.touches[0]) {
+            onDragStart(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
+        className="fixed bottom-6 right-6 z-50 p-3.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-full shadow-lg shadow-red-500/20 hover:scale-105 active:scale-95 transition-transform duration-300 flex items-center space-x-1.5 border border-red-400/20 font-bold text-xs"
+        title="Report an Issue (Draggable)"
         id="raise-issue-floating-btn"
       >
         <AlertTriangle className="w-4 h-4 shrink-0" />

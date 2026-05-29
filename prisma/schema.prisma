@@ -496,3 +496,17 @@ model JobPosting {
   updatedAt    DateTime @updatedAt
 }
 
+model Notice {
+  id                 String   @id @default(uuid())
+  title              String
+  content            String   @db.Text
+  targetType         String   // "ALL", "REGISTERED", or plan names (e.g. "Free", "Elite")
+  priority           String   // "LOW", "MEDIUM", "HIGH"
+  publishedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  referencedNoticeId String?
+  referencedNotice   Notice?  @relation("NoticeMentions", fields: [referencedNoticeId], references: [id], onDelete: SetNull)
+  mentions           Notice[] @relation("NoticeMentions")
+}
+

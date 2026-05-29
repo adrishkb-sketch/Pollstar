@@ -322,8 +322,8 @@ function CheckoutContent() {
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Detail</span>
                     <div className="font-bold text-gray-800">Pollstar Inc.</div>
-                    <div className="text-gray-500">100 Tech Venture Way</div>
-                    <div className="text-gray-500">Silicon Valley, CA 94025</div>
+                    <div className="text-gray-500">Ramrajatala</div>
+                    <div className="text-gray-500">Howrah-711112, West Bengal, India</div>
                     <div className="text-gray-500">billing@pollstar.com</div>
                   </div>
                   <div>

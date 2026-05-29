@@ -136,8 +136,15 @@ export async function GET() {
       );
     }
 
+    // Retrieve global display currency config
+    const currencyConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'global_display_currency' }
+    });
+    const globalDisplayCurrency = currencyConfig?.value || 'USD';
+
     const response = NextResponse.json({
       success: true,
+      globalDisplayCurrency,
       user: {
         id: user.id,
         email: user.email,

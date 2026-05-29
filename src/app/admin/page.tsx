@@ -8,7 +8,7 @@ import {
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
   Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
   ExternalLink, User, HelpCircle, Tag, Globe, Coins, Settings, Mail, Send,
-  Briefcase
+  Briefcase, Megaphone
 } from 'lucide-react';
 
 const POLL_FEATURES = [
@@ -85,7 +85,8 @@ const EXAM_FEATURES = [
   { key: 'studentRosterManagement', label: 'Student Roster Management' },
   { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
   { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
-  { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' }
+  { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' },
+  { key: 'liveWebcamProctoring', label: 'Live Webcam Proctoring Dashboard' }
 ];
 
 const EXAM_QUESTION_TYPES = [
@@ -144,7 +145,7 @@ export default function AdminPortal() {
   const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor' | 'coupons_domains' | 'monetization' | 'newsletter' | 'careers'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor' | 'coupons_domains' | 'monetization' | 'newsletter' | 'careers' | 'notices'>('users');
   const [issueLoadingId, setIssueLoadingId] = useState<string | null>(null);
 
   // Invoices & Newsletter States
@@ -288,6 +289,17 @@ export default function AdminPortal() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [bulkTargetPlanId, setBulkTargetPlanId] = useState('');
   const [bulkTransferLoading, setBulkTransferLoading] = useState(false);
+
+  // Notice System states
+  const [notices, setNotices] = useState<any[]>([]);
+  const [noticesLoading, setNoticesLoading] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeContent, setNoticeContent] = useState('');
+  const [noticeTargetType, setNoticeTargetType] = useState('ALL');
+  const [noticePriority, setNoticePriority] = useState('LOW');
+  const [noticePublishedAt, setNoticePublishedAt] = useState('');
+  const [noticeReferencedNoticeId, setNoticeReferencedNoticeId] = useState('');
+  const [noticeSubmitting, setNoticeSubmitting] = useState(false);
 
   // Action loading track
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -643,6 +655,79 @@ export default function AdminPortal() {
     }
   };
 
+  const fetchNotices = async () => {
+    setNoticesLoading(true);
+    try {
+      const res = await fetch('/api/admin/notices');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) setNotices(data.notices || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setNoticesLoading(false);
+    }
+  };
+
+  const handleCreateNotice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!noticeTitle.trim() || !noticeContent.trim()) {
+      alert('Please fill in notice title and content.');
+      return;
+    }
+    setNoticeSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: noticeTitle.trim(),
+          content: noticeContent.trim(),
+          targetType: noticeTargetType,
+          priority: noticePriority,
+          publishedAt: noticePublishedAt ? new Date(noticePublishedAt).toISOString() : new Date().toISOString(),
+          referencedNoticeId: noticeReferencedNoticeId || null
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('Notice published successfully!');
+        setNoticeTitle('');
+        setNoticeContent('');
+        setNoticeTargetType('ALL');
+        setNoticePriority('LOW');
+        setNoticePublishedAt('');
+        setNoticeReferencedNoticeId('');
+        fetchNotices();
+      } else {
+        alert(data.error || 'Failed to create notice.');
+      }
+    } catch (err) {
+      alert('Error creating notice.');
+    } finally {
+      setNoticeSubmitting(false);
+    }
+  };
+
+  const handleDeleteNotice = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this notice? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/admin/notices?id=${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('Notice deleted.');
+        fetchNotices();
+      } else {
+        alert(data.error || 'Failed to delete notice.');
+      }
+    } catch (err) {
+      alert('Error deleting notice.');
+    }
+  };
+
   const handleSaveJob = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!jobTitle.trim() || !jobDesc.trim()) {
@@ -727,6 +812,8 @@ export default function AdminPortal() {
       fetchNewsletterSubscribers();
     } else if (activeTab === 'careers') {
       fetchCareersJobs();
+    } else if (activeTab === 'notices') {
+      fetchNotices();
     }
   }, [activeTab]);
 
@@ -1668,6 +1755,17 @@ export default function AdminPortal() {
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('notices')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'notices' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            📣 Platform Notices
+            {activeTab === 'notices' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
         </div>
 
         {/* TAB 1: USERS MANAGEMENT */}
@@ -2391,7 +2489,7 @@ export default function AdminPortal() {
                   <p className="text-gray-500 text-[9px] uppercase font-bold mt-0.5">Enforce system lockdowns, restrict logins, or activate absolute voter verification filters platform-wide</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {/* 1. Maintenance Mode Toggle */}
                   <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
                     <div>
@@ -2447,6 +2545,24 @@ export default function AdminPortal() {
                         <ToggleLeft className="w-9 h-9 text-gray-600 stroke-[1.5]" />
                       )}
                     </button>
+                  </div>
+
+                  {/* 4. Global Display Currency Selector */}
+                  <div className="flex flex-col justify-between p-3 rounded-xl bg-[#030712] border border-white/5 gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block font-outfit">Display Currency</span>
+                      <span className="text-gray-500 text-[9px]">Select default currency for referrals & earnings ledger</span>
+                    </div>
+                    <select
+                      value={configValues['global_display_currency'] || 'USD'}
+                      onChange={e => setConfigValues({ ...configValues, global_display_currency: e.target.value })}
+                      className="w-full bg-[#030712] border border-white/10 rounded-lg py-1.5 px-2 text-[10px] text-white outline-none focus:border-purple-500 font-semibold"
+                    >
+                      <option value="USD">USD ($) - US Dollar</option>
+                      <option value="INR">INR (₹) - Indian Rupee</option>
+                      <option value="EUR">EUR (€) - Euro</option>
+                      <option value="GBP">GBP (£) - British Pound</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -3575,6 +3691,190 @@ export default function AdminPortal() {
                                   Delete
                                 </button>
                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 13: ANNOUNCEMENT NOTICES SYSTEM */}
+        {activeTab === 'notices' && (
+          <div className="space-y-8 animate-fade-in text-xs text-left">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Notice Creation Form - Left Column (5 cols) */}
+              <div className="lg:col-span-5 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-5">
+                <div className="border-b border-white/5 pb-3">
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                    <Megaphone className="w-4.5 h-4.5 text-purple-400" />
+                    <span>Publish Announcement Notice</span>
+                  </h3>
+                  <p className="text-gray-500 text-[10px] mt-0.5 font-outfit">Broadcast targeted notices to specific subscription plans or all registered users.</p>
+                </div>
+
+                <form onSubmit={handleCreateNotice} className="space-y-4 text-left">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Notice Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={noticeTitle}
+                      onChange={e => setNoticeTitle(e.target.value)}
+                      placeholder="e.g. Scheduled Database Maintenance"
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all font-outfit font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Notice Content (Markdown/Text)</label>
+                    <textarea
+                      required
+                      rows={5}
+                      value={noticeContent}
+                      onChange={e => setNoticeContent(e.target.value)}
+                      placeholder="Input announcement details here..."
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Audience Target</label>
+                      <select
+                        value={noticeTargetType}
+                        onChange={e => setNoticeTargetType(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/8 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500/60 outline-none"
+                      >
+                        <option value="ALL">All Visitors & Users (ALL)</option>
+                        <option value="REGISTERED">Logged-in Users Only</option>
+                        <option value="Free">Free Plan Tier Users</option>
+                        <option value="Elite">Elite Plan Tier Users</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Priority Level</label>
+                      <select
+                        value={noticePriority}
+                        onChange={e => setNoticePriority(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/8 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500/60 outline-none"
+                      >
+                        <option value="LOW">🔵 Low Priority</option>
+                        <option value="MEDIUM">🟡 Medium Priority</option>
+                        <option value="HIGH">🔴 High Priority</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Scheduled Publication (Optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={noticePublishedAt}
+                      onChange={e => setNoticePublishedAt(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white outline-none transition-all font-outfit"
+                    />
+                    <span className="text-[9px] text-gray-500 block">Defaults to immediate publication if left blank.</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Tag/Mention Previous Notice (Optional)</label>
+                    <select
+                      value={noticeReferencedNoticeId}
+                      onChange={e => setNoticeReferencedNoticeId(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/8 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500/60 outline-none"
+                    >
+                      <option value="">No Reference / Tagging</option>
+                      {notices.map(n => (
+                        <option key={n.id} value={n.id}>
+                          Tag: "{n.title}" ({new Date(n.publishedAt).toLocaleDateString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={noticeSubmitting}
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all border border-purple-400/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    {noticeSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Megaphone className="w-4.5 h-4.5" />
+                    )}
+                    <span>Publish & Broadcast Notice</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Notice Listings Grid - Right Column (7 cols) */}
+              <div className="lg:col-span-7 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+                <div className="border-b border-white/5 pb-3">
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+                    <Megaphone className="w-4.5 h-4.5 text-purple-400" />
+                    <span>📢 Announcement Notices Registry</span>
+                  </h3>
+                  <p className="text-gray-500 text-[10px] mt-0.5 font-outfit font-light">List of all active and scheduled announcements. Notices cannot be edited, but can be deleted.</p>
+                </div>
+
+                {noticesLoading ? (
+                  <div className="flex items-center justify-center p-8 bg-white/2 border border-white/5 rounded-2xl">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                  </div>
+                ) : notices.length === 0 ? (
+                  <div className="text-center p-6 text-gray-500 font-outfit">No active notices in the system. Use the publisher to broadcast.</div>
+                ) : (
+                  <div className="overflow-x-auto border border-white/5 bg-slate-950/20 rounded-2xl">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/5 bg-white/2 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit">
+                          <th className="px-5 py-3">Notice</th>
+                          <th className="px-5 py-3">Audience & Priority</th>
+                          <th className="px-5 py-3">Published At</th>
+                          <th className="px-5 py-3 text-right font-outfit">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-gray-300">
+                        {notices.map((n) => (
+                          <tr key={n.id} className="hover:bg-white/2 transition-colors">
+                            <td className="px-5 py-3.5 font-outfit max-w-[200px]">
+                              <span className="font-bold text-white block text-sm">{n.title}</span>
+                              <span className="text-gray-400 text-[10px] block mt-0.5 line-clamp-2 leading-relaxed">{n.content}</span>
+                              {n.referencedNotice && (
+                                <span className="inline-block mt-2 px-2 py-0.5 rounded text-[8px] bg-slate-900 border border-white/5 text-purple-300 font-semibold font-mono">
+                                  🔗 Tags: "{n.referencedNotice.title}"
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 font-outfit space-y-1.5">
+                              <span className="text-gray-300 block font-semibold text-[10px]">🎯 {n.targetType === 'ALL' ? 'Everyone (ALL)' : n.targetType === 'REGISTERED' ? 'Logged In' : `${n.targetType} Plan`}</span>
+                              <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
+                                n.priority === 'HIGH' 
+                                  ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse' 
+                                  : n.priority === 'MEDIUM' 
+                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                                    : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                              }`}>
+                                {n.priority}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 font-outfit text-gray-500 text-[10px]">
+                              {new Date(n.publishedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-outfit">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteNotice(n.id)}
+                                className="py-1 px-2.5 rounded bg-red-500/10 border border-red-500/25 hover:bg-red-500 text-red-400 hover:text-white text-[9px] font-bold uppercase transition-all"
+                              >
+                                Delete
+                              </button>
                             </td>
                           </tr>
                         ))}
