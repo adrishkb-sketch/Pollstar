@@ -3,65 +3,76 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 
-async function getIsAdmin() {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('accessToken')?.value;
-    let payload = token ? verifyAccessToken(token) : null;
+async function getAuthAdmin() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('accessToken')?.value;
+  let payload = token ? verifyAccessToken(token) : null;
 
-    if (!payload) {
-      const refreshToken = cookieStore.get('refreshToken')?.value;
-      if (refreshToken) {
-        payload = verifyRefreshToken(refreshToken);
-      }
+  if (!payload) {
+    const refreshToken = cookieStore.get('refreshToken')?.value;
+    if (refreshToken) {
+      payload = verifyRefreshToken(refreshToken);
     }
-
-    return payload && payload.role === 'ADMIN';
-  } catch (e) {
-    return false;
   }
+
+  if (!payload || payload.role !== 'ADMIN') return null;
+
+  return prisma.user.findUnique({
+    where: { id: payload.userId },
+  });
 }
 
-// GET: list jobs (public gets only active, admin gets all)
+// GET: list all job postings for admin
 export async function GET() {
   try {
-    const isAdmin = await getIsAdmin();
-    
+    const admin = await getAuthAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const jobs = await prisma.jobPosting.findMany({
-      where: isAdmin ? {} : { isActive: true },
       orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json({ success: true, jobs });
   } catch (error: any) {
-    console.error('Fetch Jobs API Error:', error);
+    console.error('Fetch Admin Careers Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-// POST: create job posting (Admin only)
+// POST: create a job posting
 export async function POST(req: Request) {
   try {
-    const isAdmin = await getIsAdmin();
-    if (!isAdmin) {
+    const admin = await getAuthAdmin();
+    if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { title, department, location, type, description, isActive } = body;
+    const { title, department, location, type, description, requirements, isActive } = body;
 
-    if (!title || !department || !description) {
-      return NextResponse.json({ error: 'Title, Department, and Description are required.' }, { status: 400 });
+    if (!title || !department || !location || !type || !description) {
+      return NextResponse.json({ error: 'Missing required job parameters' }, { status: 400 });
     }
 
     const job = await prisma.jobPosting.create({
       data: {
         title,
         department,
-        location: location || 'Remote',
-        type: type || 'FULL_TIME',
+        location,
+        type,
         description,
+        requirements: requirements || '',
         isActive: isActive !== false
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'CREATE_JOB',
+        adminId: admin.id,
+        details: `Admin created job posting: "${title}" in "${department}"`
       }
     });
 
@@ -72,22 +83,22 @@ export async function POST(req: Request) {
   }
 }
 
-// PATCH: update job posting (Admin only)
+// PATCH: modify a job posting
 export async function PATCH(req: Request) {
   try {
-    const isAdmin = await getIsAdmin();
-    if (!isAdmin) {
+    const admin = await getAuthAdmin();
+    if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { id, title, department, location, type, description, isActive } = body;
+    const { jobId, title, department, location, type, description, requirements, isActive } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: 'Job Posting ID is required.' }, { status: 400 });
+    if (!jobId) {
+      return NextResponse.json({ error: 'Job ID is required.' }, { status: 400 });
     }
 
-    const existing = await prisma.jobPosting.findUnique({ where: { id } });
+    const existing = await prisma.jobPosting.findUnique({ where: { id: jobId } });
     if (!existing) {
       return NextResponse.json({ error: 'Job posting not found.' }, { status: 404 });
     }
@@ -98,38 +109,60 @@ export async function PATCH(req: Request) {
     if (location !== undefined) data.location = location;
     if (type !== undefined) data.type = type;
     if (description !== undefined) data.description = description;
+    if (requirements !== undefined) data.requirements = requirements;
     if (isActive !== undefined) data.isActive = isActive;
 
     const updatedJob = await prisma.jobPosting.update({
-      where: { id },
-      data
+      where: { id: jobId },
+      data,
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'MODIFY_JOB',
+        adminId: admin.id,
+        details: `Admin modified job posting: "${existing.title}" -> "${updatedJob.title}"`
+      }
     });
 
     return NextResponse.json({ success: true, job: updatedJob });
   } catch (error: any) {
-    console.error('Update Job API Error:', error);
+    console.error('Modify Job API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-// DELETE: remove job posting (Admin only)
+// DELETE: remove a job posting
 export async function DELETE(req: Request) {
   try {
-    const isAdmin = await getIsAdmin();
-    if (!isAdmin) {
+    const admin = await getAuthAdmin();
+    if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    const jobId = searchParams.get('jobId');
 
-    if (!id) {
-      return NextResponse.json({ error: 'Job Posting ID is required.' }, { status: 400 });
+    if (!jobId) {
+      return NextResponse.json({ error: 'Job ID is required.' }, { status: 400 });
     }
 
-    await prisma.jobPosting.delete({ where: { id } });
+    const existing = await prisma.jobPosting.findUnique({ where: { id: jobId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Job posting not found.' }, { status: 404 });
+    }
 
-    return NextResponse.json({ success: true, message: 'Job posting removed successfully.' });
+    await prisma.jobPosting.delete({ where: { id: jobId } });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'DELETE_JOB',
+        adminId: admin.id,
+        details: `Admin deleted job posting: "${existing.title}"`
+      }
+    });
+
+    return NextResponse.json({ success: true, message: 'Job posting deleted successfully.' });
   } catch (error: any) {
     console.error('Delete Job API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

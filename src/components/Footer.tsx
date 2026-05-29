@@ -59,7 +59,7 @@ export default function Footer() {
     { label: 'About Us', href: '/about' },
     { label: 'Contact Us', href: '/contact' },
     { label: 'Blog', href: '#' },
-    { label: 'Careers', href: '#' },
+    { label: 'Careers', href: '/careers' },
   ];
 
   const legalLinks = [

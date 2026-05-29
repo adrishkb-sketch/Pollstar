@@ -7,7 +7,8 @@ import {
   Vote, ArrowLeft, Loader2, Users, FileText, CheckCircle, 
   XCircle, ToggleLeft, ToggleRight, ShieldCheck, AlertCircle, Trash2,
   Eye, BarChart3, Calendar, Lock, ShieldAlert, X, Plus, Edit2, Check,
-  ExternalLink, User, HelpCircle, Tag, Globe, Coins, Settings, Mail, Send
+  ExternalLink, User, HelpCircle, Tag, Globe, Coins, Settings, Mail, Send,
+  Briefcase
 } from 'lucide-react';
 
 const POLL_FEATURES = [
@@ -216,22 +217,8 @@ export default function AdminPortal() {
   const [planName, setPlanName] = useState('');
   const [planDesc, setPlanDesc] = useState('');
   const [planPrice, setPlanPrice] = useState('0.0');
-  const [planOriginalPrice, setPlanOriginalPrice] = useState('');
-  const [planOfferExpiry, setPlanOfferExpiry] = useState('');
   const [planCycle, setPlanCycle] = useState('MONTHLY');
   const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({});
-
-  // Careers CRUD Panel states
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [careersLoading, setCareersLoading] = useState(false);
-  const [showJobForm, setShowJobForm] = useState(false);
-  const [editingJob, setEditingJob] = useState<any | null>(null);
-  const [jobTitle, setJobTitle] = useState('');
-  const [jobDept, setJobDept] = useState('');
-  const [jobLoc, setJobLoc] = useState('Remote');
-  const [jobType, setJobType] = useState('FULL_TIME');
-  const [jobDesc, setJobDesc] = useState('');
-  const [jobIsActive, setJobIsActive] = useState(true);
   
   // New pricing & trial options
   const [planIsFree, setPlanIsFree] = useState(false);
@@ -255,6 +242,32 @@ export default function AdminPortal() {
   const [planMaxPolls, setPlanMaxPolls] = useState('-1');
   const [planMaxSurveys, setPlanMaxSurveys] = useState('-1');
   const [planMaxExams, setPlanMaxExams] = useState('-1');
+  
+  // Price slashes & durations pricing states
+  const [planOriginalPrice, setPlanOriginalPrice] = useState('0.0');
+  const [planOfferEndDate, setPlanOfferEndDate] = useState('');
+  const [planDurations, setPlanDurations] = useState<any>({
+    MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0' },
+    QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+    YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+    TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
+    LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+  });
+
+  // Careers CRUD Panel states
+  const [careersJobs, setCareersJobs] = useState<any[]>([]);
+  const [careersLoading, setCareersLoading] = useState(false);
+  const [showJobForm, setShowJobForm] = useState(false);
+  const [editingJob, setEditingJob] = useState<any | null>(null);
+  
+  // Job Form fields
+  const [jobTitle, setJobTitle] = useState('');
+  const [jobDept, setJobDept] = useState('Engineering');
+  const [jobLocation, setJobLocation] = useState('Remote');
+  const [jobType, setJobType] = useState('Full-time');
+  const [jobDesc, setJobDesc] = useState('');
+  const [jobReqs, setJobReqs] = useState('');
+  const [jobIsActive, setJobIsActive] = useState(true);
 
   const [planFormError, setPlanFormError] = useState('');
   const [planFormLoading, setPlanFormLoading] = useState(false);
@@ -344,18 +357,12 @@ export default function AdminPortal() {
         const configData = await configRes.json();
         setSiteConfigs(configData.configs || []);
         
+        // Populate configValues dictionary
         const vals: Record<string, string> = {};
         (configData.configs || []).forEach((c: any) => {
           vals[c.key] = c.value;
         });
         setConfigValues(vals);
-      }
-
-      // 8. Fetch Careers Job Postings
-      const jobsRes = await fetch('/api/admin/careers');
-      if (jobsRes.ok) {
-        const jobsData = await jobsRes.json();
-        setJobs(jobsData.jobs || []);
       }
 
     } catch (err) {
@@ -418,6 +425,8 @@ export default function AdminPortal() {
     } finally {
       setLoadingPayouts(false);
     }
+  };
+
   const fetchInvoices = async () => {
     setInvoicesLoading(true);
     try {
@@ -619,6 +628,90 @@ export default function AdminPortal() {
     }
   };
 
+  const fetchCareersJobs = async () => {
+    setCareersLoading(true);
+    try {
+      const res = await fetch('/api/admin/careers');
+      if (res.ok) {
+        const data = await res.json();
+        setCareersJobs(data.jobs || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCareersLoading(false);
+    }
+  };
+
+  const handleSaveJob = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jobTitle.trim() || !jobDesc.trim()) {
+      alert('Job title and description are required.');
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/admin/careers', {
+        method: editingJob ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: editingJob?.id,
+          title: jobTitle,
+          department: jobDept,
+          location: jobLocation,
+          type: jobType,
+          description: jobDesc,
+          requirements: jobReqs,
+          isActive: jobIsActive
+        })
+      });
+      if (res.ok) {
+        alert(editingJob ? 'Job posting updated successfully!' : 'Job posted successfully!');
+        setEditingJob(null);
+        setJobTitle('');
+        setJobDesc('');
+        setJobReqs('');
+        setJobIsActive(true);
+        setShowJobForm(false);
+        fetchCareersJobs();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to save job posting.');
+      }
+    } catch (err) {
+      alert('Failed to save job posting.');
+    }
+  };
+
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm('Are you sure you want to delete this job posting?')) return;
+    try {
+      const res = await fetch(`/api/admin/careers?jobId=${jobId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert('Job posting deleted.');
+        fetchCareersJobs();
+      } else {
+        alert('Failed to delete job posting.');
+      }
+    } catch (e) {
+      alert('Failed to delete job posting.');
+    }
+  };
+
+  const handleEditJobClick = (job: any) => {
+    setEditingJob(job);
+    setJobTitle(job.title);
+    setJobDept(job.department);
+    setJobLocation(job.location);
+    setJobType(job.type);
+    setJobDesc(job.description);
+    setJobReqs(job.requirements || '');
+    setJobIsActive(job.isActive);
+    setShowJobForm(true);
+  };
+
   useEffect(() => {
     fetchAdminData();
   }, []);
@@ -632,6 +725,8 @@ export default function AdminPortal() {
       fetchInvoices();
     } else if (activeTab === 'newsletter') {
       fetchNewsletterSubscribers();
+    } else if (activeTab === 'careers') {
+      fetchCareersJobs();
     }
   }, [activeTab]);
 
@@ -904,8 +999,6 @@ export default function AdminPortal() {
     setPlanName('');
     setPlanDesc('');
     setPlanPrice('0.0');
-    setPlanOriginalPrice('');
-    setPlanOfferExpiry('');
     setPlanCycle('MONTHLY');
     setPlanIsFree(false);
     setPlanCurrency('USD');
@@ -921,6 +1014,15 @@ export default function AdminPortal() {
     setPlanMaxPolls('-1');
     setPlanMaxSurveys('-1');
     setPlanMaxExams('-1');
+    setPlanOriginalPrice('0.0');
+    setPlanOfferEndDate('');
+    setPlanDurations({
+      MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0' },
+      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+    });
 
     const resetFeats: Record<string, boolean> = {};
     FEATURES_KEYS.forEach(f => { resetFeats[f.key] = true; });
@@ -940,8 +1042,6 @@ export default function AdminPortal() {
     setPlanName(plan.name);
     setPlanDesc(plan.description || '');
     setPlanPrice(plan.price.toString());
-    setPlanOriginalPrice(plan.originalPrice !== null && plan.originalPrice !== undefined ? plan.originalPrice.toString() : '');
-    setPlanOfferExpiry(plan.offerExpiry ? new Date(plan.offerExpiry).toISOString().slice(0, 16) : '');
     setPlanCycle(plan.billingCycle);
     setPlanIsFree(plan.isFree);
     setPlanCurrency(plan.currency || 'USD');
@@ -957,6 +1057,15 @@ export default function AdminPortal() {
     setPlanMaxPolls(plan.maxPolls !== null && plan.maxPolls !== undefined ? plan.maxPolls.toString() : '-1');
     setPlanMaxSurveys(plan.maxSurveys !== null && plan.maxSurveys !== undefined ? plan.maxSurveys.toString() : '-1');
     setPlanMaxExams(plan.maxExams !== null && plan.maxExams !== undefined ? plan.maxExams.toString() : '-1');
+    setPlanOriginalPrice((plan.originalPrice || 0.0).toString());
+    setPlanOfferEndDate(plan.offerEndDate ? new Date(plan.offerEndDate).toISOString().substring(0, 16) : '');
+    setPlanDurations(plan.durations || {
+      MONTHLY: { enabled: true, price: plan.price.toString(), originalPrice: (plan.originalPrice || 0.0).toString() },
+      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
+      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+    });
 
     let resolvedFeats: Record<string, boolean> = {};
     FEATURES_KEYS.forEach(f => {
@@ -1019,8 +1128,9 @@ export default function AdminPortal() {
       maxPolls: planMaxPolls,
       maxSurveys: planMaxSurveys,
       maxExams: planMaxExams,
-      originalPrice: planOriginalPrice ? parseFloat(planOriginalPrice) : null,
-      offerExpiry: planOfferExpiry ? planOfferExpiry : null,
+      originalPrice: planIsFree ? 0 : parseFloat(planOriginalPrice || '0'),
+      offerEndDate: planOfferEndDate || null,
+      durations: planDurations,
     };
 
     try {
@@ -1123,25 +1233,6 @@ export default function AdminPortal() {
     }
   };
 
-  const handleToggleMaintenanceMode = async (currentVal: string) => {
-    const newVal = currentVal === 'true' ? 'false' : 'true';
-    setConfigValues(prev => ({ ...prev, maintenance_mode_enabled: newVal }));
-    try {
-      const res = await fetch('/api/admin/site-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'maintenance_mode_enabled', value: newVal })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save maintenance state');
-      alert(`🔧 System-Wide Scheduled Maintenance is now ${newVal === 'true' ? 'ENABLED' : 'DISABLED'}.`);
-      fetchAdminData();
-    } catch (err: any) {
-      alert(`Failed to toggle maintenance mode: ${err.message}`);
-      setConfigValues(prev => ({ ...prev, maintenance_mode_enabled: currentVal }));
-    }
-  };
-
   const handleSaveSiteConfigs = async () => {
     setConfigSaving(true);
     try {
@@ -1160,88 +1251,6 @@ export default function AdminPortal() {
       alert(err.message);
     } finally {
       setConfigSaving(false);
-    }
-  };
-
-  const handleOpenCreateJob = () => {
-    setEditingJob(null);
-    setJobTitle('');
-    setJobDept('');
-    setJobLoc('Remote');
-    setJobType('FULL_TIME');
-    setJobDesc('');
-    setJobIsActive(true);
-    setShowJobForm(true);
-  };
-
-  const handleOpenEditJob = (job: any) => {
-    setEditingJob(job);
-    setJobTitle(job.title);
-    setJobDept(job.department);
-    setJobLoc(job.location);
-    setJobType(job.type);
-    setJobDesc(job.description);
-    setJobIsActive(job.isActive);
-    setShowJobForm(true);
-  };
-
-  const handleSaveJob = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCareersLoading(true);
-    try {
-      const payload = {
-        id: editingJob?.id,
-        title: jobTitle,
-        department: jobDept,
-        location: jobLoc,
-        type: jobType,
-        description: jobDesc,
-        isActive: jobIsActive
-      };
-
-      const res = await fetch('/api/admin/careers', {
-        method: editingJob ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save job posting.');
-
-      setShowJobForm(false);
-      fetchAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setCareersLoading(false);
-    }
-  };
-
-  const handleDeleteJob = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this job posting?')) return;
-    try {
-      const res = await fetch(`/api/admin/careers?id=${id}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to delete job posting.');
-      fetchAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const handleToggleJobActive = async (job: any) => {
-    try {
-      const res = await fetch('/api/admin/careers', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: job.id, isActive: !job.isActive })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update job posting.');
-      fetchAdminData();
-    } catch (err: any) {
-      alert(err.message);
     }
   };
 
@@ -1578,7 +1587,7 @@ export default function AdminPortal() {
               activeTab === 'site_editor' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
-            Global Settings
+            Site Editor
             {activeTab === 'site_editor' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
@@ -1654,7 +1663,7 @@ export default function AdminPortal() {
               activeTab === 'careers' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
             }`}
           >
-            💼 Careers Board
+            💼 Careers & Jobs
             {activeTab === 'careers' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
@@ -2353,15 +2362,15 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* TAB 8: GLOBAL SETTINGS & WEBSITE CONTENT EDITOR */}
+        {/* TAB 8: WEBSITE CONTENT EDITOR */}
         {activeTab === 'site_editor' && (
           <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-white/5">
               <div className="flex items-center space-x-2.5">
                 <Edit2 className="w-5 h-5 text-purple-400" />
                 <div>
-                  <h3 className="font-outfit text-lg font-bold text-white">Global Settings & Website Content Editor</h3>
-                  <p className="text-gray-500 text-xs mt-0.5">Manage global configuration options and customize public site pages live.</p>
+                  <h3 className="font-outfit text-lg font-bold text-white">Website Content Editor</h3>
+                  <p className="text-gray-500 text-xs mt-0.5">Edit copy on the home page, about page, contact page, and footer live.</p>
                 </div>
               </div>
               <button
@@ -2386,12 +2395,12 @@ export default function AdminPortal() {
                   {/* 1. Maintenance Mode Toggle */}
                   <div className="flex items-center justify-between p-3 rounded-xl bg-[#030712] border border-white/5">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">🔧 Enable System-Wide Scheduled Maintenance</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Maintenance Mode</span>
                       <span className="text-gray-500 text-[9px]">Gates platform access; Admins bypass only</span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleToggleMaintenanceMode(configValues['maintenance_mode_enabled'])}
+                      onClick={() => setConfigValues({ ...configValues, maintenance_mode_enabled: configValues['maintenance_mode_enabled'] === 'true' ? 'false' : 'true' })}
                       className="text-purple-400 hover:text-purple-300 transition-all focus:outline-none shrink-0 ml-2"
                     >
                       {configValues['maintenance_mode_enabled'] === 'true' ? (
@@ -3369,179 +3378,79 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* TAB: CAREERS MANAGEMENT */}
+        {/* TAB 12: CAREERS & RECRUITMENT CLEARANCE */}
         {activeTab === 'careers' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-white font-outfit">Careers Board & Job Postings</h2>
-                <p className="text-gray-500 text-xs mt-1">Manage public job postings, open career opportunities, and active recruitment roles.</p>
-              </div>
-              <button
-                onClick={handleOpenCreateJob}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/20"
-              >
-                ➕ Create Job Posting
-              </button>
-            </div>
-
-            {/* List of active job postings */}
-            <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
-              <div className="border-b border-white/5 pb-3">
-                <h3 className="font-outfit text-base font-bold text-white">💼 Platform Recruitment Directory</h3>
-                <p className="text-gray-500 text-[10px] mt-0.5 font-outfit">Full directory of active and draft recruitment postings</p>
-              </div>
-
-              {jobs.length === 0 ? (
-                <div className="text-center p-8 text-gray-500 font-outfit">No jobs posted yet. Click "Create Job Posting" to list your first opening!</div>
-              ) : (
-                <div className="overflow-x-auto border border-white/5 bg-slate-950/20 rounded-2xl">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-white/2 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit">
-                        <th className="px-5 py-3">Job Details</th>
-                        <th className="px-5 py-3">Location & Type</th>
-                        <th className="px-5 py-3">Date Posted</th>
-                        <th className="px-5 py-3 text-center">Status</th>
-                        <th className="px-5 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 text-gray-300">
-                      {jobs.map((job) => (
-                        <tr key={job.id} className="hover:bg-white/2 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <span className="font-bold text-white font-outfit text-xs block">{job.title}</span>
-                            <span className="text-[10px] text-gray-500 font-mono block mt-0.5">{job.department}</span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <span className="text-xs text-gray-300 block">{job.location}</span>
-                            <span className="text-[10px] text-purple-400 font-semibold uppercase font-mono block mt-0.5">
-                              {job.type.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-gray-400 text-[11px] font-mono">
-                            {new Date(job.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="px-5 py-3.5 text-center">
-                            <button
-                              onClick={() => handleToggleJobActive(job)}
-                              className={`px-3 py-1 rounded-xl text-[9px] font-extrabold uppercase border transition-all ${
-                                job.isActive
-                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                              }`}
-                            >
-                              {job.isActive ? 'Active' : 'Draft / Closed'}
-                            </button>
-                          </td>
-                          <td className="px-5 py-3.5 text-right space-x-2.5">
-                            <button
-                              onClick={() => handleOpenEditJob(job)}
-                              className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg text-[10px] font-bold border border-white/5 transition-all"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteJob(job.id)}
-                              className="px-2.5 py-1.5 bg-red-500/5 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-lg text-[10px] font-bold border border-red-500/10 hover:border-red-500/20 transition-all"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          <div className="space-y-8 animate-fade-in text-xs text-left">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Job Creation Form - Left Column (5 cols) */}
+              <div className="lg:col-span-5 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-5">
+                <div className="border-b border-white/5 pb-3">
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                    <Briefcase className="w-4.5 h-4.5 text-purple-400" />
+                    <span>{editingJob ? 'Edit Job Posting' : 'Post a New Job'}</span>
+                  </h3>
+                  <p className="text-gray-500 text-[10px] mt-0.5 font-outfit">Recruit exceptional talent dynamically on the public careers portal</p>
                 </div>
-              )}
-            </div>
 
-            {/* Form Modal when showJobForm is active */}
-            {showJobForm && (
-              <div className="fixed inset-0 bg-[#020612]/95 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-                <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-xl w-full bg-[#080d1a] relative space-y-6 animate-fade-in text-left">
-                  <button
-                    onClick={() => setShowJobForm(false)}
-                    className="absolute top-6 right-6 text-gray-400 hover:text-white transition-all p-1 bg-white/5 rounded-lg border border-white/5"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-
-                  <div className="border-b border-white/5 pb-4">
-                    <h3 className="text-xl font-bold text-white font-outfit">
-                      {editingJob ? 'Edit Career Posting' : 'Create Career Posting'}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-1">Fill out the job details to list this position on your public careers page.</p>
+                <form onSubmit={handleSaveJob} className="space-y-4 text-left">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Job Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={jobTitle}
+                      onChange={e => setJobTitle(e.target.value)}
+                      placeholder="e.g. Senior Frontend Developer"
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all font-outfit font-bold"
+                    />
                   </div>
 
-                  <form onSubmit={handleSaveJob} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Job Title</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Senior Assessment Engineer"
-                          value={jobTitle}
-                          onChange={e => setJobTitle(e.target.value)}
-                          className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Department</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Engineering, Sales, Product"
-                          value={jobDept}
-                          onChange={e => setJobDept(e.target.value)}
-                          className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Location</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Remote, Bangalore IN"
-                          value={jobLoc}
-                          onChange={e => setJobLoc(e.target.value)}
-                          className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Job Type</label>
-                        <select
-                          value={jobType}
-                          onChange={e => setJobType(e.target.value)}
-                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                        >
-                          <option value="FULL_TIME">Full-time</option>
-                          <option value="PART_TIME">Part-time</option>
-                          <option value="CONTRACT">Contract</option>
-                          <option value="INTERNSHIP">Internship</option>
-                        </select>
-                      </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Department</label>
+                      <select
+                        value={jobDept}
+                        onChange={e => setJobDept(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                      >
+                        <option value="Engineering">Engineering</option>
+                        <option value="Design">Design</option>
+                        <option value="Product">Product</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Support">Support</option>
+                      </select>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Role Description & Requirements</label>
-                      <textarea
-                        rows={6}
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Job Type</label>
+                      <select
+                        value={jobType}
+                        onChange={e => setJobType(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                      >
+                        <option value="Full-time">Full-time</option>
+                        <option value="Part-time">Part-time</option>
+                        <option value="Contract">Contract</option>
+                        <option value="Internship">Internship</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Location</label>
+                      <input
+                        type="text"
                         required
-                        placeholder="Draft the job description, core responsibilities, and requirements..."
-                        value={jobDesc}
-                        onChange={e => setJobDesc(e.target.value)}
-                        className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 font-sans resize-none"
+                        value={jobLocation}
+                        onChange={e => setJobLocation(e.target.value)}
+                        placeholder="e.g. Remote, India"
+                        className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all font-outfit"
                       />
                     </div>
 
-                    <div className="flex items-center space-x-2 pt-2">
+                    <div className="flex items-center space-x-2 pt-6">
                       <input
                         type="checkbox"
                         id="jobIsActiveCheckbox"
@@ -3549,32 +3458,132 @@ export default function AdminPortal() {
                         onChange={e => setJobIsActive(e.target.checked)}
                         className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
                       />
-                      <label htmlFor="jobIsActiveCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
-                        List Job Publicly (Active Posting)
+                      <label htmlFor="jobIsActiveCheckbox" className="text-[10px] font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                        Active Opening
                       </label>
                     </div>
+                  </div>
 
-                    <div className="flex gap-4 pt-4 border-t border-white/5">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Description</label>
+                    <textarea
+                      rows={6}
+                      required
+                      value={jobDesc}
+                      onChange={e => setJobDesc(e.target.value)}
+                      placeholder="Outline details, projects and overall team environment..."
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all resize-none font-outfit"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block font-outfit">Role Requirements</label>
+                    <textarea
+                      rows={4}
+                      value={jobReqs}
+                      onChange={e => setJobReqs(e.target.value)}
+                      placeholder="Key skills required (e.g., Next.js, Prisma, 3+ years experience)..."
+                      className="w-full bg-[#030712] border border-white/8 hover:border-white/12 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all resize-none font-outfit"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow font-outfit"
+                    >
+                      {editingJob ? 'Save Job Posting' : 'Launch Job Opening'}
+                    </button>
+                    {editingJob && (
                       <button
                         type="button"
-                        onClick={() => setShowJobForm(false)}
-                        className="flex-1 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 transition-all"
+                        onClick={() => {
+                          setEditingJob(null);
+                          setJobTitle('');
+                          setJobDesc('');
+                          setJobReqs('');
+                          setJobIsActive(true);
+                          setShowJobForm(false);
+                        }}
+                        className="py-3 px-4 border border-white/10 hover:bg-white/5 text-gray-400 rounded-xl text-xs font-bold transition-all font-outfit"
                       >
                         Cancel
                       </button>
-                      <button
-                        type="submit"
-                        disabled={careersLoading}
-                        className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-1.5"
-                      >
-                        {careersLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        <span>{editingJob ? 'Update Posting' : 'Publish Posting'}</span>
-                      </button>
-                    </div>
-                  </form>
-                </div>
+                    )}
+                  </div>
+                </form>
               </div>
-            )}
+
+              {/* Job Listings Grid - Right Column (7 cols) */}
+              <div className="lg:col-span-7 glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+                <div className="border-b border-white/5 pb-3">
+                  <h3 className="font-outfit text-base font-bold text-white">💼 Platform Job Openings Registry</h3>
+                  <p className="text-gray-500 text-[10px] mt-0.5 font-outfit font-light">List of all active and scheduled careers options listed on the portal</p>
+                </div>
+
+                {careersLoading ? (
+                  <div className="flex items-center justify-center p-8 bg-white/2 border border-white/5 rounded-2xl">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                  </div>
+                ) : careersJobs.length === 0 ? (
+                  <div className="text-center p-6 text-gray-500 font-outfit">No jobs posted in the registry yet. Use the editor to post.</div>
+                ) : (
+                  <div className="overflow-x-auto border border-white/5 bg-slate-950/20 rounded-2xl">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/5 bg-white/2 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit">
+                          <th className="px-5 py-3">Job Details</th>
+                          <th className="px-5 py-3">Location & Type</th>
+                          <th className="px-5 py-3 text-center">Status</th>
+                          <th className="px-5 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-gray-300">
+                        {careersJobs.map((job) => (
+                          <tr key={job.id} className="hover:bg-white/2 transition-colors">
+                            <td className="px-5 py-3.5 font-outfit">
+                              <span className="font-bold text-white block text-sm">{job.title}</span>
+                              <span className="text-gray-500 text-[10px] block mt-0.5 uppercase tracking-wider font-semibold">{job.department}</span>
+                            </td>
+                            <td className="px-5 py-3.5 font-outfit">
+                              <span className="text-gray-300 block">{job.location}</span>
+                              <span className="text-gray-500 text-[10px] block mt-0.5">{job.type}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
+                                job.isActive 
+                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+                              }`}>
+                                {job.isActive ? 'Active' : 'Draft/Closed'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-outfit">
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditJobClick(job)}
+                                  className="py-1 px-2.5 rounded bg-purple-500/10 border border-purple-500/25 hover:bg-purple-500 text-purple-300 hover:text-white text-[9px] font-bold uppercase transition-all"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteJob(job.id)}
+                                  className="py-1 px-2.5 rounded bg-red-500/10 border border-red-500/25 hover:bg-red-500 text-red-400 hover:text-white text-[9px] font-bold uppercase transition-all"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -4084,34 +4093,96 @@ export default function AdminPortal() {
                 </div>
               </div>
 
-              {/* Offer Pricing Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 2.5: Price Slashes & Expirations */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    Original Price (Strike-Through Rate)
-                  </label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Original Slashed Price (e.g. 29.99)</label>
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="e.g. 39.99 (leaves crossed out regular rate)"
+                    placeholder="e.g. 29.99"
                     value={planOriginalPrice}
                     onChange={e => setPlanOriginalPrice(e.target.value)}
                     className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                   />
-                  <span className="text-[9px] text-gray-500 mt-1 block">Specify a regular base price to display a struck-through price next to the offer rate</span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    Offer Expiration Date & Time
-                  </label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Offer End Date (Staging countdown)</label>
                   <input
                     type="datetime-local"
-                    value={planOfferExpiry}
-                    onChange={e => setPlanOfferExpiry(e.target.value)}
-                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 font-mono"
+                    value={planOfferEndDate}
+                    onChange={e => setPlanOfferEndDate(e.target.value)}
+                    className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                   />
-                  <span className="text-[9px] text-gray-500 mt-1 block">Optional deadline for promotional discount (creates countdown)</span>
+                </div>
+              </div>
+
+              {/* Row 2.6: Durations Pricing Matrix */}
+              <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Durations Pricing Matrix & Slashes</span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                  {['MONTHLY', 'QUARTERLY', 'YEARLY', 'TWO_YEARS', 'LIFETIME'].map((dur) => {
+                    const config = planDurations[dur] || { enabled: false, price: '0.0', originalPrice: '0.0' };
+                    return (
+                      <div key={dur} className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-2">
+                        <div className="flex items-center space-x-1.5">
+                          <input
+                            type="checkbox"
+                            id={`dur_${dur}`}
+                            checked={config.enabled}
+                            onChange={e => {
+                              setPlanDurations({
+                                ...planDurations,
+                                [dur]: { ...config, enabled: e.target.checked }
+                              });
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-3.5 h-3.5"
+                          />
+                          <label htmlFor={`dur_${dur}`} className="text-[9px] font-bold text-gray-300 uppercase tracking-wider cursor-pointer">
+                            {dur.replace('_', ' ')}
+                          </label>
+                        </div>
+                        {config.enabled && (
+                          <div className="space-y-1.5">
+                            <div className="space-y-1">
+                              <span className="text-[8px] text-gray-500 font-bold uppercase block">Price</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Price"
+                                value={config.price}
+                                onChange={e => {
+                                  setPlanDurations({
+                                    ...planDurations,
+                                    [dur]: { ...config, price: e.target.value }
+                                  });
+                                }}
+                                className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[8px] text-gray-500 font-bold uppercase block">Original Slashed</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Original Price"
+                                value={config.originalPrice}
+                                onChange={e => {
+                                  setPlanDurations({
+                                    ...planDurations,
+                                    [dur]: { ...config, originalPrice: e.target.value }
+                                  });
+                                }}
+                                className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 outline-none focus:border-purple-500"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -4183,10 +4254,7 @@ export default function AdminPortal() {
                     className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                   >
                     <option value="MONTHLY">Monthly</option>
-                    <option value="QUARTERLY">Quarterly</option>
                     <option value="YEARLY">Yearly</option>
-                    <option value="TWO_YEARS">2 Years</option>
-                    <option value="LIFETIME">Lifetime</option>
                     <option value="ONE_TIME">One Time</option>
                   </select>
                 </div>
@@ -4942,5 +5010,4 @@ export default function AdminPortal() {
 
     </div>
   );
-}
 }

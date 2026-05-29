@@ -21,10 +21,6 @@ export default function SiteWalkthrough() {
   const [highlightCoords, setHighlightCoords] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [wizardStep, setWizardStep] = useState<number | null>(null);
 
-  // Absolute positioning for popover next to spotlight bounds
-  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
-  const [arrowPath, setArrowPath] = useState<string>("");
-
   // Monitor viewport size for mobile layout fallback
   useEffect(() => {
     const handleResize = () => {
@@ -55,6 +51,7 @@ export default function SiteWalkthrough() {
 
   // Predefined context-specific walkthrough steps with warm, friendly human-written copy
   const getStepsForPage = (): TourStep[] => {
+    // 1. Creation Wizard steps
     if (pathname === "/dashboard/create") {
       const step = wizardStep || 1;
       switch (step) {
@@ -71,7 +68,7 @@ export default function SiteWalkthrough() {
             {
               selector: "[data-wizard-step]",
               title: "Step 2: Question Format",
-              description: "Choose how voters will make their choice. 'Single Choice' is the standard ballot. 'Ranked Priority' lets voters rank candidates in order of preference (scored using Borda Count). 'Knockout Tournament' sets up a fun, head-to-head bracket battle!"
+              description: "Choose how voters will make their choice. 'Single Choice' is the standard ballot. 'Ranked Priority' lets voters rank candidates in order of preference (which we score using Borda Count). 'Knockout Tournament' sets up a fun, head-to-head bracket battle!"
             }
           ];
         case 3:
@@ -87,7 +84,7 @@ export default function SiteWalkthrough() {
             {
               selector: "[data-wizard-step]",
               title: "Step 4: Who Can Vote?",
-              description: "Decide your voter list. 'Open' lets anyone with the link join in. 'Closed' keeps it strictly secure—voters must be on your spreadsheet roster, and you can import past rosters instantly using the dropdown to save you time!"
+              description: "Decide your voter list. 'Open' lets anyone with the link join in. 'Closed' keeps it strictly secure—voters must be on your spreadsheet roster, and we can import past rosters instantly using the dropdown to save you time!"
             }
           ];
         case 5:
@@ -127,6 +124,7 @@ export default function SiteWalkthrough() {
       }
     }
 
+    // 2. Main Landing Page
     if (pathname === "/") {
       return [
         {
@@ -147,6 +145,7 @@ export default function SiteWalkthrough() {
       ];
     }
 
+    // 3. Creator Dashboard
     if (pathname === "/dashboard") {
       return [
         {
@@ -167,6 +166,7 @@ export default function SiteWalkthrough() {
       ];
     }
 
+    // 4. Voter Portal
     if (pathname?.startsWith("/poll/")) {
       return [
         {
@@ -197,6 +197,7 @@ export default function SiteWalkthrough() {
       ];
     }
 
+    // 5. Poll Creator Analytics
     if (pathname?.startsWith("/dashboard/polls/")) {
       return [
         {
@@ -217,6 +218,7 @@ export default function SiteWalkthrough() {
       ];
     }
 
+    // 6. Admin Panel
     if (pathname === "/admin") {
       return [
         {
@@ -260,116 +262,35 @@ export default function SiteWalkthrough() {
     }
   }, [pathname, wizardStep, steps.length]);
 
-  // Compute coordinates & popover styles dynamically (No infinite scroll loop)
+  // Compute spotlight bounding box coordinates around the active selector element
   useEffect(() => {
     if (!isActive || !currentStep?.selector || isMobile) {
       setHighlightCoords(null);
-      setPopoverStyle({});
-      setArrowPath("");
       return;
-    }
-
-    // Scroll ONCE gently when the step updates, not inside scroll events!
-    const targetEl = document.querySelector(currentStep.selector!);
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     const updateCoordinates = () => {
       const el = document.querySelector(currentStep.selector!);
       if (el) {
         const rect = el.getBoundingClientRect();
+        // Scroll adjustment
         const top = rect.top + window.scrollY;
         const left = rect.left + window.scrollX;
-        
-        const coords = {
+        setHighlightCoords({
           top: top - 8,
           left: left - 8,
           width: rect.width + 16,
           height: rect.height + 16
-        };
-        
-        setHighlightCoords(coords);
-
-        // Calculate smart placement for the tooltip card
-        const vpWidth = window.innerWidth;
-        const vpHeight = window.innerHeight;
-        const popoverWidth = 320;
-        const popoverHeight = 220;
-
-        let placement: 'right' | 'left' | 'bottom' | 'top' = 'right';
-
-        if (coords.left + coords.width + popoverWidth + 60 < vpWidth) {
-          placement = 'right';
-        } else if (coords.left - popoverWidth - 60 > 0) {
-          placement = 'left';
-        } else if (coords.top + coords.height + popoverHeight + 60 < vpHeight + window.scrollY) {
-          placement = 'bottom';
-        } else {
-          placement = 'top';
-        }
-
-        let popLeft = 0;
-        let popTop = 0;
-        let sX = 0, sY = 0, eX = 0, eY = 0;
-
-        if (placement === 'right') {
-          popLeft = coords.left + coords.width + 40;
-          popTop = Math.max(10 + window.scrollY, coords.top + coords.height / 2 - popoverHeight / 2);
-          
-          sX = popLeft;
-          sY = popTop + popoverHeight / 2;
-          eX = coords.left + coords.width;
-          eY = coords.top + coords.height / 2;
-        } else if (placement === 'left') {
-          popLeft = coords.left - popoverWidth - 40;
-          popTop = Math.max(10 + window.scrollY, coords.top + coords.height / 2 - popoverHeight / 2);
-
-          sX = popLeft + popoverWidth;
-          sY = popTop + popoverHeight / 2;
-          eX = coords.left;
-          eY = coords.top + coords.height / 2;
-        } else if (placement === 'bottom') {
-          popLeft = Math.max(10 + window.scrollX, coords.left + coords.width / 2 - popoverWidth / 2);
-          popTop = coords.top + coords.height + 40;
-
-          sX = popLeft + popoverWidth / 2;
-          sY = popTop;
-          eX = coords.left + coords.width / 2;
-          eY = coords.top + coords.height;
-        } else {
-          popLeft = Math.max(10 + window.scrollX, coords.left + coords.width / 2 - popoverWidth / 2);
-          popTop = Math.max(10 + window.scrollY, coords.top - popoverHeight - 40);
-
-          sX = popLeft + popoverWidth / 2;
-          sY = popTop + popoverHeight;
-          eX = coords.left + coords.width / 2;
-          eY = coords.top;
-        }
-
-        setPopoverStyle({
-          position: 'absolute',
-          left: `${popLeft}px`,
-          top: `${popTop}px`,
-          width: `${popoverWidth}px`,
-          zIndex: 50,
         });
-
-        // Bezier curve connector path
-        const ctrlX1 = sX + (eX - sX) * 0.4;
-        const ctrlY1 = sY;
-        const ctrlX2 = sX + (eX - sX) * 0.6;
-        const ctrlY2 = eY;
-
-        setArrowPath(`M ${sX} ${sY} C ${ctrlX1} ${ctrlY1}, ${ctrlX2} ${ctrlY2}, ${eX} ${eY}`);
+        // Scroll target element gently into viewport view
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
       } else {
         setHighlightCoords(null);
-        setPopoverStyle({});
-        setArrowPath("");
       }
     };
 
     updateCoordinates();
+    // Re-verify on resize / dynamic shifts
     const timer = setTimeout(updateCoordinates, 300);
     window.addEventListener("resize", updateCoordinates);
     window.addEventListener("scroll", updateCoordinates);
@@ -380,26 +301,6 @@ export default function SiteWalkthrough() {
       window.removeEventListener("scroll", updateCoordinates);
     };
   }, [isActive, activeStepIndex, currentStep, isMobile]);
-
-  // Handle action click triggers on spotlight elements
-  useEffect(() => {
-    if (!isActive || !currentStep?.selector) return;
-
-    const targetEl = document.querySelector(currentStep.selector);
-    if (!targetEl) return;
-
-    const handleTargetClick = () => {
-      // Progress step after short animation delay
-      setTimeout(() => {
-        handleNext();
-      }, 350);
-    };
-
-    targetEl.addEventListener('click', handleTargetClick);
-    return () => {
-      targetEl.removeEventListener('click', handleTargetClick);
-    };
-  }, [isActive, activeStepIndex, currentStep]);
 
   const handleNext = () => {
     if (activeStepIndex < steps.length - 1) {
@@ -436,99 +337,57 @@ export default function SiteWalkthrough() {
 
   return (
     <>
-      <style jsx global>{`
-        @keyframes tour-dash {
-          to {
-            stroke-dashoffset: -20;
-          }
-        }
-        .animate-dash {
-          animation: tour-dash 1.2s linear infinite;
-        }
-      `}</style>
-
       {/* 1. Permanent Help FAB Launcher (Bottom Right corner) */}
       <button
         onClick={handleStartManualTour}
-        className="fixed z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-all transform hover:scale-105 active:scale-95 bottom-20 right-6 sm:bottom-6 sm:right-[175px]"
+        className="fixed z-40 p-4 sm:px-5 sm:py-3.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center space-x-2 transition-all transform hover:scale-105 active:scale-95 animate-pulse-glow bottom-20 right-6 sm:bottom-6 sm:right-[175px]"
         title="Need help? Start the Page Tour Guide!"
       >
         <HelpCircle className="w-5 h-5 shrink-0" />
         <span className="hidden sm:inline">Guide Tour</span>
       </button>
 
-      {/* 2. Walkthrough Tour Dialog Overlay (100% click-through, non-blocking) */}
+      {/* 2. Walkthrough Tour Dialog Overlay */}
       {isActive && (
-        <div className="absolute inset-0 z-45 min-h-[3000px] pointer-events-none">
-          {/* Subtle pulse glowing spotlight ring around the highlighted element */}
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Spotlight Highlight Mask (Desktop only) */}
           {!isMobile && highlightCoords && (
             <div 
-              className="absolute pointer-events-none border-2 border-emerald-400 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all duration-300 animate-pulse"
+              className="absolute pointer-events-none border-[3px] border-emerald-400 rounded-2xl shadow-[0_0_0_9999px_rgba(3,7,18,0.85)] transition-all duration-300"
               style={{
                 top: `${highlightCoords.top}px`,
                 left: `${highlightCoords.left}px`,
                 width: `${highlightCoords.width}px`,
-                height: `${highlightCoords.height}px`,
-                zIndex: 48
+                height: `${highlightCoords.height}px`
               }}
             />
           )}
 
-          {/* SVG curve line connector (Desktop Only) */}
-          {!isMobile && highlightCoords && arrowPath && (
-            <svg className="absolute inset-0 pointer-events-none w-full h-full" style={{ zIndex: 49, minHeight: '3000px' }}>
-              <defs>
-                <marker
-                  id="arrowhead"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="6"
-                  refY="3.5"
-                  orient="auto"
-                >
-                  <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
-                </marker>
-              </defs>
-              <path
-                d={arrowPath}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="2.5"
-                strokeDasharray="6"
-                className="animate-dash"
-                markerEnd="url(#arrowhead)"
-              />
-            </svg>
+          {/* Simple dark backdrop if no specific element is targeted, or if mobile viewport */}
+          {(isMobile || !highlightCoords) && (
+            <div className="absolute inset-0 bg-[#030712]/90 backdrop-blur-sm" />
           )}
 
-          {/* Tooltip Content Popover Card (Interactive) */}
-          <div 
-            style={!isMobile && highlightCoords ? popoverStyle : {
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              maxWidth: '360px',
-              width: '90%',
-              zIndex: 50
-            }}
-            className="pointer-events-auto"
-          >
-            <div className="glass-card w-full rounded-3xl p-6 sm:p-7 border border-white/10 shadow-2xl space-y-5 bg-[#080d1a]/95 backdrop-blur-xl relative transition-all">
-              {/* Glowing header accent line */}
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 to-indigo-500 rounded-t-3xl" />
-
+          {/* Tooltip Content Popover card container */}
+          <div className="flex items-center justify-center min-h-screen p-4 relative z-50">
+            <div 
+              className={`glass-card max-w-md w-full rounded-3xl p-6 sm:p-7 border border-white/10 shadow-2xl space-y-6 relative transition-all animate-fade-in ${
+                !isMobile && highlightCoords 
+                  ? "mt-4" 
+                  : ""
+              }`}
+            >
               {/* Card Header details */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-4 mt-1">
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
                 <div className="flex items-center space-x-2">
                   <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
                     <Compass className="w-5 h-5 animate-spin" style={{ animationDuration: "12s" }} />
                   </div>
                   <div>
-                    <span className="text-[9px] text-indigo-400 uppercase tracking-widest font-black block">
+                    <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-black block">
                       Page Guide {activeStepIndex + 1} of {steps.length}
                     </span>
-                    <h4 className="text-white text-sm font-bold font-outfit mt-0.5 leading-tight">
+                    <h4 className="text-white text-base font-bold font-outfit">
                       {currentStep.title}
                     </h4>
                   </div>
@@ -538,18 +397,18 @@ export default function SiteWalkthrough() {
                   className="p-1.5 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors"
                   title="Close Guide"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Conversational friendly copy body */}
               <div className="space-y-3">
-                <p className="text-gray-300 text-xs sm:text-sm leading-relaxed font-medium">
+                <p className="text-gray-300 text-sm leading-relaxed font-medium">
                   {currentStep.description}
                 </p>
                 {currentStep.selector && !document.querySelector(currentStep.selector) && (
-                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-xl text-[10px] flex items-start space-x-2">
-                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-xl text-xs flex items-start space-x-2">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>This element will show up on this page once you complete the current active action!</span>
                   </div>
                 )}
@@ -559,27 +418,27 @@ export default function SiteWalkthrough() {
               <div className="flex items-center justify-between border-t border-white/5 pt-4">
                 <button
                   onClick={handleSkip}
-                  className="text-[10px] font-bold text-gray-500 hover:text-gray-300 transition-colors uppercase tracking-wider"
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors uppercase tracking-wider"
                 >
                   Skip Tour
                 </button>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3">
                   {activeStepIndex > 0 && (
                     <button
                       onClick={handlePrev}
-                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-gray-300 hover:text-white border border-white/5 hover:bg-white/5 transition-all flex items-center space-x-1"
+                      className="px-3 py-2 rounded-xl text-xs font-bold text-gray-300 hover:text-white border border-white/5 hover:bg-white/5 transition-all flex items-center space-x-1"
                     >
-                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <ChevronLeft className="w-4 h-4" />
                       <span>Back</span>
                     </button>
                   )}
                   <button
                     onClick={handleNext}
-                    className="px-4 py-2 rounded-xl text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-teal-400 text-white flex items-center space-x-1 shadow-lg shadow-emerald-500/25 transition-all hover:opacity-95 active:scale-95"
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-400 text-white flex items-center space-x-1.5 shadow-lg shadow-emerald-500/25 transition-all hover:opacity-95 active:scale-95"
                   >
                     <span>{activeStepIndex === steps.length - 1 ? "Finish" : "Next"}</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>

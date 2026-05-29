@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Outfit, Inter } from "next/font/google";
 import RaiseIssueButton from "@/components/RaiseIssueButton";
 import SiteWalkthrough from "@/components/SiteWalkthrough";
-import MaintenanceGuard from "@/components/MaintenanceGuard";
-import DevelopmentSandboxAlert from "@/components/DevelopmentSandboxAlert";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -65,10 +63,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: zoomBlockerScript }} />
       </head>
       <body className="font-sans antialiased text-gray-100 min-h-screen flex flex-col bg-[#030712]">
-        <DevelopmentSandboxAlert />
-        <MaintenanceGuard>
-          {children}
-        </MaintenanceGuard>
+        {children}
         <RaiseIssueButton />
         <SiteWalkthrough />
       </body>

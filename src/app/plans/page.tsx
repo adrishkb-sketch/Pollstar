@@ -159,34 +159,8 @@ export default function PublicPlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedCycle, setSelectedCycle] = useState('MONTHLY');
+  const [selectedDurs, setSelectedDurs] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const getPlanDiscount = (currentPlan: any) => {
-    if (currentPlan.isFree || currentPlan.planType !== 'SUBSCRIPTION' || currentPlan.billingCycle === 'MONTHLY') {
-      return null;
-    }
-    const baseName = currentPlan.name.split(' ')[0].toLowerCase();
-    const monthlyPlan = plans.find(p => 
-      p.billingCycle === 'MONTHLY' && 
-      p.planType === 'SUBSCRIPTION' && 
-      !p.isFree &&
-      p.name.split(' ')[0].toLowerCase() === baseName
-    );
-    if (!monthlyPlan || monthlyPlan.price <= 0) return null;
-
-    let months = 1;
-    if (currentPlan.billingCycle === 'QUARTERLY') months = 3;
-    if (currentPlan.billingCycle === 'YEARLY') months = 12;
-    if (currentPlan.billingCycle === 'TWO_YEARS') months = 24;
-    if (currentPlan.billingCycle === 'LIFETIME') months = 36; // assume 3 years
-
-    const baseCost = monthlyPlan.price * months;
-    if (currentPlan.price >= baseCost) return null;
-
-    const pct = Math.round((1 - (currentPlan.price / baseCost)) * 100);
-    return pct > 0 ? pct : null;
-  };
 
   const fetchPlans = async () => {
     try {
@@ -264,32 +238,6 @@ export default function PublicPlansPage() {
           </p>
         </div>
 
-        {/* Dynamic Billing Switcher */}
-        <div className="flex justify-center items-center">
-          <div className="flex p-1 bg-white/5 border border-white/10 rounded-2xl gap-1.5 backdrop-blur-md">
-            {[
-              { value: 'MONTHLY', label: 'Monthly' },
-              { value: 'QUARTERLY', label: 'Quarterly' },
-              { value: 'YEARLY', label: 'Yearly' },
-              { value: 'TWO_YEARS', label: '2 Years' },
-              { value: 'LIFETIME', label: 'Lifetime' }
-            ].map(cycle => (
-              <button
-                key={cycle.value}
-                type="button"
-                onClick={() => setSelectedCycle(cycle.value)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  selectedCycle === cycle.value
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 font-outfit'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5 font-outfit'
-                }`}
-              >
-                {cycle.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {error && (
           <div className="glass-card border border-red-500/20 bg-red-500/5 rounded-2xl p-4 text-center text-red-400 text-sm">
             {error}
@@ -323,21 +271,12 @@ export default function PublicPlansPage() {
             ref={scrollRef}
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
-            {plans.filter((p: any) => p.isFree || p.planType !== 'SUBSCRIPTION' || p.billingCycle === selectedCycle).map((p: any) => {
-              const discountPct = getPlanDiscount(p);
-              const isOfferActive = p.offerExpiry && new Date(p.offerExpiry) > new Date();
-
+            {plans.map((p) => {
               return (
                 <div 
                   key={p.id}
                   className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
                 >
-                  {isOfferActive && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-l from-indigo-500 to-purple-600 text-white font-extrabold uppercase text-[8px] tracking-widest px-3 py-1 rounded-bl-xl shadow-lg border-l border-b border-indigo-400/20 animate-pulse">
-                      🔥 Special Offer
-                    </div>
-                  )}
-
                   <div className="space-y-6">
                     {/* Header */}
                     <div className="space-y-2">
@@ -348,38 +287,106 @@ export default function PublicPlansPage() {
                         >
                           {p.badgeLabel || p.name}
                         </span>
-
-                        {discountPct && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-extrabold uppercase tracking-wide">
-                            Save {discountPct}%!
-                          </span>
-                        )}
                       </div>
                       <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
                       <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
                     </div>
 
+                    {/* Durations Segment Toggles if configured */}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      if (enabledDurs.length <= 1) return null;
+
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+
+                      return (
+                        <div className="p-1 bg-white/2 border border-white/5 rounded-xl flex flex-wrap gap-1">
+                          {enabledDurs.map((dur) => {
+                            const cfg = dursConfig[dur];
+                            const isSelected = activeDur === dur;
+                            let discountText = '';
+                            if (dur !== 'MONTHLY' && dursConfig['MONTHLY']?.enabled) {
+                              const mPrice = parseFloat(dursConfig['MONTHLY'].price || '0');
+                              const dPrice = parseFloat(cfg.price || '0');
+                              let factor = 1;
+                              if (dur === 'QUARTERLY') factor = 3;
+                              else if (dur === 'YEARLY') factor = 12;
+                              else if (dur === 'TWO_YEARS') factor = 24;
+                              if (mPrice > 0) {
+                                const fullCost = mPrice * factor;
+                                const savings = ((fullCost - dPrice) / fullCost) * 100;
+                                if (savings > 0) discountText = `Save ${Math.round(savings)}%`;
+                              }
+                            }
+                            return (
+                              <button
+                                type="button"
+                                key={dur}
+                                onClick={() => setSelectedDurs(prev => ({ ...prev, [p.id]: dur }))}
+                                className={`flex-1 py-1.5 px-2 rounded-lg text-[8px] font-bold uppercase transition-all flex flex-col items-center justify-center ${
+                                  isSelected 
+                                    ? 'bg-purple-500/20 border border-purple-500/30 text-purple-300' 
+                                    : 'bg-transparent border border-transparent text-gray-500 hover:text-gray-300'
+                                }`}
+                              >
+                                <span>{dur.replace('_', ' ')}</span>
+                                {discountText && <span className="text-[7px] text-emerald-400 font-extrabold">{discountText}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Active Offer Countdown notification ticker */}
+                    {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-between gap-2 animate-pulse-glow">
+                        <span className="flex items-center gap-1">⚡ Limited Time Offer active!</span>
+                        <span className="font-mono text-[9px]">Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+
                     {/* Price Tag */}
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
-                      <div className="flex items-baseline flex-wrap gap-1.5">
-                        <span className="text-3xl font-black text-white font-outfit">
-                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                        </span>
-                        {p.originalPrice && p.originalPrice > p.price && (
-                          <span className="text-sm text-gray-500 line-through font-medium font-outfit">
-                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
-                          </span>
-                        )}
-                        <span className="text-xs text-gray-500 font-semibold ml-1">/{p.billingCycle.toLowerCase()}</span>
-                      </div>
+                      {(() => {
+                        const dursConfig = p.durations ? (p.durations as any) : null;
+                        const enabledDurs = dursConfig 
+                          ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                          : [];
+                        
+                        const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                        
+                        let displayPrice = p.price;
+                        let displayOriginalPrice = p.originalPrice;
+                        let cycleName = p.billingCycle.toLowerCase();
 
-                      {isOfferActive && (
-                        <div className="text-[9px] text-indigo-400 font-mono font-medium pt-1 flex items-center gap-1 animate-pulse">
-                          <span>Promo ends:</span>
-                          <span>{new Date(p.offerExpiry).toLocaleDateString()} at {new Date(p.offerExpiry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      )}
+                        if (enabledDurs.length > 0 && dursConfig[activeDur]) {
+                          displayPrice = parseFloat(dursConfig[activeDur].price || '0');
+                          displayOriginalPrice = parseFloat(dursConfig[activeDur].originalPrice || '0');
+                          cycleName = activeDur.toLowerCase();
+                        }
+
+                        const hasSlashPrice = displayOriginalPrice && displayOriginalPrice > displayPrice;
+
+                        return (
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-3xl font-black text-white font-outfit">
+                              {getCurrencySymbol(p.currency)}{displayPrice.toFixed(2)}
+                            </span>
+                            {hasSlashPrice && (
+                              <span className="text-sm text-red-400/70 font-semibold line-through">
+                                {getCurrencySymbol(p.currency)}{displayOriginalPrice!.toFixed(2)}
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Limits Display */}
@@ -422,12 +429,27 @@ export default function PublicPlansPage() {
                   </div>
 
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    <Link
-                      href={`/signup?planId=${p.id}`}
-                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                    >
-                      {p.price > 0 ? 'Sign Up & Subscribe' : 'Register Free'}
-                    </Link>
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      
+                      let displayPrice = p.price;
+                      if (enabledDurs.length > 0 && dursConfig[activeDur]) {
+                        displayPrice = parseFloat(dursConfig[activeDur].price || '0');
+                      }
+
+                      return (
+                        <Link
+                          href={`/signup?planId=${p.id}&duration=${activeDur}`}
+                          className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                        >
+                          {displayPrice > 0 ? 'Sign Up & Subscribe' : 'Register Free'}
+                        </Link>
+                      );
+                    })()}
                   </div>
                 </div>
               );

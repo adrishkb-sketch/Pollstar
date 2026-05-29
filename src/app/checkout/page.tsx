@@ -39,6 +39,7 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const planId = searchParams.get('planId');
+  const selectedDuration = searchParams.get('duration') || 'MONTHLY';
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +103,14 @@ function CheckoutContent() {
             const matchedPlan = planData.plans.find((p: Plan) => p.id === planId);
             if (matchedPlan) {
               setPlan(matchedPlan);
-              setFinalPrice(matchedPlan.price);
+              let basePrice = matchedPlan.price;
+              if (selectedDuration && (matchedPlan as any).durations) {
+                const durationsConfig = (matchedPlan as any).durations as any;
+                if (durationsConfig[selectedDuration] && durationsConfig[selectedDuration].enabled) {
+                  basePrice = parseFloat(durationsConfig[selectedDuration].price || '0');
+                }
+              }
+              setFinalPrice(basePrice);
             } else {
               setError('Selected plan could not be found.');
             }
@@ -186,7 +194,8 @@ function CheckoutContent() {
           billingAddress: address || 'N/A',
           billingCity: city || 'N/A',
           billingZip: zipCode || 'N/A',
-          billingPhone: phone || null
+          billingPhone: phone || null,
+          duration: selectedDuration
         })
       });
       const data = await res.json();
@@ -258,7 +267,7 @@ function CheckoutContent() {
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Billing Cycle</span>
-              <span className="text-gray-400 font-semibold">{plan.billingCycle}</span>
+              <span className="text-gray-400 font-semibold">{selectedDuration}</span>
             </div>
           </div>
 
@@ -340,8 +349,8 @@ function CheckoutContent() {
                     <tbody className="divide-y divide-gray-100">
                       <tr>
                         <td className="p-3 font-semibold text-gray-800">{generatedInvoice.planName} Tier Upgrade</td>
-                        <td className="p-3 text-gray-500">{plan.billingCycle}</td>
-                        <td className="p-3 text-right text-gray-500">{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</td>
+                        <td className="p-3 text-gray-500">{selectedDuration}</td>
+                        <td className="p-3 text-right text-gray-500">{getCurrencySymbol(plan.currency)}{finalPrice.toFixed(2)}</td>
                         <td className="p-3 text-right font-bold text-gray-800">{getCurrencySymbol(plan.currency)}{generatedInvoice.amountPaid.toFixed(2)}</td>
                       </tr>
                     </tbody>
@@ -352,7 +361,7 @@ function CheckoutContent() {
                 <div className="border-t border-gray-100 pt-4 flex flex-col items-end text-xs space-y-2">
                   <div className="flex w-64 justify-between text-gray-500">
                     <span>Base Amount</span>
-                    <span>{getCurrencySymbol(plan.currency)}{plan.price.toFixed(2)}</span>
+                    <span>{getCurrencySymbol(plan.currency)}{finalPrice.toFixed(2)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex w-64 justify-between text-emerald-600 font-semibold">

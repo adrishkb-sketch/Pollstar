@@ -350,8 +350,12 @@ model Plan {
   maxPolls        Int?     @default(10)
   maxSurveys      Int?     @default(10)
   maxExams        Int?     @default(10)
-  originalPrice   Float?   // Strike-through original pricing
-  offerExpiry     DateTime? // Promotion offer expiration deadline
+  
+  // Price slashes & durations pricing configs
+  originalPrice   Float?   @default(0.0)
+  offerEndDate    DateTime?
+  durations       Json?    // Optional JSON pricing configuration per duration
+
   users           User[]
   emailDomainMappings EmailDomainMapping[]
   invoices        Invoice[]
@@ -468,6 +472,7 @@ model Invoice {
   billingCity    String
   billingZip     String
   billingPhone   String?
+  billingCycle   String   @default("MONTHLY")
   createdAt      DateTime @default(now())
 }
 
@@ -479,14 +484,15 @@ model NewsletterSubscriber {
 }
 
 model JobPosting {
-  id          String   @id @default(uuid())
-  title       String
-  department  String
-  location    String   @default("Remote")
-  type        String   @default("FULL_TIME") // FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP
-  description String   @db.Text
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  title        String
+  department   String
+  location     String
+  type         String
+  description  String   @db.Text
+  requirements String   @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 

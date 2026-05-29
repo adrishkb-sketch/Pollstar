@@ -173,7 +173,6 @@ export default function PlansPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedCycle, setSelectedCycle] = useState('MONTHLY');
 
   // Invoice display states
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
@@ -181,32 +180,6 @@ export default function PlansPage() {
 
   // Mobile Swipe ref
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const getPlanDiscount = (currentPlan: any) => {
-    if (currentPlan.isFree || currentPlan.planType !== 'SUBSCRIPTION' || currentPlan.billingCycle === 'MONTHLY') {
-      return null;
-    }
-    const baseName = currentPlan.name.split(' ')[0].toLowerCase();
-    const monthlyPlan = plans.find(p => 
-      p.billingCycle === 'MONTHLY' && 
-      p.planType === 'SUBSCRIPTION' && 
-      !p.isFree &&
-      p.name.split(' ')[0].toLowerCase() === baseName
-    );
-    if (!monthlyPlan || monthlyPlan.price <= 0) return null;
-
-    let months = 1;
-    if (currentPlan.billingCycle === 'QUARTERLY') months = 3;
-    if (currentPlan.billingCycle === 'YEARLY') months = 12;
-    if (currentPlan.billingCycle === 'TWO_YEARS') months = 24;
-    if (currentPlan.billingCycle === 'LIFETIME') months = 36; // assume 3 years
-
-    const baseCost = monthlyPlan.price * months;
-    if (currentPlan.price >= baseCost) return null;
-
-    const pct = Math.round((1 - (currentPlan.price / baseCost)) * 100);
-    return pct > 0 ? pct : null;
-  };
 
   const fetchSessionAndPlans = async () => {
     try {
@@ -293,31 +266,10 @@ export default function PlansPage() {
             </h1>
             <p className="text-gray-500 text-xs mt-1">Upgrade your features, examine plan details, and download purchase invoices.</p>
           </div>
-        </div>
 
-        {/* Dynamic Billing Switcher */}
-        <div className="flex justify-center items-center">
-          <div className="flex p-1 bg-white/5 border border-white/10 rounded-2xl gap-1.5 backdrop-blur-md">
-            {[
-              { value: 'MONTHLY', label: 'Monthly' },
-              { value: 'QUARTERLY', label: 'Quarterly' },
-              { value: 'YEARLY', label: 'Yearly' },
-              { value: 'TWO_YEARS', label: '2 Years' },
-              { value: 'LIFETIME', label: 'Lifetime' }
-            ].map(cycle => (
-              <button
-                key={cycle.value}
-                type="button"
-                onClick={() => setSelectedCycle(cycle.value)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  selectedCycle === cycle.value
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 font-outfit'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5 font-outfit'
-                }`}
-              >
-                {cycle.label}
-              </button>
-            ))}
+          <div className="glass-card rounded-2xl px-4 py-2.5 border border-purple-500/20 bg-purple-500/5 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-purple-400 animate-pulse" />
+            <span className="text-xs text-gray-300 font-semibold">Active Tier: <strong className="text-purple-300 uppercase">{currentPlan.name} Plan</strong></span>
           </div>
         </div>
 
@@ -354,10 +306,8 @@ export default function PlansPage() {
             ref={scrollRef}
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
-            {plans.filter((p: any) => p.isFree || p.planType !== 'SUBSCRIPTION' || p.billingCycle === selectedCycle).map((p: any) => {
+            {plans.map((p) => {
               const isActivePlan = user?.planId === p.id || (p.name === 'Free' && !user?.planId);
-              const discountPct = getPlanDiscount(p);
-              const isOfferActive = p.offerExpiry && new Date(p.offerExpiry) > new Date();
               
               return (
                 <div 
@@ -368,12 +318,6 @@ export default function PlansPage() {
                       : 'border-white/5 hover:border-white/10'
                   }`}
                 >
-                  {isOfferActive && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-l from-indigo-500 to-purple-600 text-white font-extrabold uppercase text-[8px] tracking-widest px-3 py-1 rounded-bl-xl shadow-lg border-l border-b border-indigo-400/20 animate-pulse">
-                      🔥 Special Offer
-                    </div>
-                  )}
-
                   {/* Decorative glowing gradient blur */}
                   {isActivePlan && (
                     <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none" />
@@ -389,16 +333,9 @@ export default function PlansPage() {
                         >
                           {p.badgeLabel || p.name}
                         </span>
-
                         {isActivePlan && (
                           <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0">
                             Active
-                          </span>
-                        )}
-
-                        {discountPct && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-extrabold uppercase tracking-wide block shrink-0">
-                            Save {discountPct}%!
                           </span>
                         )}
                       </div>
@@ -409,24 +346,10 @@ export default function PlansPage() {
                     {/* Price Tag */}
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
-                      <div className="flex items-baseline flex-wrap gap-1.5">
-                        <span className="text-3xl font-black text-white font-outfit">
-                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                        </span>
-                        {p.originalPrice && p.originalPrice > p.price && (
-                          <span className="text-sm text-gray-500 line-through font-medium font-outfit">
-                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
-                          </span>
-                        )}
+                      <div className="flex items-baseline">
+                        <span className="text-3xl font-black text-white font-outfit">{getCurrencySymbol(p.currency)}{p.price.toFixed(2)}</span>
                         <span className="text-xs text-gray-500 font-semibold ml-1">/{p.billingCycle.toLowerCase()}</span>
                       </div>
-
-                      {isOfferActive && (
-                        <div className="text-[9px] text-indigo-400 font-mono font-medium pt-1 flex items-center gap-1 animate-pulse">
-                          <span>Promo ends:</span>
-                          <span>{new Date(p.offerExpiry).toLocaleDateString()} at {new Date(p.offerExpiry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Checklists features details */}

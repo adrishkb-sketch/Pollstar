@@ -36,7 +36,8 @@ export async function POST(req: Request) {
       billingAddress, 
       billingCity, 
       billingZip, 
-      billingPhone 
+      billingPhone,
+      duration
     } = await req.json();
 
     if (!planId) {
@@ -51,7 +52,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    let finalPrice = plan.price;
+    let basePrice = plan.price;
+    let selectedBillingCycle = plan.billingCycle;
+
+    if (duration && plan.durations) {
+      const durationsConfig = plan.durations as any;
+      if (durationsConfig[duration] && durationsConfig[duration].enabled) {
+        basePrice = parseFloat(durationsConfig[duration].price || '0');
+        selectedBillingCycle = duration;
+      }
+    }
+
+    let finalPrice = basePrice;
     let discountAmount = 0;
 
     // Apply coupon discount if provided
@@ -77,18 +89,18 @@ export async function POST(req: Request) {
 
         if (validDates && validFirstTime) {
           if (coupon.discountType === 'FREE') {
-            discountAmount = plan.price;
+            discountAmount = basePrice;
           } else if (coupon.discountType === 'PERCENTAGE') {
-            discountAmount = (plan.price * coupon.discountValue) / 100;
+            discountAmount = (basePrice * coupon.discountValue) / 100;
           } else { // FLAT
             discountAmount = coupon.discountValue;
           }
 
-          if (discountAmount > plan.price) {
-            discountAmount = plan.price;
+          if (discountAmount > basePrice) {
+            discountAmount = basePrice;
           }
 
-          finalPrice = Math.max(0, plan.price - discountAmount);
+          finalPrice = Math.max(0, basePrice - discountAmount);
         }
       }
     }
@@ -110,7 +122,8 @@ export async function POST(req: Request) {
         billingAddress: billingAddress || 'N/A',
         billingCity: billingCity || 'N/A',
         billingZip: billingZip || 'N/A',
-        billingPhone: billingPhone || null
+        billingPhone: billingPhone || null,
+        billingCycle: selectedBillingCycle
       }
     });
 
@@ -121,7 +134,8 @@ export async function POST(req: Request) {
       success: true,
       message: `Successfully subscribed to ${plan.name} Plan!`,
       planName: plan.name,
-      finalPricePaid: finalPrice
+      finalPricePaid: finalPrice,
+      billingCycle: selectedBillingCycle
     });
   } catch (error: any) {
     console.error('Checkout Complete Error:', error);

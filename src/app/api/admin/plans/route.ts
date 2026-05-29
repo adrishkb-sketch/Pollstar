@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       packQuantity, freePerks, comboTypes, badgeColor, badgeLabel,
       hasFreeTrial, freeTrialDays, freeTrialFeatures, pollSubtypes,
       isActive, features, maxPolls, maxSurveys, maxExams,
-      originalPrice, offerExpiry
+      originalPrice, offerEndDate, durations
     } = body;
 
     if (!name || !features) {
@@ -95,8 +95,9 @@ export async function POST(req: Request) {
         maxPolls: maxPolls === null || maxPolls === undefined || maxPolls === '' || parseInt(maxPolls) === -1 ? null : parseInt(maxPolls),
         maxSurveys: maxSurveys === null || maxSurveys === undefined || maxSurveys === '' || parseInt(maxSurveys) === -1 ? null : parseInt(maxSurveys),
         maxExams: maxExams === null || maxExams === undefined || maxExams === '' || parseInt(maxExams) === -1 ? null : parseInt(maxExams),
-        originalPrice: originalPrice ? parseFloat(originalPrice) : null,
-        offerExpiry: offerExpiry ? new Date(offerExpiry) : null,
+        originalPrice: originalPrice ? parseFloat(originalPrice) : 0.0,
+        offerEndDate: offerEndDate ? new Date(offerEndDate) : null,
+        durations: durations || null,
       }
     });
 
@@ -210,10 +211,13 @@ export async function PATCH(req: Request) {
       data.maxExams = updateFields.maxExams === null || updateFields.maxExams === undefined || updateFields.maxExams === '' || parseInt(updateFields.maxExams) === -1 ? null : parseInt(updateFields.maxExams);
     }
     if (updateFields.originalPrice !== undefined) {
-      data.originalPrice = updateFields.originalPrice === null || updateFields.originalPrice === '' ? null : parseFloat(updateFields.originalPrice);
+      data.originalPrice = updateFields.originalPrice ? parseFloat(updateFields.originalPrice) : 0.0;
     }
-    if (updateFields.offerExpiry !== undefined) {
-      data.offerExpiry = updateFields.offerExpiry === null || updateFields.offerExpiry === '' ? null : new Date(updateFields.offerExpiry);
+    if (updateFields.offerEndDate !== undefined) {
+      data.offerEndDate = updateFields.offerEndDate ? new Date(updateFields.offerEndDate) : null;
+    }
+    if (updateFields.durations !== undefined) {
+      data.durations = updateFields.durations || null;
     }
 
     const updatedPlan = await prisma.plan.update({
