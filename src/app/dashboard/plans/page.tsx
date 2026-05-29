@@ -540,49 +540,6 @@ export default function PlansPage() {
                       );
                     })()}
 
-                    {/* Dynamic Limits Display */}
-                    {(() => {
-                      const dursConfig = p.durations ? (p.durations as any) : null;
-                      const enabledDurs = dursConfig 
-                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
-                        : [];
-                      
-                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
-                      const durConfig = dursConfig?.[activeDur] || null;
-
-                      let limitPolls = p.maxPolls;
-                      let limitSurveys = p.maxSurveys;
-                      let limitExams = p.maxExams;
-
-                      if (enabledDurs.length > 0 && durConfig) {
-                        if (durConfig.maxPolls !== undefined && durConfig.maxPolls !== '') {
-                          limitPolls = parseInt(durConfig.maxPolls);
-                        }
-                        if (durConfig.maxSurveys !== undefined && durConfig.maxSurveys !== '') {
-                          limitSurveys = parseInt(durConfig.maxSurveys);
-                        }
-                        if (durConfig.maxExams !== undefined && durConfig.maxExams !== '') {
-                          limitExams = parseInt(durConfig.maxExams);
-                        }
-                      }
-
-                      return (
-                        <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
-                          <div className="flex items-center justify-between">
-                            <span>Max Polls Allowed:</span>
-                            <strong className="text-white font-bold">{limitPolls === null || limitPolls === -1 ? 'Unlimited' : limitPolls}</strong>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>Max Surveys Allowed:</span>
-                            <strong className="text-white font-bold">{limitSurveys === null || limitSurveys === -1 ? 'Unlimited' : limitSurveys}</strong>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>Max Exams Allowed:</span>
-                            <strong className="text-white font-bold">{limitExams === null || limitExams === -1 ? 'Unlimited' : limitExams}</strong>
-                          </div>
-                        </div>
-                      );
-                    })()}
 
                     {/* Checklists features details */}
                     <div className="space-y-3">
@@ -698,6 +655,22 @@ export default function PlansPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Flat Inclusions/Limits Display */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                      <div className="flex items-center justify-between">
+                        <span>Max Polls Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Surveys Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Exams Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="pt-6 mt-6 border-t border-white/5">
@@ -745,6 +718,22 @@ export default function PlansPage() {
                       <span className="text-[8px] text-gray-500 font-bold uppercase block">Pre-Requisite</span>
                       <div className="text-[10px] text-purple-300 font-semibold bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl leading-relaxed">
                         ⚠️ **Requires active subscription**: This package functions as an overlay and can only be active alongside a running paid subscription.
+                      </div>
+                    </div>
+
+                    {/* Flat Inclusions/Limits Display */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                      <div className="flex items-center justify-between">
+                        <span>Max Polls Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Surveys Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Exams Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
                       </div>
                     </div>
                   </div>
