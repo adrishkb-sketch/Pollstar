@@ -33,6 +33,8 @@ interface Plan {
   currency: string;
   billingCycle: string;
   badgeColor: string;
+  planType: string;
+  packQuantity?: number | null;
   hasFreeTrial?: boolean;
   freeTrialDays?: number | null;
 }
@@ -710,13 +712,19 @@ function CheckoutContent() {
                 <div className="border-b border-white/5 pb-4">
                   <h3 className="text-lg font-bold">Subscription Summary</h3>
                   <p className="text-xs text-gray-500">Confirm purchase plan details</p>
-                </div>
-
-                {/* Plan Badge Card */}
+                            {/* Plan Badge Card */}
                 <div className="flex items-center justify-between border border-white/5 rounded-2xl bg-white/[0.02] p-4">
                   <div>
                     <h4 className="font-extrabold text-lg text-purple-300">{plan.name}</h4>
-                    <p className="text-xs text-gray-500 font-semibold uppercase">{isTrial ? `Free Trial (${plan.freeTrialDays || 7} Days)` : `${selectedDuration} Access`}</p>
+                    <p className="text-xs text-gray-500 font-semibold uppercase">
+                      {isTrial 
+                        ? `Free Trial (${plan.freeTrialDays || 7} Days)` 
+                        : plan.planType === 'ADDON' 
+                          ? 'Add-On Expansion' 
+                          : ['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(plan.planType || '')
+                            ? 'One-Time Pack'
+                            : `${selectedDuration} Access`}
+                    </p>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-black text-white">{isTrial ? 'FREE' : `${getCurrencySymbol(plan.currency)}${basePrice.toFixed(2)}`}</span>
@@ -730,13 +738,20 @@ function CheckoutContent() {
                   <p>
                     {isTrial 
                       ? `Free Trial: Enjoy full premium access to "${plan.name}" features for exactly ${plan.freeTrialDays || 7} days. No charges, no payment credentials required. It will automatically revert to the Free plan afterwards.`
-                      : selectedDuration === 'LIFETIME' 
-                        ? 'Lifetime Plan: Enjoy permanent premium access. No renewals, no future charges.' 
-                        : `Your plan features will remain active for exactly ${
-                            selectedDuration === 'QUARTERLY' ? '90 days' : selectedDuration === 'YEARLY' ? '365 days' : (selectedDuration === 'TWO_YEAR' || selectedDuration === 'TWO_YEARS') ? '730 days' : '30 days'
-                          }. After this duration, it will auto-expire and revert to the default Free plan.`}
+                      : plan.planType === 'ADDON'
+                        ? `Add-On Expansion: This package functions as an overlay to your active subscription. It will remain active and fully aligned with your primary subscription plan, automatically co-terminating when your main tier expires or renews.`
+                        : ['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(plan.planType || '')
+                          ? `One-Time Payment: This credit pack grants you ${plan.packQuantity || 0} premium ${
+                              plan.planType === 'POLL_PACK' ? 'polls' : plan.planType === 'SURVEY_PACK' ? 'surveys' : plan.planType === 'EXAM_PACK' ? 'exams' : 'entity items'
+                            } and features. The credits remain valid permanently with lifetime validity and no recurring charges.`
+                          : selectedDuration === 'LIFETIME' 
+                            ? 'Lifetime Plan: Enjoy permanent premium access. No renewals, no future charges.' 
+                            : `Your plan features will remain active for exactly ${
+                                selectedDuration === 'QUARTERLY' ? '90 days' : selectedDuration === 'YEARLY' ? '365 days' : (selectedDuration === 'TWO_YEAR' || selectedDuration === 'TWO_YEARS') ? '730 days' : '30 days'
+                              }. After this duration, it will auto-expire and revert to the default Free plan.`}
                   </p>
                 </div>
+         </div>
 
                 {/* Apply Coupon Promo Code */}
                 {!isTrial && (

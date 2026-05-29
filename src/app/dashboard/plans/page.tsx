@@ -628,73 +628,138 @@ export default function PlansPage() {
           </div>
         </div>
 
-        {/* Invoice Purchase Ledger history */}
-        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6">
-          <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
-            <FileText className="w-5 h-5 text-purple-400" />
-            <div>
-              <h2 className="text-xl font-bold">Purchase Invoices History</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Download receipts or print tax invoices for accounting records</p>
+        {/* Responsive Grid for Past Plans History & Invoice History */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Past Subscriptions & Plans Timeline */}
+          <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6 flex flex-col">
+            <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
+              <Zap className="w-5 h-5 text-indigo-400" />
+              <div>
+                <h2 className="text-xl font-bold">Past Subscriptions & Plan History</h2>
+                <p className="text-gray-500 text-xs mt-0.5">Chronological timeline of active and previously held tiers</p>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-purple-500/20">
+              {invoices.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-gray-500 text-xs py-8">
+                  No active or historical plan subscriptions found.
+                </div>
+              ) : (
+                invoices.map((inv, idx) => {
+                  const isActivePlan = idx === 0 && !inv.isAddon;
+                  const isExpired = inv.planExpiresAt ? new Date(inv.planExpiresAt) < new Date() : false;
+
+                  return (
+                    <div 
+                      key={`past-${inv.id}`} 
+                      className={`p-4 rounded-2xl border transition-all flex justify-between items-center ${
+                        isActivePlan 
+                          ? 'bg-purple-500/5 border-purple-500/20 shadow-md' 
+                          : 'bg-white/[0.01] border-white/5'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-white">{inv.plan.name}</span>
+                          <span 
+                            className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider block shrink-0"
+                            style={{ color: inv.plan.badgeColor || '#a855f7', backgroundColor: `${inv.plan.badgeColor || '#a855f7'}15`, border: `1px solid ${inv.plan.badgeColor || '#a855f7'}30` }}
+                          >
+                            {inv.isAddon ? 'Add-On' : 'Main Plan'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-500">
+                          Activated: <strong className="text-gray-400">{new Date(inv.createdAt).toLocaleDateString()}</strong> 
+                          {inv.planExpiresAt && (
+                            <> • Expires: <strong className="text-gray-400">{new Date(inv.planExpiresAt).toLocaleDateString()}</strong></>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                          isActivePlan && !isExpired
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : isExpired
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                              : 'bg-gray-500/10 text-gray-400 border border-white/5'
+                        }`}>
+                          {isActivePlan && !isExpired ? 'Active' : isExpired ? 'Expired' : 'Previous'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
-            <table className="min-w-[650px] w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
-                  <th className="pb-3 pr-2">Billing Date</th>
-                  <th className="pb-3 pr-2">Reference ID</th>
-                  <th className="pb-3 pr-2">Plan Details</th>
-                  <th className="pb-3 pr-2">Amount Paid</th>
-                  <th className="pb-3 pr-2 text-right">Receipt Sheet</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {invoices.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">No active premium plan purchases recorded on this account yet.</td>
+          {/* Invoice Purchase Ledger history */}
+          <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6">
+            <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
+              <FileText className="w-5 h-5 text-purple-400" />
+              <div>
+                <h2 className="text-xl font-bold">Purchase Invoices History</h2>
+                <p className="text-gray-500 text-xs mt-0.5">Download receipts or print tax invoices for accounting records</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20 max-h-[300px] overflow-y-auto">
+              <table className="min-w-[450px] w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
+                    <th className="pb-3 pr-2">Date</th>
+                    <th className="pb-3 pr-2">Plan</th>
+                    <th className="pb-3 pr-2">Paid</th>
+                    <th className="pb-3 pr-2 text-right">Invoice</th>
                   </tr>
-                ) : (
-                  invoices.map((inv) => (
-                    <tr key={inv.id} className="text-gray-300">
-                      <td className="py-3.5 pr-2 font-mono text-[10px] text-gray-500">
-                        {new Date(inv.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3.5 pr-2 font-mono text-indigo-300">
-                        {inv.id.toUpperCase()}
-                      </td>
-                      <td className="py-3.5 pr-2 font-semibold">
-                        {inv.plan.name} Tier Upgrade
-                      </td>
-                      <td className="py-3.5 pr-2 font-bold font-mono text-emerald-400">
-                        {getCurrencySymbol(inv.plan.currency)}{inv.amountPaid.toFixed(2)}
-                      </td>
-                      <td className="py-3.5 pr-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedInvoice({
-                              ...inv,
-                              receiptRef: `PST-${Math.floor(Math.random()*900000+100000)}`,
-                              planName: inv.plan.name,
-                              planCurrency: inv.plan.currency,
-                              createdAt: new Date(inv.createdAt).toLocaleDateString()
-                            });
-                            setShowInvoiceModal(true);
-                          }}
-                          className="py-1.5 px-3 rounded-lg border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 text-purple-300 text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 ml-auto"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Get Invoice</span>
-                        </button>
-                      </td>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-gray-500">No premium plan purchases recorded.</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    invoices.map((inv) => (
+                      <tr key={inv.id} className="text-gray-300">
+                        <td className="py-3 pr-2 font-mono text-[10px] text-gray-500">
+                          {new Date(inv.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 pr-2 font-semibold">
+                          {inv.plan.name}
+                        </td>
+                        <td className="py-3 pr-2 font-bold font-mono text-emerald-400">
+                          {getCurrencySymbol(inv.plan.currency)}{inv.amountPaid.toFixed(2)}
+                        </td>
+                        <td className="py-3 pr-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedInvoice({
+                                ...inv,
+                                receiptRef: `PST-${inv.id.substring(0,8).toUpperCase()}`,
+                                planName: inv.plan.name,
+                                planCurrency: inv.plan.currency,
+                                createdAt: new Date(inv.createdAt).toLocaleDateString()
+                              });
+                              setShowInvoiceModal(true);
+                            }}
+                            className="py-1 px-2 rounded border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 text-purple-300 text-[9px] font-bold uppercase transition-all flex items-center gap-1.5 ml-auto"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Invoice</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+
 
         {/* DYNAMIC PRINTABLE POPUP MODAL OVERLAY */}
         {showInvoiceModal && selectedInvoice && (

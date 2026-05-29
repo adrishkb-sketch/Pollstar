@@ -153,6 +153,14 @@ export async function POST(req: Request) {
       isLifetime = false;
       const trialDays = plan.freeTrialDays || 7;
       planExpiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+    } else if (plan.planType === 'ADDON') {
+      // Add-ons co-terminate with the user's active subscription based plan
+      planExpiresAt = user.planExpiresAt;
+      isLifetime = user.isLifetimePlan;
+    } else if (['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(plan.planType)) {
+      // Credit packs are one-time payment packs with lifetime validity
+      isLifetime = true;
+      planExpiresAt = null;
     }
 
     const isAddonPlan = !!(isAddon || plan.planType === 'ADDON' || plan.planType === 'POLL_PACK' || plan.planType === 'SURVEY_PACK' || plan.planType === 'EXAM_PACK' || plan.planType === 'COMBO_PACK');

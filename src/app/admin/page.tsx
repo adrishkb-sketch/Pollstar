@@ -4488,87 +4488,90 @@ export default function AdminPortal() {
               )}
 
               {/* Row 2.6: Durations Pricing Matrix */}
-              <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Durations Pricing Matrix & Slashes</span>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                  {['MONTHLY', 'QUARTERLY', 'YEARLY', 'TWO_YEARS', 'LIFETIME'].map((dur) => {
-                    const config = planDurations[dur] || { enabled: false, price: '0.0', originalPrice: '0.0' };
-                    return (
-                      <div key={dur} className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-2">
-                        <div className="flex items-center space-x-1.5">
-                          <input
-                            type="checkbox"
-                            id={`dur_${dur}`}
-                            checked={config.enabled}
-                            onChange={e => {
-                              setPlanDurations({
-                                ...planDurations,
-                                [dur]: { ...config, enabled: e.target.checked }
-                              });
-                            }}
-                            className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-3.5 h-3.5"
-                          />
-                          <label htmlFor={`dur_${dur}`} className="text-[9px] font-bold text-gray-300 uppercase tracking-wider cursor-pointer">
-                            {dur.replace('_', ' ')}
-                          </label>
-                        </div>
-                        {config.enabled && (
-                          <div className="space-y-1.5">
-                            <div className="space-y-1">
-                              <span className="text-[8px] text-gray-500 font-bold uppercase block">Price</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                placeholder="Price"
-                                value={config.price}
-                                onChange={e => {
-                                  setPlanDurations({
-                                    ...planDurations,
-                                    [dur]: { ...config, price: e.target.value }
-                                  });
-                                }}
-                                className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-[8px] text-gray-500 font-bold uppercase block">Original Slashed</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                placeholder="Original Price"
-                                value={config.originalPrice}
-                                onChange={e => {
-                                  setPlanDurations({
-                                    ...planDurations,
-                                    [dur]: { ...config, originalPrice: e.target.value }
-                                  });
-                                }}
-                                className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 outline-none focus:border-purple-500"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-[8px] text-purple-400 font-bold uppercase block">Razorpay Plan ID</span>
-                              <input
-                                type="text"
-                                placeholder="plan_HNw..."
-                                value={config.razorpayPlanId || ''}
-                                onChange={e => {
-                                  setPlanDurations({
-                                    ...planDurations,
-                                    [dur]: { ...config, razorpayPlanId: e.target.value }
-                                  });
-                                }}
-                                className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
-                              />
-                            </div>
+              {planType === 'SUBSCRIPTION' && (
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Durations Pricing Matrix & Slashes</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    {['MONTHLY', 'QUARTERLY', 'YEARLY', 'TWO_YEARS', 'LIFETIME'].map((dur) => {
+                      const config = planDurations[dur] || { enabled: false, price: '0.0', originalPrice: '0.0' };
+                      return (
+                        <div key={dur} className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-2">
+                          <div className="flex items-center space-x-1.5">
+                            <input
+                              type="checkbox"
+                              id={`dur_${dur}`}
+                              checked={config.enabled}
+                              onChange={e => {
+                                setPlanDurations({
+                                  ...planDurations,
+                                  [dur]: { ...config, enabled: e.target.checked }
+                                });
+                              }}
+                              className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-3.5 h-3.5"
+                            />
+                            <label htmlFor={`dur_${dur}`} className="text-[9px] font-bold text-gray-300 uppercase tracking-wider cursor-pointer">
+                              {dur.replace('_', ' ')}
+                            </label>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          {config.enabled && (
+                            <div className="space-y-1.5">
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Price</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Price"
+                                  value={config.price}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, price: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Original Slashed</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Original Price"
+                                  value={config.originalPrice}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, originalPrice: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 outline-none focus:border-purple-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-purple-400 font-bold uppercase block">Razorpay Plan ID</span>
+                                <input
+                                  type="text"
+                                  placeholder="plan_HNw..."
+                                  value={config.razorpayPlanId || ''}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, razorpayPlanId: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+
 
               {/* Conditional Row 3: Pack Quantities, perks, combos */}
               {planType !== 'SUBSCRIPTION' && (

@@ -20,6 +20,9 @@ if (isSMTPConfigured) {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 }
 
