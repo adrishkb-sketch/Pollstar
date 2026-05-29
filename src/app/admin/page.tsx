@@ -1238,13 +1238,13 @@ export default function AdminPortal() {
       planType,
       packQuantity: planType !== 'SUBSCRIPTION' ? parseInt(planPackQuantity) : null,
       freePerks: parseInt(planFreePerks) || 0,
-      comboTypes: planType === 'COMBO_PACK' ? planComboTypes.join(',') : null,
+      comboTypes: (planType === 'COMBO_PACK' || planType === 'ADDON') ? planComboTypes.join(',') : null,
       badgeColor: planBadgeColor,
       badgeLabel: planBadgeLabel,
-      hasFreeTrial: planHasFreeTrial,
-      freeTrialDays: planHasFreeTrial ? parseInt(planFreeTrialDays) : null,
-      freeTrialFeatures: planHasFreeTrial ? planFreeTrialFeatures : null,
-      pollSubtypes: Object.keys(planPollSubtypes).filter(k => planPollSubtypes[k]).join(','),
+      hasFreeTrial: planType === 'SUBSCRIPTION' ? planHasFreeTrial : false,
+      freeTrialDays: (planType === 'SUBSCRIPTION' && planHasFreeTrial) ? parseInt(planFreeTrialDays) : null,
+      freeTrialFeatures: (planType === 'SUBSCRIPTION' && planHasFreeTrial) ? planFreeTrialFeatures : null,
+      pollSubtypes: (planType === 'SUBSCRIPTION' || planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL') && !planComboTypes.includes('SURVEY') && !planComboTypes.includes('EXAM'))) ? Object.keys(planPollSubtypes).filter(k => planPollSubtypes[k]).join(',') : '',
       isActive: planIsActive,
       features: planFeatures,
       maxPolls: planMaxPolls,
@@ -4656,9 +4656,11 @@ export default function AdminPortal() {
                     />
                   </div>
 
-                  {planType === 'COMBO_PACK' && (
+                  {(planType === 'COMBO_PACK' || planType === 'ADDON') && (
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Combo Types Included</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                        {planType === 'COMBO_PACK' ? 'Combo Types Included' : 'Add-on Types Included'}
+                      </label>
                       <div className="flex items-center gap-3 pt-2">
                         {['POLL', 'SURVEY', 'EXAM'].map(t => {
                           const isSel = planComboTypes.includes(t);
@@ -4721,95 +4723,99 @@ export default function AdminPortal() {
               </div>
 
               {/* Row 5: Free trial options */}
-              <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="planHasFreeTrialCheckbox"
-                      checked={planHasFreeTrial}
-                      onChange={e => setPlanHasFreeTrial(e.target.checked)}
-                      className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
-                    />
-                    <label htmlFor="planHasFreeTrialCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
-                      Offer Free Trial Period
-                    </label>
-                  </div>
-                  {planHasFreeTrial && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <span className="text-gray-500">Trial Days:</span>
+              {planType === 'SUBSCRIPTION' && (
+                <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
                       <input
-                        type="number"
-                        min="1"
-                        required
-                        value={planFreeTrialDays}
-                        onChange={e => setPlanFreeTrialDays(e.target.value)}
-                        className="bg-[#030712] border border-white/10 rounded-lg w-16 px-2 py-1 text-xs text-white text-center outline-none focus:border-purple-500"
+                        type="checkbox"
+                        id="planHasFreeTrialCheckbox"
+                        checked={planHasFreeTrial}
+                        onChange={e => setPlanHasFreeTrial(e.target.checked)}
+                        className="rounded border-white/20 bg-white/5 text-purple-600 focus:ring-0 w-4 h-4"
                       />
+                      <label htmlFor="planHasFreeTrialCheckbox" className="text-xs font-bold uppercase tracking-wider text-gray-300 cursor-pointer">
+                        Offer Free Trial Period
+                      </label>
+                    </div>
+                    {planHasFreeTrial && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-gray-500">Trial Days:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={planFreeTrialDays}
+                          onChange={e => setPlanFreeTrialDays(e.target.value)}
+                          className="bg-[#030712] border border-white/10 rounded-lg w-16 px-2 py-1 text-xs text-white text-center outline-none focus:border-purple-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {planHasFreeTrial && (
+                    <div className="space-y-2 animate-slide-in">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
+                        Free Trial Allowed Features
+                      </label>
+                      <div className="max-h-[140px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pr-2">
+                        {FEATURES_KEYS.map((item) => {
+                          const isChecked = planFreeTrialFeatures[item.key] || false;
+                          return (
+                            <div
+                              key={`trial-${item.key}`}
+                              onClick={() => setPlanFreeTrialFeatures({ ...planFreeTrialFeatures, [item.key]: !isChecked })}
+                              className={`p-2 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
+                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
+                              }`}
+                            >
+                              <span className="text-[10px] text-gray-300 truncate">{item.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
+                              }`}>
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
-
-                {planHasFreeTrial && (
-                  <div className="space-y-2 animate-slide-in">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
-                      Free Trial Allowed Features
-                    </label>
-                    <div className="max-h-[140px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pr-2">
-                      {FEATURES_KEYS.map((item) => {
-                        const isChecked = planFreeTrialFeatures[item.key] || false;
-                        return (
-                          <div
-                            key={`trial-${item.key}`}
-                            onClick={() => setPlanFreeTrialFeatures({ ...planFreeTrialFeatures, [item.key]: !isChecked })}
-                            className={`p-2 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                              isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                            }`}
-                          >
-                            <span className="text-[10px] text-gray-300 truncate">{item.label}</span>
-                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                              isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                            }`}>
-                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Row 6: Poll subtypes allowed */}
-              <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
-                  Allowed Poll Subtypes
-                </label>
-                <div className="flex flex-wrap gap-4 pt-1">
-                  {[
-                    { key: 'mcq', label: 'MCQ (Single Correct)' },
-                    { key: 'ranked', label: 'Ranked Choice Poll' },
-                    { key: 'multi', label: 'Multiple Correct (Checkboxes)' },
-                    { key: 'knockout', label: 'Knockout Bracket Tournament' }
-                  ].map(subtype => {
-                    const isChecked = planPollSubtypes[subtype.key] || false;
-                    return (
-                      <div
-                        key={subtype.key}
-                        onClick={() => setPlanPollSubtypes({ ...planPollSubtypes, [subtype.key]: !isChecked })}
-                        className="flex items-center space-x-2 cursor-pointer select-none"
-                      >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                          isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20 bg-white/3'
-                        }`}>
-                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+              {(planType === 'SUBSCRIPTION' || planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL') && !planComboTypes.includes('SURVEY') && !planComboTypes.includes('EXAM'))) && (
+                <div className="p-4 rounded-2xl bg-white/1 border border-white/5 space-y-2 animate-slide-in">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
+                    Allowed Poll Subtypes
+                  </label>
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    {[
+                      { key: 'mcq', label: 'MCQ (Single Correct)' },
+                      { key: 'ranked', label: 'Ranked Choice Poll' },
+                      { key: 'multi', label: 'Multiple Correct (Checkboxes)' },
+                      { key: 'knockout', label: 'Knockout Bracket Tournament' }
+                    ].map(subtype => {
+                      const isChecked = planPollSubtypes[subtype.key] || false;
+                      return (
+                        <div
+                          key={subtype.key}
+                          onClick={() => setPlanPollSubtypes({ ...planPollSubtypes, [subtype.key]: !isChecked })}
+                          className="flex items-center space-x-2 cursor-pointer select-none"
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                            isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20 bg-white/3'
+                          }`}>
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs text-gray-300 font-medium">{subtype.label}</span>
                         </div>
-                        <span className="text-xs text-gray-300 font-medium">{subtype.label}</span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Row 7: Description text */}
               <div className="space-y-1.5">
@@ -5015,41 +5021,58 @@ export default function AdminPortal() {
               </div>
 
               {/* Row: Plan Quota Limits */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-white/5 pt-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Polls Allowed</label>
-                  <input
-                    type="number"
-                    value={planMaxPolls}
-                    onChange={e => setPlanMaxPolls(e.target.value)}
-                    placeholder="-1 for unlimited"
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                  />
-                  <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Surveys Allowed</label>
-                  <input
-                    type="number"
-                    value={planMaxSurveys}
-                    onChange={e => setPlanMaxSurveys(e.target.value)}
-                    placeholder="-1 for unlimited"
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                  />
-                  <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Exams Allowed</label>
-                  <input
-                    type="number"
-                    value={planMaxExams}
-                    onChange={e => setPlanMaxExams(e.target.value)}
-                    placeholder="-1 for unlimited"
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                  />
-                  <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
-                </div>
-              </div>
+              {(() => {
+                const showMaxPolls = planType === 'SUBSCRIPTION' || planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL'));
+                const showMaxSurveys = planType === 'SUBSCRIPTION' || planType === 'SURVEY_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('SURVEY'));
+                const showMaxExams = planType === 'SUBSCRIPTION' || planType === 'EXAM_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('EXAM'));
+                const numColumns = (showMaxPolls ? 1 : 0) + (showMaxSurveys ? 1 : 0) + (showMaxExams ? 1 : 0);
+
+                if (numColumns === 0) return null;
+
+                return (
+                  <div className={`grid grid-cols-1 ${numColumns === 3 ? 'sm:grid-cols-3' : numColumns === 2 ? 'sm:grid-cols-2' : ''} gap-4 border-t border-white/5 pt-4 animate-slide-in`}>
+                    {showMaxPolls && (
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Polls Allowed</label>
+                        <input
+                          type="number"
+                          value={planMaxPolls}
+                          onChange={e => setPlanMaxPolls(e.target.value)}
+                          placeholder="-1 for unlimited"
+                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                      </div>
+                    )}
+                    {showMaxSurveys && (
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Surveys Allowed</label>
+                        <input
+                          type="number"
+                          value={planMaxSurveys}
+                          onChange={e => setPlanMaxSurveys(e.target.value)}
+                          placeholder="-1 for unlimited"
+                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                      </div>
+                    )}
+                    {showMaxExams && (
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Exams Allowed</label>
+                        <input
+                          type="number"
+                          value={planMaxExams}
+                          onChange={e => setPlanMaxExams(e.target.value)}
+                          placeholder="-1 for unlimited"
+                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Row 9: Status Toggle */}
               <div className="flex items-center space-x-2 pt-2">

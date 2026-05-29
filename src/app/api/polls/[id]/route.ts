@@ -249,6 +249,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Before deleting, persist a deletion-history entry so quota tracking
+    // and the "Deleted Items" ledger can still count this creation.
+    await prisma.deletedPoll.create({
+      data: {
+        title: poll.title,
+        pollType: poll.pollType,
+        creatorId: poll.creatorId,
+      },
+    });
+
     await prisma.poll.delete({
       where: { id: pollId },
     });

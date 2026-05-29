@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, Plus, LogOut, Loader2, AlertCircle, Calendar, 
   BarChart3, Users, CheckCircle, Copy, Check, Eye, Edit, Trash2, X, Upload,
-  Share2, Link as LinkIcon, Code2, Zap, ExternalLink, Settings, Mail, PlusCircle, Lock, Megaphone
+  Share2, Link as LinkIcon, Code2, Zap, ExternalLink, Settings, Mail, PlusCircle, Lock, Megaphone,
+  History, ChevronDown, ChevronUp, TrendingUp
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 import AdvertisementZone from '@/components/AdvertisementZone';
@@ -68,6 +69,12 @@ export default function Dashboard() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
 
+  // Quota & Deleted Items panel state
+  const [quota, setQuota] = useState<any>(null);
+  const [quotaLoading, setQuotaLoading] = useState(true);
+  const [deletedItems, setDeletedItems] = useState<any[]>([]);
+  const [showDeletedItems, setShowDeletedItems] = useState(false);
+
   // Load session, polls, and notices
   useEffect(() => {
     // Load dismissed notices from localStorage
@@ -109,6 +116,20 @@ export default function Dashboard() {
           const noticesData = await noticesRes.json();
           setNotices(noticesData.notices || []);
         }
+
+        // Load quota data
+        try {
+          const quotaRes = await fetch('/api/dashboard/quota');
+          if (quotaRes.ok) {
+            const qd = await quotaRes.json();
+            setQuota(qd);
+            setDeletedItems(qd.deletedItems || []);
+          }
+        } catch (e) {
+          console.error('Quota fetch error:', e);
+        } finally {
+          setQuotaLoading(false);
+        }
       } catch (err) {
         setError('Failed to load dashboard data');
       } finally {
@@ -134,10 +155,16 @@ export default function Dashboard() {
           const noticesData = await noticesRes.json();
           setNotices(noticesData.notices || []);
         }
+        const quotaRes = await fetch('/api/dashboard/quota');
+        if (quotaRes.ok) {
+          const qd = await quotaRes.json();
+          setQuota(qd);
+          setDeletedItems(qd.deletedItems || []);
+        }
       } catch (e) {
         console.error('Real-time workspace sync error:', e);
       }
-    }, 10000); // Poll every 10 seconds
+    }, 15000); // Sync every 15 seconds
 
     return () => clearInterval(interval);
   }, [user]);
@@ -646,6 +673,159 @@ export default function Dashboard() {
         </div>
 
         <AdvertisementZone removeAdvertisements={user?.plan?.features?.removeAdvertisements === true} />
+
+        {/* ── Quota Progress Panel ───────────────────────────────────────── */}
+        {!quotaLoading && quota && (() => {
+          const { total, subscription, isSubBased, planType } = quota;
+          const cycleLabel = isSubBased && subscription
+            ? `Cycle: ${new Date(subscription.cycleStart).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${new Date(subscription.cycleEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+            : 'All-time lifetime quota';
+
+          const bars = [
+            { label: 'Polls', used: total.usedPolls, limit: total.allowedPolls, color: 'from-indigo-500 to-violet-500', warn: 'from-amber-500 to-orange-500', crit: 'from-red-500 to-rose-600', icon: '🗳' },
+            { label: 'Surveys', used: total.usedSurveys, limit: total.allowedSurveys, color: 'from-violet-500 to-purple-600', warn: 'from-amber-500 to-orange-500', crit: 'from-red-500 to-rose-600', icon: '📋' },
+            { label: 'Exams', used: total.usedExams, limit: total.allowedExams, color: 'from-cyan-500 to-blue-500', warn: 'from-amber-500 to-orange-500', crit: 'from-red-500 to-rose-600', icon: '📝' },
+          ];
+
+          return (
+            <div className="glass-card rounded-3xl p-6 border border-white/8 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center">
+                    <TrendingUp className="w-4.5 h-4.5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-outfit text-base font-bold text-white">Creation Quota &amp; Usage</h3>
+                    <p className="text-[10px] text-gray-500 font-semibold">{cycleLabel} · {planType || 'FREE'}</p>
+                  </div>
+                </div>
+                {!isSubBased && (
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold border bg-violet-500/10 border-violet-500/20 text-violet-300 uppercase tracking-wider">Pack Quota</span>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {bars.map((bar) => {
+                  const isUnlimited = bar.limit === -1 || bar.limit === null;
+                  const pct = isUnlimited ? 0 : Math.min(100, Math.round((bar.used / Math.max(bar.limit, 1)) * 100));
+                  const isWarn = pct >= 75 && pct < 90;
+                  const isCrit = pct >= 90;
+                  const trackColor = isCrit ? bar.crit : isWarn ? bar.warn : bar.color;
+
+                  return (
+                    <div key={bar.label} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                          <span>{bar.icon}</span>
+                          {bar.label}
+                        </span>
+                        <span className={`text-xs font-bold ${
+                          isCrit ? 'text-red-400' : isWarn ? 'text-amber-400' : 'text-gray-400'
+                        }`}>
+                          {isUnlimited
+                            ? <span className="text-emerald-400 flex items-center gap-1"><span>∞</span><span className="text-[10px] font-semibold">Unlimited</span></span>
+                            : <>{bar.used} <span className="text-gray-600">/</span> {bar.limit}</>}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                        {!isUnlimited && (
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${trackColor} transition-all duration-700 ease-out`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        )}
+                        {isUnlimited && (
+                          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500/40 to-teal-500/40" style={{ width: '100%' }} />
+                        )}
+                      </div>
+                      {isCrit && !isUnlimited && (
+                        <p className="text-[10px] text-red-400 font-semibold">⚠️ Quota nearly exhausted — upgrade to create more {bar.label.toLowerCase()}.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {(total.allowedPolls !== -1 || total.allowedSurveys !== -1 || total.allowedExams !== -1) && (
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                  <p className="text-[10px] text-gray-600 leading-relaxed">Deleted sessions still count towards your quota.</p>
+                  <a href="/dashboard/plans" className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors">Upgrade Plan →</a>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Deleted Items Ledger ───────────────────────────────────────── */}
+        {deletedItems.length > 0 && (
+          <div className="glass-card rounded-3xl border border-white/8 overflow-hidden">
+            <button
+              onClick={() => setShowDeletedItems(v => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/3 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                  <History className="w-4.5 h-4.5 text-red-400" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-outfit text-base font-bold text-white">Deleted Items</h3>
+                  <p className="text-[10px] text-gray-500 font-semibold">{deletedItems.length} item{deletedItems.length !== 1 ? 's' : ''} permanently removed · still count toward quota</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-400">{deletedItems.length}</span>
+                {showDeletedItems ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+              </div>
+            </button>
+
+            {showDeletedItems && (
+              <div className="border-t border-white/5 px-6 pb-6 pt-4 space-y-2 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-1 gap-2">
+                  {deletedItems.map((item: any) => {
+                    const typeColor = item.pollType === 'SURVEY'
+                      ? 'bg-violet-500/10 border-violet-500/20 text-violet-400'
+                      : item.pollType === 'EXAM'
+                        ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
+                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400';
+                    const typeIcon = item.pollType === 'SURVEY' ? '📋' : item.pollType === 'EXAM' ? '📝' : '🗳';
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-3.5 rounded-2xl bg-white/2 border border-white/5 hover:border-white/8 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-red-500/8 border border-red-500/15 flex items-center justify-center shrink-0">
+                            <Trash2 className="w-3.5 h-3.5 text-red-400/70" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-300 truncate leading-snug group-hover:text-white transition-colors">{item.title}</p>
+                            <p className="text-[10px] text-gray-600 mt-0.5">
+                              Deleted {new Date(item.deletedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}
+                              {' '}at{' '}
+                              {new Date(item.deletedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <span className={`px-2 py-1 rounded-lg text-[9px] font-bold border ${typeColor}`}>
+                            {typeIcon} {item.pollType}
+                          </span>
+                          <span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-red-500/8 border border-red-500/15 text-red-400/80">
+                            REMOVED
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-center text-[10px] text-gray-700 pt-2 leading-relaxed">
+                  These sessions are permanently deleted. Analytics, responses, and configuration data are not recoverable.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

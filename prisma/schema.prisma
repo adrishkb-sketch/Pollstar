@@ -520,3 +520,12 @@ model Notice {
   mentions           Notice[] @relation("NoticeMentions")
 }
 
+model DeletedPoll {
+  id        String   @id @default(uuid())
+  title     String
+  pollType  String   // POLL, SURVEY, EXAM
+  creatorId String
+  deletedAt DateTime @default(now())
+}
+
+
