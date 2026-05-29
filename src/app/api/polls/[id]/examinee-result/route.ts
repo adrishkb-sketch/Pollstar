@@ -1,8 +1,32 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
+import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
+
+async function getAuthUserEmail() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('accessToken')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
+
+  let payload = token ? verifyAccessToken(token) : null;
+
+  if (!payload && refreshToken) {
+    const refreshPayload = verifyRefreshToken(refreshToken);
+    if (refreshPayload) {
+      payload = {
+        userId: refreshPayload.userId,
+        email: refreshPayload.email,
+        role: refreshPayload.role,
+      };
+    }
+  }
+
+  if (!payload) return null;
+  return payload.email;
+}
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -42,7 +66,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     let voterEmail = email;
     let voterIdentifier = '';
 
-    if (voterToken) {
+    if (!voterEmail) {
+      voterEmail = await getAuthUserEmail();
+    }
+
+    if (!voterEmail && voterToken) {
       try {
         const decoded = jwt.verify(voterToken, JWT_SECRET) as any;
         if (decoded.pollId === pollId) {
@@ -55,7 +83,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     if (!voterEmail) {
-      return NextResponse.json({ error: 'Candidate email is required to fetch results' }, { status: 400 });
+      return NextResponse.json({
+        success: false,
+        resultsReleased: true,
+        requiresLogin: true,
+        message: 'Authentication required. Please log in or identify your email address to access your graded analysis.'
+      }, { status: 200 });
     }
 
     // Find the student's vote

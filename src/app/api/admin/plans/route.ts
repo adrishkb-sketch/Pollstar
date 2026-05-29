@@ -59,7 +59,8 @@ export async function POST(req: Request) {
       name, description, price, isFree, currency, billingCycle, planType,
       packQuantity, freePerks, comboTypes, badgeColor, badgeLabel,
       hasFreeTrial, freeTrialDays, freeTrialFeatures, pollSubtypes,
-      isActive, features
+      isActive, features, maxPolls, maxSurveys, maxExams,
+      originalPrice, offerExpiry
     } = body;
 
     if (!name || !features) {
@@ -91,6 +92,11 @@ export async function POST(req: Request) {
         pollSubtypes: pollSubtypes || null,
         isActive: isActive !== false,
         features,
+        maxPolls: maxPolls === null || maxPolls === undefined || maxPolls === '' || parseInt(maxPolls) === -1 ? null : parseInt(maxPolls),
+        maxSurveys: maxSurveys === null || maxSurveys === undefined || maxSurveys === '' || parseInt(maxSurveys) === -1 ? null : parseInt(maxSurveys),
+        maxExams: maxExams === null || maxExams === undefined || maxExams === '' || parseInt(maxExams) === -1 ? null : parseInt(maxExams),
+        originalPrice: originalPrice ? parseFloat(originalPrice) : null,
+        offerExpiry: offerExpiry ? new Date(offerExpiry) : null,
       }
     });
 
@@ -194,6 +200,21 @@ export async function PATCH(req: Request) {
     if (updateFields.pollSubtypes !== undefined) data.pollSubtypes = updateFields.pollSubtypes;
     if (updateFields.isActive !== undefined) data.isActive = updateFields.isActive;
     if (updateFields.features !== undefined) data.features = updateFields.features;
+    if (updateFields.maxPolls !== undefined) {
+      data.maxPolls = updateFields.maxPolls === null || updateFields.maxPolls === undefined || updateFields.maxPolls === '' || parseInt(updateFields.maxPolls) === -1 ? null : parseInt(updateFields.maxPolls);
+    }
+    if (updateFields.maxSurveys !== undefined) {
+      data.maxSurveys = updateFields.maxSurveys === null || updateFields.maxSurveys === undefined || updateFields.maxSurveys === '' || parseInt(updateFields.maxSurveys) === -1 ? null : parseInt(updateFields.maxSurveys);
+    }
+    if (updateFields.maxExams !== undefined) {
+      data.maxExams = updateFields.maxExams === null || updateFields.maxExams === undefined || updateFields.maxExams === '' || parseInt(updateFields.maxExams) === -1 ? null : parseInt(updateFields.maxExams);
+    }
+    if (updateFields.originalPrice !== undefined) {
+      data.originalPrice = updateFields.originalPrice === null || updateFields.originalPrice === '' ? null : parseFloat(updateFields.originalPrice);
+    }
+    if (updateFields.offerExpiry !== undefined) {
+      data.offerExpiry = updateFields.offerExpiry === null || updateFields.offerExpiry === '' ? null : new Date(updateFields.offerExpiry);
+    }
 
     const updatedPlan = await prisma.plan.update({
       where: { id: planId },

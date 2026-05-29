@@ -158,6 +158,42 @@ export async function POST(req: Request) {
 
     // Plan Gating Checks
     if (user.role !== 'ADMIN') {
+      const userWithPlan = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: { plan: true },
+      });
+      if (userWithPlan?.plan) {
+        const plan = userWithPlan.plan;
+        if (pollType === 'SURVEY' && plan.maxSurveys !== null && plan.maxSurveys >= 0) {
+          const count = await prisma.poll.count({
+            where: { creatorId: user.id, pollType: 'SURVEY' },
+          });
+          if (count >= plan.maxSurveys) {
+            return NextResponse.json({
+              error: `You have reached the maximum allowance of ${plan.maxSurveys} surveys for your "${plan.name}" plan. Please upgrade to create more.`
+            }, { status: 403 });
+          }
+        } else if (pollType === 'EXAM' && plan.maxExams !== null && plan.maxExams >= 0) {
+          const count = await prisma.poll.count({
+            where: { creatorId: user.id, pollType: 'EXAM' },
+          });
+          if (count >= plan.maxExams) {
+            return NextResponse.json({
+              error: `You have reached the maximum allowance of ${plan.maxExams} exams for your "${plan.name}" plan. Please upgrade to create more.`
+            }, { status: 403 });
+          }
+        } else if ((pollType === 'POLL' || !pollType) && plan.maxPolls !== null && plan.maxPolls >= 0) {
+          const count = await prisma.poll.count({
+            where: { creatorId: user.id, pollType: 'POLL' },
+          });
+          if (count >= plan.maxPolls) {
+            return NextResponse.json({
+              error: `You have reached the maximum allowance of ${plan.maxPolls} polls for your "${plan.name}" plan. Please upgrade to create more.`
+            }, { status: 403 });
+          }
+        }
+      }
+
       const typeKey = pollType === 'SURVEY' ? 'multipageSurveys' : pollType === 'EXAM' ? 'teacherGradebook' : 'openPublicPolls';
       const access = await checkFeatureAccess(user.id, typeKey);
       if (!access.allowed) {

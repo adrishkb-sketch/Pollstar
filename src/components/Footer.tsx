@@ -8,6 +8,31 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
   const [tagline, setTagline] = useState("The premium platform for real-time polls, surveys & exams. Trusted by educators, teams, and organizations worldwide.");
   const [copyright, setCopyright] = useState(`© ${new Date().getFullYear()} Pollstar. All rights reserved.`);
+  const [subEmail, setSubEmail] = useState('');
+  const [submittingSub, setSubmittingSub] = useState(false);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subEmail.trim()) return;
+    setSubmittingSub(true);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: subEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to subscribe.');
+      }
+      setSubEmail('');
+      alert('Successfully subscribed to our newsletter loop!');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSubmittingSub(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/admin/site-config')
@@ -57,20 +82,27 @@ export default function Footer() {
               Get product updates, tips, and new feature announcements.
             </p>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto max-w-md">
+          <form onSubmit={handleSubscribe} className="flex items-center gap-3 w-full md:w-auto max-w-md">
             <div className="relative flex-1">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="email"
                 placeholder="you@example.com"
-                className="glass-input w-full pl-10 pr-4 py-2.5 text-sm rounded-xl"
+                value={subEmail}
+                onChange={e => setSubEmail(e.target.value)}
+                className="glass-input w-full !pl-10 pr-4 py-2.5 text-sm rounded-xl"
+                required
               />
             </div>
-            <button className="gradient-btn px-5 py-2.5 rounded-xl text-sm font-semibold text-white flex items-center gap-1.5 shrink-0">
-              Subscribe
+            <button
+              type="submit"
+              disabled={submittingSub}
+              className="gradient-btn px-5 py-2.5 rounded-xl text-sm font-semibold text-white flex items-center gap-1.5 shrink-0"
+            >
+              <span>{submittingSub ? 'Subscribing...' : 'Subscribe'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          </div>
+          </form>
         </div>
       </div>
 

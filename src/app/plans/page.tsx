@@ -2,24 +2,16 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { 
   Zap, 
   Sparkles, 
   Loader2, 
   Check, 
-  ArrowLeft, 
   ChevronLeft, 
   ChevronRight, 
-  FileText, 
-  Printer, 
-  X, 
-  Coins, 
-  ShieldAlert,
   Lock,
-  Download
+  Vote
 } from 'lucide-react';
-import DashboardHeader from '@/components/DashboardHeader';
 
 const FEATURES_INFO = [
   // 1. Poll Features (19)
@@ -136,11 +128,8 @@ const getCurrencySymbol = (currencyCode?: string) => {
 
 const getHasFeature = (features: any, key: string): boolean => {
   if (!features) return false;
-  
-  // Direct match
   if (features[key] === true) return true;
   
-  // Key mappings between admin dashboard keys and plans display keys
   const mappings: Record<string, string[]> = {
     singleChoice: ['singleChoiceMultiSelect', 'singleChoice'],
     bordaCount: ['rankedChoiceBordaCount', 'bordaCount'],
@@ -166,20 +155,11 @@ const getHasFeature = (features: any, key: string): boolean => {
   return altKeys.some(altKey => features[altKey] === true);
 };
 
-export default function PlansPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+export default function PublicPlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCycle, setSelectedCycle] = useState('MONTHLY');
-
-  // Invoice display states
-  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-
-  // Mobile Swipe ref
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const getPlanDiscount = (currentPlan: any) => {
@@ -208,50 +188,22 @@ export default function PlansPage() {
     return pct > 0 ? pct : null;
   };
 
-  const fetchSessionAndPlans = async () => {
+  const fetchPlans = async () => {
     try {
-      const res = await fetch('/api/auth/me');
-      if (!res.ok) {
-        router.push('/login');
-        return;
-      }
-      const data = await res.json();
-      setUser(data.user);
-
-      // Fetch plans list
-      const plansRes = await fetch('/api/plans');
-      if (plansRes.ok) {
-        const plansData = await plansRes.json();
-        const rawPlans = plansData.plans || [];
-        
-        // Sort so that the user's active plan is placed first (on the left)
-        const userPlanId = data.user?.planId;
-        const sortedPlans = [...rawPlans].sort((a, b) => {
-          const aActive = userPlanId === a.id || (a.name === 'Free' && !userPlanId);
-          const bActive = userPlanId === b.id || (b.name === 'Free' && !userPlanId);
-          if (aActive && !bActive) return -1;
-          if (!aActive && bActive) return 1;
-          return b.price - a.price;
-        });
-        
-        setPlans(sortedPlans);
-      }
-
-      // Fetch user invoices
-      const invoicesRes = await fetch('/api/checkout/invoices');
-      if (invoicesRes.ok) {
-        const invoicesData = await invoicesRes.json();
-        setInvoices(invoicesData.invoices || []);
+      const res = await fetch('/api/plans');
+      if (res.ok) {
+        const data = await res.json();
+        setPlans(data.plans || []);
       }
     } catch (err) {
-      setError('Failed to fetch platform pricing data.');
+      setError('Failed to fetch pricing configurations.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSessionAndPlans();
+    fetchPlans();
   }, []);
 
   const handleScrollLeft = () => {
@@ -275,24 +227,41 @@ export default function PlansPage() {
     );
   }
 
-  const currentPlan = user?.plan || { id: '', name: 'Free', price: 0.0, billingCycle: 'MONTHLY' };
-
   return (
-    <div className="min-h-screen bg-[#030712] text-white flex flex-col">
-      <DashboardHeader user={user} />
+    <div className="min-h-screen bg-[#030712] text-white flex flex-col font-outfit">
+      {/* Header */}
+      <header className="border-b border-white/5 py-5 px-6 bg-[#030712]/50 backdrop-blur z-20 sticky top-0">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <Link href="/" className="flex items-center space-x-2.5">
+            <div className="p-2 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-xl shadow-lg shadow-emerald-500/20">
+              <Vote className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-outfit text-xl font-bold tracking-tight text-white">
+              Poll<span className="text-emerald-400">star</span>
+            </span>
+          </Link>
+          <div className="flex gap-4">
+            <Link href="/login" className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all">Sign In</Link>
+            <Link href="/signup" className="gradient-btn px-4 py-2 rounded-xl text-xs font-bold text-white transition-all">Get Started</Link>
+          </div>
+        </div>
+      </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-12 flex-1 relative w-full">
+      <main className="max-w-7xl mx-auto px-6 py-16 space-y-16 flex-1 relative w-full">
         {/* Glow glow background */}
         <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
 
         {/* Title */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Pricing Subscriptions & Plans
-            </h1>
-            <p className="text-gray-500 text-xs mt-1">Upgrade your features, examine plan details, and download purchase invoices.</p>
-          </div>
+        <div className="text-center max-w-2xl mx-auto space-y-4">
+          <span className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-extrabold uppercase tracking-widest">
+            Simple Pricing, Infinite Features
+          </span>
+          <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-tight">
+            Plans Engineered For <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">Every Scale</span>
+          </h1>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            From classroom quizzes to nationwide polling and multi-page surveys. Explore all 94 features engineered to maximize response fidelity.
+          </p>
         </div>
 
         {/* Dynamic Billing Switcher */}
@@ -349,34 +318,24 @@ export default function PlansPage() {
             </div>
           </div>
 
-          {/* Cards container: horizontal scroll snap on mobile, grids on desktop */}
+          {/* Cards container */}
           <div 
             ref={scrollRef}
             className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
           >
             {plans.filter((p: any) => p.isFree || p.planType !== 'SUBSCRIPTION' || p.billingCycle === selectedCycle).map((p: any) => {
-              const isActivePlan = user?.planId === p.id || (p.name === 'Free' && !user?.planId);
               const discountPct = getPlanDiscount(p);
               const isOfferActive = p.offerExpiry && new Date(p.offerExpiry) > new Date();
-              
+
               return (
                 <div 
                   key={p.id}
-                  className={`snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01] ${
-                    isActivePlan 
-                      ? 'border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.1)] bg-gradient-to-b from-purple-950/10 to-transparent' 
-                      : 'border-white/5 hover:border-white/10'
-                  }`}
+                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
                 >
                   {isOfferActive && (
                     <div className="absolute top-0 right-0 bg-gradient-to-l from-indigo-500 to-purple-600 text-white font-extrabold uppercase text-[8px] tracking-widest px-3 py-1 rounded-bl-xl shadow-lg border-l border-b border-indigo-400/20 animate-pulse">
                       🔥 Special Offer
                     </div>
-                  )}
-
-                  {/* Decorative glowing gradient blur */}
-                  {isActivePlan && (
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none" />
                   )}
 
                   <div className="space-y-6">
@@ -390,14 +349,8 @@ export default function PlansPage() {
                           {p.badgeLabel || p.name}
                         </span>
 
-                        {isActivePlan && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0">
-                            Active
-                          </span>
-                        )}
-
                         {discountPct && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-extrabold uppercase tracking-wide block shrink-0">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-extrabold uppercase tracking-wide">
                             Save {discountPct}%!
                           </span>
                         )}
@@ -429,6 +382,22 @@ export default function PlansPage() {
                       )}
                     </div>
 
+                    {/* Limits Display */}
+                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1 font-outfit">
+                      <div className="flex items-center justify-between">
+                        <span>Max Polls Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Surveys Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Max Exams Allowed:</span>
+                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                      </div>
+                    </div>
+
                     {/* Checklists features details */}
                     <div className="space-y-3">
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
@@ -452,213 +421,19 @@ export default function PlansPage() {
                     </div>
                   </div>
 
-                  {/* Actions CTA upgraded to Checkout */}
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    {isActivePlan ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-400 text-xs border border-white/5 cursor-not-allowed text-center"
-                      >
-                        Currently Subscribed
-                      </button>
-                    ) : (
-                      <Link
-                        href={`/checkout?planId=${p.id}`}
-                        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                      >
-                        {p.price > 0 ? `Get Upgrade (${p.billingCycle})` : 'Activate Free Tier'}
-                      </Link>
-                    )}
+                    <Link
+                      href={`/signup?planId=${p.id}`}
+                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                    >
+                      {p.price > 0 ? 'Sign Up & Subscribe' : 'Register Free'}
+                    </Link>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-
-        {/* Invoice Purchase Ledger history */}
-        <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 bg-[#080d1a] space-y-6">
-          <div className="flex items-center space-x-2.5 pb-4 border-b border-white/5">
-            <FileText className="w-5 h-5 text-purple-400" />
-            <div>
-              <h2 className="text-xl font-bold">Purchase Invoices History</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Download receipts or print tax invoices for accounting records</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
-            <table className="min-w-[650px] w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
-                  <th className="pb-3 pr-2">Billing Date</th>
-                  <th className="pb-3 pr-2">Reference ID</th>
-                  <th className="pb-3 pr-2">Plan Details</th>
-                  <th className="pb-3 pr-2">Amount Paid</th>
-                  <th className="pb-3 pr-2 text-right">Receipt Sheet</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {invoices.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">No active premium plan purchases recorded on this account yet.</td>
-                  </tr>
-                ) : (
-                  invoices.map((inv) => (
-                    <tr key={inv.id} className="text-gray-300">
-                      <td className="py-3.5 pr-2 font-mono text-[10px] text-gray-500">
-                        {new Date(inv.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3.5 pr-2 font-mono text-indigo-300">
-                        {inv.id.toUpperCase()}
-                      </td>
-                      <td className="py-3.5 pr-2 font-semibold">
-                        {inv.plan.name} Tier Upgrade
-                      </td>
-                      <td className="py-3.5 pr-2 font-bold font-mono text-emerald-400">
-                        {getCurrencySymbol(inv.plan.currency)}{inv.amountPaid.toFixed(2)}
-                      </td>
-                      <td className="py-3.5 pr-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedInvoice({
-                              ...inv,
-                              receiptRef: `PST-${Math.floor(Math.random()*900000+100000)}`,
-                              planName: inv.plan.name,
-                              planCurrency: inv.plan.currency,
-                              createdAt: new Date(inv.createdAt).toLocaleDateString()
-                            });
-                            setShowInvoiceModal(true);
-                          }}
-                          className="py-1.5 px-3 rounded-lg border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 text-purple-300 text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 ml-auto"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Get Invoice</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* DYNAMIC PRINTABLE POPUP MODAL OVERLAY */}
-        {showInvoiceModal && selectedInvoice && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
-            <div className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 max-w-2xl w-full relative shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:p-0 print:shadow-none print:max-h-full">
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setShowInvoiceModal(false)}
-                className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 transition-all p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 print:hidden"
-              >
-                ✕
-              </button>
-
-              {/* Invoice Layout */}
-              <div className="space-y-6 text-left">
-                {/* Header */}
-                <div className="flex justify-between items-start border-b border-gray-100 pb-5">
-                  <div className="space-y-1">
-                    <h2 className="text-xl font-black tracking-tight text-indigo-600">POLLSTAR</h2>
-                    <p className="text-xs text-gray-500 font-semibold uppercase">Simulated Tax Invoice</p>
-                  </div>
-                  <div className="text-right text-xs text-gray-500 space-y-0.5 font-semibold">
-                    <div><strong>Invoice No:</strong> {selectedInvoice.id.toUpperCase()}</div>
-                    <div><strong>Date:</strong> {selectedInvoice.createdAt}</div>
-                    <div><strong>Receipt Ref:</strong> {selectedInvoice.receiptRef}</div>
-                  </div>
-                </div>
-
-                {/* Company & Client Addresses */}
-                <div className="grid grid-cols-2 gap-6 text-xs leading-relaxed">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Detail</span>
-                    <div className="font-bold text-gray-800">Pollstar Inc.</div>
-                    <div className="text-gray-500">100 Tech Venture Way</div>
-                    <div className="text-gray-500">Silicon Valley, CA 94025</div>
-                    <div className="text-gray-500">billing@pollstar.com</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Bill To</span>
-                    <div className="font-bold text-gray-800">{selectedInvoice.billingName}</div>
-                    <div className="text-gray-500">{selectedInvoice.billingAddress}</div>
-                    <div className="text-gray-500">{selectedInvoice.billingCity}, {selectedInvoice.billingZip}</div>
-                    <div className="text-gray-500">Phone: {selectedInvoice.billingPhone || 'N/A'}</div>
-                  </div>
-                </div>
-
-                {/* Purchase Items Table */}
-                <div className="border border-gray-100 rounded-2xl overflow-x-auto w-full scrollbar-thin text-xs">
-                  <table className="min-w-[450px] w-full text-left">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="p-3">Subscription Description</th>
-                        <th className="p-3">Billing Cycle</th>
-                        <th className="p-3 text-right">Total Paid</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      <tr>
-                        <td className="p-3 font-semibold text-gray-800">{selectedInvoice.planName} Tier Upgrade</td>
-                        <td className="p-3 text-gray-500">MONTHLY</td>
-                        <td className="p-3 text-right font-bold text-gray-800">{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Totals Section */}
-                <div className="border-t border-gray-100 pt-4 flex flex-col items-end text-xs space-y-2">
-                  <div className="flex w-64 justify-between text-gray-500">
-                    <span>Base Amount</span>
-                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</span>
-                  </div>
-                  {selectedInvoice.couponCode && (
-                    <div className="flex w-64 justify-between text-emerald-600 font-semibold">
-                      <span>Applied Promo Code</span>
-                      <span>{selectedInvoice.couponCode}</span>
-                    </div>
-                  )}
-                  <div className="flex w-64 justify-between text-gray-500">
-                    <span>GST/VAT Estimate (0%)</span>
-                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}0.00</span>
-                  </div>
-                  <div className="flex w-64 justify-between font-black text-gray-900 border-t border-gray-100 pt-2 text-sm">
-                    <span>Total Amount Paid</span>
-                    <span>{getCurrencySymbol(selectedInvoice.planCurrency)}{selectedInvoice.amountPaid.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Disclaimer */}
-                <div className="text-[10px] text-gray-400 leading-relaxed text-center border-t border-gray-100 pt-4">
-                  Thank you for your purchase! This is a simulated transaction receipt generated in the Pollstar Sandbox. No physical funds have been processed or moved.
-                </div>
-
-                {/* Action Row */}
-                <div className="flex gap-3 pt-2 print:hidden">
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95"
-                  >
-                    Print or Save as PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowInvoiceModal(false)}
-                    className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 text-gray-500 rounded-xl text-xs font-bold transition-all active:scale-95"
-                  >
-                    Close Invoice
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

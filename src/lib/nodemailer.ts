@@ -593,3 +593,45 @@ export async function sendExamResultsReleasedEmail({
 
   return true;
 }
+
+/**
+ * Sends a newsletter broadcast to subscribers.
+ */
+export async function sendNewsletterBroadcastEmail(email: string, title: string, content: string): Promise<boolean> {
+  const subject = `📢 Newsletter: ${title}`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 24px; text-align: center;">Pollstar News & Updates</h2>
+      <div style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px;">
+        ${content.replace(/\n/g, '<br />')}
+      </div>
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px; margin-top: 32px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px;">
+        You are receiving this because you subscribed to the Pollstar newsletter loop.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject,
+        html,
+      });
+      return true;
+    } catch (error) {
+      console.error('SMTP Mail Error sending newsletter broadcast:', error);
+    }
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: ${subject.substring(0, 45).padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}

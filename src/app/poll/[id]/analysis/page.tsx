@@ -118,6 +118,72 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
     );
   }
 
+  // Requires Authentication / Email lookup
+  if (data && data.requiresLogin) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center p-6 relative overflow-hidden">
+        {/* Ambient background glows */}
+        <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="glass-card max-w-md w-full border border-white/5 bg-[#080d1a] rounded-3xl p-8 text-center space-y-6 shadow-2xl relative z-10">
+          <div className="w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto shadow-[0_0_20px_rgba(99,102,241,0.15)] animate-pulse">
+            <GraduationCap className="w-8 h-8" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="font-outfit text-xl font-bold text-white uppercase tracking-wider">Access Graded Report</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              To view your detailed exam analytics, AI tutoring insights, and concept diagnostics, please identify yourself.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const emailVal = formData.get('email') as string;
+            if (emailVal) {
+              window.location.search = `?email=${encodeURIComponent(emailVal)}`;
+            }
+          }} className="space-y-4">
+            <div className="text-left">
+              <label className="block text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-2 ml-1">
+                Candidate Email Address
+              </label>
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="you@university.com"
+                className="w-full glass-input placeholder-gray-600 text-xs px-4 py-3.5 rounded-xl border border-white/5 bg-[#030712]/50 text-white focus:outline-none focus:border-indigo-500/50 transition-all font-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-1.5"
+            >
+              <span>Retrieve Graded Report</span>
+            </button>
+          </form>
+
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-white/5"></div>
+            <span className="flex-shrink mx-4 text-[10px] text-gray-500 font-mono uppercase tracking-widest">Or Account Login</span>
+            <div className="flex-grow border-t border-white/5"></div>
+          </div>
+
+          <Link
+            href={`/login?callbackUrl=/poll/${pollId}/analysis`}
+            className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-all border border-white/5 block text-center"
+          >
+            Log In to Pollstar Account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // 2. Not Voted / Submission not found
   if (data && !data.voted) {
     return (

@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 export default function AboutPage() {
   const [mission, setMission] = useState("At Pollstar, our mission is to empower teams, organizations, and educators with beautifully simple yet highly sophisticated voting and evaluation tools. We believe every organization — from a classroom to a multinational enterprise — deserves tools that ensure fair, transparent, and engaging participation.");
   const [history, setHistory] = useState("Pollstar was born from a simple frustration — existing polling tools were either too basic, too insecure, or too ugly. We set out to build the most comprehensive, secure, and beautifully designed voting platform on the internet.");
+  const [dbStats, setDbStats] = useState({ totalVotes: 0, totalPolls: 0, totalSurveys: 0, totalExams: 0 });
 
   useEffect(() => {
     fetch('/api/admin/site-config')
@@ -26,13 +27,27 @@ export default function AboutPage() {
         }
       })
       .catch(e => console.error(e));
+
+    fetch('/api/about-stats')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          setDbStats({
+            totalVotes: data.totalVotes || 0,
+            totalPolls: data.totalPolls || 0,
+            totalSurveys: data.totalSurveys || 0,
+            totalExams: data.totalExams || 0
+          });
+        }
+      })
+      .catch(e => console.error(e));
   }, []);
 
   const stats = [
-    { value: '10K+', label: 'Polls Created', icon: BarChart3 },
-    { value: '500K+', label: 'Votes Cast', icon: Vote },
-    { value: '120+', label: 'Countries', icon: Globe2 },
-    { value: '99.9%', label: 'Uptime', icon: Zap },
+    { value: `${dbStats.totalPolls}`, label: 'Polls Created', icon: BarChart3 },
+    { value: `${dbStats.totalSurveys}`, label: 'Surveys Conducted', icon: Target },
+    { value: `${dbStats.totalExams}`, label: 'Exams Run', icon: BookOpen },
+    { value: `${dbStats.totalVotes}`, label: 'Votes & Attempts', icon: Vote },
   ];
 
   const values = [

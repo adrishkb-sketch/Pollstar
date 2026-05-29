@@ -293,6 +293,7 @@ model PollSettings {
   enableCopyPasteBlock         Boolean @default(false)
   enableInstantFeedback        Boolean @default(false)
   enableNegativeMarking        Boolean @default(false)
+  negativeMarkingPenalty       Float   @default(0.25)
   enableCalculator             Boolean @default(false)
   enableOtpBypass              Boolean @default(false)
   enableStrictTimeBuffer       Boolean @default(false)
@@ -346,6 +347,11 @@ model Plan {
   pollSubtypes    Json?    // For POLL_PACK: ["MCQ","RANKED","KNOCKOUT","MULTIPLE_CORRECT"]
   isActive        Boolean  @default(true) // Admin can deactivate plans
   features        Json     // JSON object with feature boolean flags
+  maxPolls        Int?     @default(10)
+  maxSurveys      Int?     @default(10)
+  maxExams        Int?     @default(10)
+  originalPrice   Float?   // Strike-through original pricing
+  offerExpiry     DateTime? // Promotion offer expiration deadline
   users           User[]
   emailDomainMappings EmailDomainMapping[]
   invoices        Invoice[]
@@ -464,3 +470,23 @@ model Invoice {
   billingPhone   String?
   createdAt      DateTime @default(now())
 }
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model JobPosting {
+  id          String   @id @default(uuid())
+  title       String
+  department  String
+  location    String   @default("Remote")
+  type        String   @default("FULL_TIME") // FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP
+  description String   @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+

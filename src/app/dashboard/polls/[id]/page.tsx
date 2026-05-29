@@ -42,12 +42,19 @@ export default function PollInsights({ params }: PageProps) {
   const [tickerFlashState, setTickerFlashState] = useState<Record<string, 'UP' | 'DOWN' | null>>({});
 
   // Analytics Inbox & Messaging states
-  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades' | 'collaborators'>('analytics');
   const [inboxMessages, setInboxMessages] = useState<any[]>([]);
   const [selectedVoter, setSelectedVoter] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   const [inboxSearch, setInboxSearch] = useState('');
+
+  // Collaborators States
+  const [collaborators, setCollaborators] = useState<any[]>([]);
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [collabError, setCollabError] = useState('');
 
   // Exam Grades Panel & Inspector states
   const [gradeInspectorVote, setGradeInspectorVote] = useState<any | null>(null);
@@ -721,11 +728,20 @@ export default function PollInsights({ params }: PageProps) {
     const targetState = !poll.settings?.resultsReleased;
 
     try {
-      const res = await fetch(`/api/polls/${poll.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resultsReleased: targetState })
-      });
+      let res;
+      if (targetState) {
+        // Release: call the email broadcaster endpoint
+        res = await fetch(`/api/polls/${poll.id}/release-results`, {
+          method: 'POST',
+        });
+      } else {
+        // Retract: standard patch to settings
+        res = await fetch(`/api/polls/${poll.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resultsReleased: false })
+        });
+      }
 
       const data = await res.json();
       if (!res.ok) {
@@ -739,7 +755,7 @@ export default function PollInsights({ params }: PageProps) {
           resultsReleased: targetState
         }
       }));
-      alert(`Exam results are now successfully ${targetState ? 'released' : 'withheld'}!`);
+      alert(`Exam results are now successfully ${targetState ? 'released and student reports dispatched' : 'withheld'}!`);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -803,6 +819,176 @@ export default function PollInsights({ params }: PageProps) {
     } finally {
       setIsSavingOverride(false);
     }
+  const fetchCollaborators = async () => {
+    setCollaboratorsLoading(true);
+    try {
+      const res = await fetch(`/api/polls/${pollId}/collaborators`);
+      if (res.ok) {
+        const data = await res.json();
+        setCollaborators(data.collaborators || []);
+      }
+    } catch (err) {
+      console.error('Failed to load collaborators:', err);
+    } finally {
+      setCollaboratorsLoading(false);
+    }
+  };
+
+  const handleInviteCollaborator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviteLoading(true);
+    setCollabError('');
+    try {
+      const res = await fetch(`/api/polls/${pollId}/collaborators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to invite collaborator.');
+      }
+      setInviteEmail('');
+      alert('Collaborator successfully invited!');
+      fetchCollaborators();
+    } catch (err: any) {
+      setCollabError(err.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleRemoveCollaborator = async (userId: string) => {
+    if (!confirm('Are you sure you want to remove this collaborator?')) return;
+    try {
+      const res = await fetch(`/api/polls/${pollId}/collaborators?userId=${userId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove.');
+      alert('Collaborator removed successfully!');
+      fetchCollaborators();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'collaborators') {
+      fetchCollaborators();
+    }
+  }, [activeTab, pollId]);
+
+  const renderCollaboratorsPanel = () => {
+    return (
+      <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-8 space-y-8 animate-fade-in print:hidden">
+        <div className="flex items-center justify-between border-b border-white/5 pb-5">
+          <div className="space-y-1">
+            <h3 className="font-outfit text-xl font-extrabold text-white flex items-center gap-2">
+              <Users className="w-5 h-5 text-indigo-400" />
+              <span>Team Collaboration Hub</span>
+            </h3>
+            <p className="text-xs text-gray-400">
+              Invite other users to collaborate on this {poll.pollType?.toLowerCase() || 'session'}. They will be notified via email to access this page.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          <form onSubmit={handleInviteCollaborator} className="md:col-span-4 space-y-4">
+            <h4 className="font-outfit text-xs font-extrabold text-indigo-400 uppercase tracking-widest">Invite Collaborator</h4>
+            <div className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Collaborator's Email</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="name@email.com"
+                  className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
+                  required
+                />
+              </div>
+
+              {collabError && (
+                <p className="text-red-400 text-xs font-semibold">{collabError}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={inviteLoading}
+                className="w-full py-2.5 gradient-btn text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow"
+              >
+                {inviteLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Users className="w-4 h-4 text-white" />
+                )}
+                <span>Send Collaboration Invite</span>
+              </button>
+            </div>
+          </form>
+
+          <div className="md:col-span-8 space-y-4">
+            <h4 className="font-outfit text-xs font-extrabold text-indigo-400 uppercase tracking-widest">Active Collaborators</h4>
+            {collaboratorsLoading ? (
+              <div className="flex items-center justify-center p-8 bg-white/2 border border-white/5 rounded-2xl">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+              </div>
+            ) : collaborators.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 bg-white/2 border border-white/5 rounded-2xl space-y-2">
+                <Users className="w-8 h-8 text-gray-500 stroke-[1.5]" />
+                <span className="text-xs text-gray-400 font-medium">No other collaborators yet.</span>
+                <span className="text-[10px] text-gray-500">Invite colleagues to help manage, edit questions, or view student outcomes.</span>
+              </div>
+            ) : (
+              <div className="border border-white/5 bg-slate-950/20 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/2">
+                        <th className="px-5 py-3 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit">Collaborator</th>
+                        <th className="px-5 py-3 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit">Status</th>
+                        <th className="px-5 py-3 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider font-outfit text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {collaborators.map((c: any) => (
+                        <tr key={c.userId} className="hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <span className="text-xs text-gray-200 font-bold block">{c.user.email}</span>
+                            <span className="text-[9px] text-gray-500">Joined {new Date(c.createdAt).toLocaleDateString()}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
+                              c.user.verified 
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                            }`}>
+                              {c.user.verified ? 'Registered' : 'Pending Sign Up'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <button
+                              onClick={() => handleRemoveCollaborator(c.userId)}
+                              className="p-1.5 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-all"
+                              title="Remove Collaborator"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderGradesPanel = () => {
@@ -1772,6 +1958,17 @@ export default function PollInsights({ params }: PageProps) {
             )}
           </button>
         )}
+        <button
+          onClick={() => setActiveTab('collaborators')}
+          className={`pb-4 text-sm font-bold transition-all relative flex items-center space-x-1.5 ${
+            activeTab === 'collaborators' ? 'text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <span>👥 Team Collaboration</span>
+          {activeTab === 'collaborators' && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
+          )}
+        </button>
       </div>
 
       {/* Analytics Inbox (Conditional early return) */}
@@ -1931,6 +2128,8 @@ export default function PollInsights({ params }: PageProps) {
         </div>
       ) : activeTab === 'grades' ? (
         renderGradesPanel()
+      ) : activeTab === 'collaborators' ? (
+        renderCollaboratorsPanel()
       ) : (
         <>
           {/* Wall Street Live Ticker */}
@@ -3065,4 +3264,5 @@ export default function PollInsights({ params }: PageProps) {
       `}</style>
     </div>
   );
+}
 }

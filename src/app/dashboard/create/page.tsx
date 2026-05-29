@@ -134,6 +134,8 @@ export default function CreatePoll() {
   const [publicShowCharts, setPublicShowCharts] = useState(true);
   const [publicShowStats, setPublicShowStats] = useState(true);
   const [postSurveyAction, setPostSurveyAction] = useState('Thank you for completing this survey!');
+  const [resultsReleased, setResultsReleased] = useState(false);
+  const [postExamMessage, setPostExamMessage] = useState('Thank you for completing the exam! Your answers have been recorded.');
   const [enableConfidenceSlider, setEnableConfidenceSlider] = useState(false);
   const [enableDragAndDropPodium, setEnableDragAndDropPodium] = useState(false);
   const [enableHotStreaks, setEnableHotStreaks] = useState(false);
@@ -1056,7 +1058,8 @@ export default function CreatePoll() {
         ...Object.fromEntries(Object.entries(knockoutFeatures).map(([key, enabled]) => [key, hasKnockoutQuestion ? enabled : false])),
         rankedTieBreakerRule,
         rankedCompletenessRule,
-        postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : null,
+        postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : pollType === 'EXAM' ? postExamMessage : null,
+        resultsReleased: pollType === 'EXAM' ? resultsReleased : false,
         collectEmail: pollType === 'SURVEY' ? collectEmail : false,
         postEmailMessage: pollType === 'SURVEY' ? postEmailMessage : null,
         enableDropOffTracking: pollType === 'SURVEY' ? enableDropOffTracking : false,
@@ -1892,6 +1895,59 @@ export default function CreatePoll() {
             </div>
           )}
 
+          {/* Exam Type Step 3 Replacement: Exam Completion & Grading Settings */}
+          {currentStep === 3 && pollType === 'EXAM' && (
+            <div className="space-y-6 animate-fade-in-up">
+              <div>
+                <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Exam Completion & Scores</h2>
+                <p className="text-gray-400 text-sm mt-1">Configure post-exam message and results release mode.</p>
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+                    Post-Exam Thank You Message
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={postExamMessage}
+                    onChange={(e) => setPostExamMessage(e.target.value)}
+                    placeholder="e.g. Thank you for completing the exam! Your answers have been recorded."
+                    className="w-full glass-input placeholder-gray-600 text-sm resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center bg-white/3 border border-white/5 rounded-2xl p-4 gap-4">
+                  <div className="space-y-1">
+                    <span className="text-sm font-semibold text-gray-200 block font-outfit">Release Score Reports Immediately?</span>
+                    <span className="text-[10px] text-gray-500 block leading-relaxed font-outfit">
+                      If enabled, students can see their scorecards and analysis immediately upon finishing the exam. Otherwise, results are withheld until you release them manually.
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 bg-white/5 p-1 rounded-xl border border-white/5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setResultsReleased(true)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                        resultsReleased ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Yes, immediately
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResultsReleased(false)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                        !resultsReleased ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      No, withhold
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* STEP 4: Access Settings & Dynamic Spreadsheet */}
           {currentStep === 4 && (
             <div className="space-y-6 animate-fade-in-up">
@@ -2290,7 +2346,7 @@ export default function CreatePoll() {
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Stop Cheating</h2>
                 <p className="text-gray-400 text-sm mt-1">
-                  Add protections to keep {pollType === 'SURVEY' ? 'submissions' : 'votes'} fair and stop anyone from submitting multiple times.
+                  Add protections to keep {pollType === 'SURVEY' ? 'submissions' : pollType === 'EXAM' ? 'exam attempts' : 'votes'} fair and stop anyone from submitting multiple times.
                 </p>
               </div>
 
@@ -2299,7 +2355,7 @@ export default function CreatePoll() {
                 {!isOpenVoting && (
                   <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
-                      Security Priority (Closed {pollType === 'SURVEY' ? 'Survey' : 'Voting'} Only)
+                      Security Priority (Closed {pollType === 'SURVEY' ? 'Survey' : pollType === 'EXAM' ? 'Exam' : 'Voting'} Only)
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div
@@ -2312,7 +2368,7 @@ export default function CreatePoll() {
                       >
                         <span className="block font-bold text-sm">🔴 High Security</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          {pollType === 'SURVEY' ? 'Respondents' : 'Voters'} must enter a 6-digit email code before they can submit or see results.
+                          {pollType === 'SURVEY' ? 'Respondents' : pollType === 'EXAM' ? 'Students' : 'Voters'} must enter a 6-digit email code before they can submit or see results.
                         </span>
                       </div>
                       <div
@@ -2325,7 +2381,7 @@ export default function CreatePoll() {
                       >
                         <span className="block font-bold text-sm">🟢 Easy Access</span>
                         <span className="block text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          No email code needed. {pollType === 'SURVEY' ? 'Respondents' : 'Voters'} go straight to the form and submit immediately.
+                          No email code needed. {pollType === 'SURVEY' ? 'Respondents' : pollType === 'EXAM' ? 'Students' : 'Voters'} go straight to the form and submit immediately.
                         </span>
                       </div>
                     </div>
@@ -2462,6 +2518,61 @@ export default function CreatePoll() {
                       <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Tracked Voting</h3>
                       <p className="text-gray-400 text-xs leading-relaxed">
                         Voter names and emails are recorded next to their choices in your reports. You can see exactly who voted for what.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : pollType === 'EXAM' ? (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Student Identity &amp; Integrity</h2>
+                  <p className="text-gray-400 text-sm mt-1">Configure student tracking and exam anonymity controls.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+                  {/* Anonymous Exam */}
+                  <div
+                    onClick={() => setIsAnonymous(true)}
+                    className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
+                      isAnonymous
+                        ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
+                        : 'border-white/5 hover:border-white/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      {isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />}
+                    </div>
+                    <div>
+                      <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Anonymous Assessments</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Student scores are kept strictly anonymous. Perfect for low-stakes self-evaluation tests.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tracked Exam */}
+                  <div
+                    onClick={() => setIsAnonymous(false)}
+                    className={`glass-card rounded-3xl p-6 border cursor-pointer transition-all flex flex-col justify-between h-44 ${
+                      !isAnonymous
+                        ? 'border-indigo-500/60 shadow-[0_0_24px_rgba(99,102,241,0.15)] bg-indigo-500/5'
+                        : 'border-white/5 hover:border-white/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      {!isAnonymous && <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />}
+                    </div>
+                    <div>
+                      <h3 className="font-outfit text-lg font-bold text-white mb-1.5">Tracked Assessments</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Each student's name, email, and detailed score report are saved in the teacher gradebook.
                       </p>
                     </div>
                   </div>
@@ -2833,6 +2944,65 @@ export default function CreatePoll() {
                   </div>
                 </div>
               </div>
+            ) : pollType === 'EXAM' ? (
+              <div className="space-y-6 animate-fade-in-up">
+                <div>
+                  <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Class Summary &amp; Gradebook</h2>
+                  <p className="text-gray-400 text-sm mt-1">Configure teacher summaries and gradebook results access parameters.</p>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  {/* Smart Debrief for Exams */}
+                  <div
+                    onClick={() => setEnableSmartDebrief(!enableSmartDebrief)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      enableSmartDebrief ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0">
+                        <Brain className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Auto-Generate an AI Class Diagnostics Report</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Automatically writes a comprehensive class summary, identifying overall strengths, topics requiring revision, and student misconceptions.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      enableSmartDebrief ? 'border-amber-500 bg-amber-500 text-white' : 'border-white/20'
+                    }`}>
+                      {enableSmartDebrief && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {/* Hide results until end */}
+                  <div
+                    onClick={() => setHideResultsUntilEnd(!hideResultsUntilEnd)}
+                    className={`glass-card rounded-2xl p-5 border cursor-pointer flex items-center justify-between transition-all ${
+                      hideResultsUntilEnd ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-outfit font-bold text-white text-sm">Withhold Scores Until Exam Ends</h4>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                          Students won't receive any score reports or correct answer guides until the entire exam window has officially closed.
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      hideResultsUntilEnd ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-white/20'
+                    }`}>
+                      {hideResultsUntilEnd && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="space-y-6 animate-fade-in-up">
                 <div>
@@ -3026,6 +3196,38 @@ export default function CreatePoll() {
                           </button>
                         );
                       })}
+                    </div>
+
+                    {/* Quota inputs or inputs for timer duration and Drive folders */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/5 pt-4 mt-4">
+                      <div>
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2 font-outfit">
+                          ⏳ Exam Timer Duration (Minutes)
+                        </label>
+                        <input
+                          type="number"
+                          value={examTimerDuration}
+                          onChange={(e) => setExamTimerDuration(Math.max(1, parseInt(e.target.value) || 0))}
+                          className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all font-outfit"
+                        />
+                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">Specify countdown timer for test attempts in minutes.</span>
+                      </div>
+                      
+                      {enableProctorCamera && (
+                        <div className="animate-fade-in-up">
+                          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2 font-outfit">
+                            📂 Google Drive Proctoring Backup Folder URL
+                          </label>
+                          <input
+                            type="text"
+                            value={proctorDriveFolderUrl}
+                            onChange={(e) => setProctorDriveFolderUrl(e.target.value)}
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all font-outfit"
+                          />
+                          <span className="text-[9px] text-gray-500 mt-1 block font-outfit">Webcam snapshots and proctoring logs will be compiled and uploaded here.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

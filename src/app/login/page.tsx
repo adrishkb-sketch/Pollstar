@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Vote, ArrowLeft, Mail, Lock, AlertTriangle } from 'lucide-react';
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +32,7 @@ export default function Login() {
         throw new Error(data.error || 'Failed to login');
       }
 
-      router.push('/dashboard');
+      router.push(callbackUrl);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -38,6 +40,78 @@ export default function Login() {
     }
   };
 
+  return (
+    <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl">
+      {error && (
+        <div className="flex items-center space-x-2.5 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm mb-6">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleLogin} className="space-y-6">
+        <div>
+          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+            Email Address
+          </label>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
+              <Mail className="w-5 h-5" />
+            </span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@university.com"
+              className="w-full !pl-12 glass-input placeholder-gray-600 text-sm"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
+            Password
+          </label>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
+              <Lock className="w-5 h-5" />
+            </span>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full !pl-12 glass-input placeholder-gray-600 text-sm"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-sm flex items-center justify-center space-x-2"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <span>Log In</span>
+          )}
+        </button>
+      </form>
+
+      <div className="text-center mt-6 text-sm text-gray-400">
+        Don't have an account?{' '}
+        <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+          Sign Up
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function Login() {
   return (
     <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 relative">
       {/* Background ambient light */}
@@ -63,73 +137,14 @@ export default function Login() {
           </p>
         </div>
 
-        <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl">
-          {error && (
-            <div className="flex items-center space-x-2.5 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm mb-6">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
-                  <Mail className="w-5 h-5" />
-                </span>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@university.com"
-                  className="w-full !pl-12 glass-input placeholder-gray-600 text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
-                  <Lock className="w-5 h-5" />
-                </span>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full !pl-12 glass-input placeholder-gray-600 text-sm"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-sm flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <span>Log In</span>
-              )}
-            </button>
-          </form>
-
-          <div className="text-center mt-6 text-sm text-gray-400">
-            Don't have an account?{' '}
-            <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-              Sign Up
-            </Link>
+        <Suspense fallback={
+          <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl flex flex-col items-center justify-center space-y-4">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-gray-500 font-mono">Initializing secure connection...</p>
           </div>
-        </div>
+        }>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
