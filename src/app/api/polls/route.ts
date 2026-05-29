@@ -162,33 +162,87 @@ export async function POST(req: Request) {
         where: { id: user.id },
         include: { plan: true },
       });
-      if (userWithPlan?.plan) {
+
+      if (userWithPlan) {
         const plan = userWithPlan.plan;
-        if (pollType === 'SURVEY' && plan.maxSurveys !== null && plan.maxSurveys >= 0) {
-          const count = await prisma.poll.count({
-            where: { creatorId: user.id, pollType: 'SURVEY' },
-          });
-          if (count >= plan.maxSurveys) {
-            return NextResponse.json({
-              error: `You have reached the maximum allowance of ${plan.maxSurveys} surveys for your "${plan.name}" plan. Please upgrade to create more.`
-            }, { status: 403 });
+        const isFreePlan = !plan || plan.isFree;
+
+        // Compute active subscription / cycle period range
+        const signupDate = userWithPlan.createdAt;
+        let start: Date;
+        let end: Date;
+
+        if (isFreePlan || !userWithPlan.planExpiresAt) {
+          // General Free Plan resets every month on anniversary signup date
+          const now = new Date();
+          const signupAnniversary = new Date(signupDate);
+          signupAnniversary.setFullYear(now.getFullYear());
+          signupAnniversary.setMonth(now.getMonth());
+          if (signupAnniversary > now) {
+            signupAnniversary.setMonth(signupAnniversary.getMonth() - 1);
           }
-        } else if (pollType === 'EXAM' && plan.maxExams !== null && plan.maxExams >= 0) {
-          const count = await prisma.poll.count({
-            where: { creatorId: user.id, pollType: 'EXAM' },
-          });
-          if (count >= plan.maxExams) {
-            return NextResponse.json({
-              error: `You have reached the maximum allowance of ${plan.maxExams} exams for your "${plan.name}" plan. Please upgrade to create more.`
-            }, { status: 403 });
+          start = signupAnniversary;
+          end = new Date(start);
+          end.setMonth(end.getMonth() + 1);
+        } else {
+          // Recurring subscription plan period range calculated from expiration date backwards
+          const endExp = new Date(userWithPlan.planExpiresAt);
+          const startExp = new Date(userWithPlan.planExpiresAt);
+          const cycle = (userWithPlan.planBillingCycle || 'MONTHLY').toUpperCase();
+
+          if (cycle === 'MONTHLY') {
+            startExp.setMonth(startExp.getMonth() - 1);
+          } else if (cycle === 'QUARTERLY') {
+            startExp.setMonth(startExp.getMonth() - 3);
+          } else if (cycle === 'YEARLY') {
+            startExp.setMonth(startExp.getMonth() - 12);
+          } else if (cycle === 'TWO_YEAR' || cycle === 'TWO_YEARS') {
+            startExp.setMonth(startExp.getMonth() - 24);
+          } else {
+            startExp.setMonth(startExp.getMonth() - 1);
           }
-        } else if ((pollType === 'POLL' || !pollType) && plan.maxPolls !== null && plan.maxPolls >= 0) {
+          
+          start = startExp;
+          end = endExp;
+        }
+
+        // Determine the dynamic limits (reading from plan.durations if matching billing cycle)
+        let limitPolls = isFreePlan ? 3 : (plan?.maxPolls ?? -1);
+        let limitSurveys = isFreePlan ? 3 : (plan?.maxSurveys ?? -1);
+        let limitExams = isFreePlan ? 3 : (plan?.maxExams ?? -1);
+
+        if (plan && plan.durations && !isFreePlan) {
+          const durs = plan.durations as any;
+          const cycle = userWithPlan.planBillingCycle || 'MONTHLY';
+          if (durs[cycle] && durs[cycle].enabled) {
+            const cfg = durs[cycle];
+            if (cfg.maxPolls !== undefined && cfg.maxPolls !== '') limitPolls = parseInt(cfg.maxPolls);
+            if (cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') limitSurveys = parseInt(cfg.maxSurveys);
+            if (cfg.maxExams !== undefined && cfg.maxExams !== '') limitExams = parseInt(cfg.maxExams);
+          }
+        }
+
+        // Count current creation in that period
+        const targetType = pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL';
+        const activeLimit = targetType === 'SURVEY' ? limitSurveys : targetType === 'EXAM' ? limitExams : limitPolls;
+        const activeLabel = targetType === 'SURVEY' ? 'surveys' : targetType === 'EXAM' ? 'exams' : 'polls';
+        const planName = plan ? plan.name : 'Free';
+
+        if (activeLimit !== null && activeLimit >= 0) {
           const count = await prisma.poll.count({
-            where: { creatorId: user.id, pollType: 'POLL' },
+            where: {
+              creatorId: user.id,
+              pollType: targetType,
+              createdAt: {
+                gte: start,
+                lt: end,
+              }
+            }
           });
-          if (count >= plan.maxPolls) {
+
+          if (count >= activeLimit) {
             return NextResponse.json({
-              error: `You have reached the maximum allowance of ${plan.maxPolls} polls for your "${plan.name}" plan. Please upgrade to create more.`
+              error: `You have reached the maximum allowance of ${activeLimit} ${activeLabel} for your current billing cycle period on the "${planName}" plan. Your cycle runs from ${start.toLocaleDateString()} to ${end.toLocaleDateString()}. Please upgrade or renew your plan to create more.`
             }, { status: 403 });
           }
         }

@@ -448,10 +448,12 @@ export default function PublicPlansPage() {
                               <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
                             </div>
                             
-                            {/* Validity date below the price */}
+                            {/* Validity date below the price - beautiful premium glow layout */}
                             {offerEndDate && (
-                              <div className="text-[10px] font-bold text-purple-400/90 flex items-center gap-1.5 pt-1.5">
-                                📅 Redeem before: <span className="text-purple-300 underline">{new Date(offerEndDate).toLocaleDateString()}</span>
+                              <div className="mt-2.5 p-2 rounded-xl bg-gradient-to-r from-red-500/10 via-amber-500/5 to-purple-500/10 border border-red-500/20 text-[10px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-300 to-amber-300 flex items-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.05)] animate-pulse shrink-0">
+                                <span>⏳</span>
+                                <span className="text-gray-300 font-bold">Redeem Offer before:</span>
+                                <span className="text-amber-400 font-mono tracking-wider font-extrabold">{new Date(offerEndDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                               </div>
                             )}
                           </div>
@@ -459,21 +461,49 @@ export default function PublicPlansPage() {
                       );
                     })()}
 
-                    {/* Limits Display */}
-                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1 font-outfit">
-                      <div className="flex items-center justify-between">
-                        <span>Max Polls Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Surveys Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Exams Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
-                      </div>
-                    </div>
+                    {/* Dynamic Limits Display */}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
+
+                      let limitPolls = p.maxPolls;
+                      let limitSurveys = p.maxSurveys;
+                      let limitExams = p.maxExams;
+
+                      if (enabledDurs.length > 0 && durConfig) {
+                        if (durConfig.maxPolls !== undefined && durConfig.maxPolls !== '') {
+                          limitPolls = parseInt(durConfig.maxPolls);
+                        }
+                        if (durConfig.maxSurveys !== undefined && durConfig.maxSurveys !== '') {
+                          limitSurveys = parseInt(durConfig.maxSurveys);
+                        }
+                        if (durConfig.maxExams !== undefined && durConfig.maxExams !== '') {
+                          limitExams = parseInt(durConfig.maxExams);
+                        }
+                      }
+
+                      return (
+                        <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                          <div className="flex items-center justify-between">
+                            <span>Max Polls Allowed:</span>
+                            <strong className="text-white font-bold">{limitPolls === null || limitPolls === -1 ? 'Unlimited' : limitPolls}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Max Surveys Allowed:</span>
+                            <strong className="text-white font-bold">{limitSurveys === null || limitSurveys === -1 ? 'Unlimited' : limitSurveys}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Max Exams Allowed:</span>
+                            <strong className="text-white font-bold">{limitExams === null || limitExams === -1 ? 'Unlimited' : limitExams}</strong>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Checklists features details */}
                     <div className="space-y-3">

@@ -4561,6 +4561,51 @@ export default function AdminPortal() {
                                   className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
                                 />
                               </div>
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Polls</span>
+                                <input
+                                  type="number"
+                                  placeholder="Max Polls (-1 = unlim)"
+                                  value={config.maxPolls !== undefined ? config.maxPolls : '-1'}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, maxPolls: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Surveys</span>
+                                <input
+                                  type="number"
+                                  placeholder="Max Surveys (-1 = unlim)"
+                                  value={config.maxSurveys !== undefined ? config.maxSurveys : '-1'}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, maxSurveys: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Exams</span>
+                                <input
+                                  type="number"
+                                  placeholder="Max Exams (-1 = unlim)"
+                                  value={config.maxExams !== undefined ? config.maxExams : '-1'}
+                                  onChange={e => {
+                                    setPlanDurations({
+                                      ...planDurations,
+                                      [dur]: { ...config, maxExams: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
+                                />
+                              </div>
                               {(() => {
                                 const pPrice = parseFloat(config.price || '0');
                                 const pOriginalPrice = parseFloat(config.originalPrice || '0');
