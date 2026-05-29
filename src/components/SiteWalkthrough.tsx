@@ -273,12 +273,9 @@ export default function SiteWalkthrough() {
       const el = document.querySelector(currentStep.selector!);
       if (el) {
         const rect = el.getBoundingClientRect();
-        // Scroll adjustment
-        const top = rect.top + window.scrollY;
-        const left = rect.left + window.scrollX;
         setHighlightCoords({
-          top: top - 8,
-          left: left - 8,
+          top: rect.top - 8,
+          left: rect.left - 8,
           width: rect.width + 16,
           height: rect.height + 16
         });
@@ -417,7 +414,7 @@ export default function SiteWalkthrough() {
           {/* Spotlight Highlight Mask (Desktop only) */}
           {!isMobile && highlightCoords && (
             <div 
-              className="absolute pointer-events-none border-[3px] border-emerald-400 rounded-2xl shadow-[0_0_0_9999px_rgba(3,7,18,0.85)] transition-all duration-300"
+              className="fixed pointer-events-none border-[3px] border-emerald-400 rounded-2xl shadow-[0_0_0_9999px_rgba(3,7,18,0.85)] transition-all duration-300"
               style={{
                 top: `${highlightCoords.top}px`,
                 left: `${highlightCoords.left}px`,

@@ -25,6 +25,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
     { href: '/dashboard/gradebook', label: '📊 Gradebook' },
     { href: '/dashboard/plans', label: 'Plans & Features' },
     { href: '/dashboard/earnings', label: '💰 Earnings & Referrals' },
+    { href: '/dashboard/notices', label: '📣 Announcements' },
   ];
 
   return (

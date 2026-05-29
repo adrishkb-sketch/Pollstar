@@ -1215,7 +1215,7 @@ export default function AdminPortal() {
       maxPolls: planMaxPolls,
       maxSurveys: planMaxSurveys,
       maxExams: planMaxExams,
-      originalPrice: planIsFree ? 0 : parseFloat(planOriginalPrice || '0'),
+      originalPrice: parseFloat(planOriginalPrice || '0'),
       offerEndDate: planOfferEndDate || null,
       durations: planDurations,
     };

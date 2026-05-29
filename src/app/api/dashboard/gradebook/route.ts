@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+import { checkFeatureAccess } from '@/lib/featureGate';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -34,6 +35,13 @@ export async function GET(req: Request) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const access = await checkFeatureAccess(user.id, 'teacherGradebook');
+    if (!access.allowed) {
+      return NextResponse.json({ 
+        error: access.reason || 'Upgrade to premium to access the cumulative gradebook.' 
+      }, { status: 403 });
     }
 
     // 1. Fetch all polls, surveys, and exams created by this user

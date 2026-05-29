@@ -16,6 +16,8 @@ export default function GradebookPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hasAccess, setHasAccess] = useState(true);
+  const [accessReason, setAccessReason] = useState('');
   
   // Gradebook grid data
   const [headers, setHeaders] = useState<any[]>([]);
@@ -32,6 +34,12 @@ export default function GradebookPage() {
   const fetchGradebook = async () => {
     try {
       const res = await fetch('/api/dashboard/gradebook');
+      if (res.status === 403) {
+        const data = await res.json();
+        setHasAccess(false);
+        setAccessReason(data.error || 'The Teacher Gradebook is an Elite Plan premium feature.');
+        return;
+      }
       if (!res.ok) {
         throw new Error('Failed to fetch gradebook matrix');
       }
@@ -197,6 +205,78 @@ export default function GradebookPage() {
       <div className="min-h-screen bg-[#030712] flex flex-col justify-center items-center">
         <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
         <span className="text-gray-400 text-sm mt-4 font-semibold">Syncing Cumulative Gradebook...</span>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex-1 flex flex-col min-h-screen bg-[#030712]">
+        {/* Header */}
+        <DashboardHeader user={user} />
+
+        {/* Main Content */}
+        <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-16 flex flex-col justify-center items-center relative">
+          <div className="absolute top-1/4 left-1/3 w-[450px] h-[450px] bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="glass-card max-w-lg w-full rounded-3xl p-8 border border-purple-500/10 bg-[#080d1a]/80 shadow-[0_0_50px_rgba(168,85,247,0.08)] text-center space-y-6 animate-fade-in relative overflow-hidden">
+            {/* Glowing blur */}
+            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none" />
+            
+            <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto text-purple-400">
+              <ShieldAlert className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-extrabold uppercase tracking-widest block w-fit mx-auto">
+                ⭐ Premium Gated Capability
+              </span>
+              <h3 className="font-outfit text-2xl font-black text-white">Cumulative Teacher Gradebook</h3>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                {accessReason || "The unified cohort gradebook compiles all participant grades, scores, time analytics, and responses across multiple exams and surveys in a real-time cumulative grid."}
+              </p>
+            </div>
+
+            {/* List of features they unlock */}
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3 text-left">
+              <span className="text-[9px] text-gray-500 font-extrabold uppercase tracking-wider block">Features Unlocked on Elite Plan:</span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-gray-300">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span>Interactive Class Sheets</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span>Manual Mark Overrides</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span>Excel (CSV) Data Exports</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span>Realtime Student Analytics</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/dashboard"
+                className="px-6 py-3 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition-all text-center block"
+              >
+                Back to Home
+              </Link>
+              <Link
+                href="/dashboard/plans"
+                className="gradient-btn px-6 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-purple-500/25 transition-all text-center block"
+              >
+                Upgrade to Elite Plan
+              </Link>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }

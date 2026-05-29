@@ -344,12 +344,27 @@ export default function PlansPage() {
                       <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
                     </div>
 
+                    {/* Active Offer Countdown notification ticker */}
+                    {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-between gap-2 animate-pulse-glow">
+                        <span className="flex items-center gap-1">⚡ Limited Time Offer active!</span>
+                        <span className="font-mono text-[9px]">Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+
                     {/* Price Tag */}
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Subscription Price</span>
-                      <div className="flex items-baseline">
-                        <span className="text-3xl font-black text-white font-outfit">{getCurrencySymbol(p.currency)}{p.price.toFixed(2)}</span>
-                        <span className="text-xs text-gray-500 font-semibold ml-1">/{p.billingCycle.toLowerCase()}</span>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-3xl font-black text-white font-outfit">
+                          {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                        </span>
+                        {p.originalPrice && p.originalPrice > p.price && (
+                          <span className="text-sm text-red-400/70 font-semibold line-through">
+                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-500 font-semibold">/{p.billingCycle.toLowerCase()}</span>
                       </div>
                     </div>
 
