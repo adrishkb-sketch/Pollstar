@@ -611,25 +611,6 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Admin Approval Banner */}
-        {user && !user.approved && user.role !== 'ADMIN' && (
-          <div className="glass-card rounded-2xl p-6 border-amber-500/20 bg-amber-500/5 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-glow">
-            <div className="flex items-start md:items-center space-x-4">
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-outfit text-lg font-bold text-white">Verification Pending</h4>
-                <p className="text-gray-400 text-sm mt-0.5 leading-relaxed">
-                  Your creator status is currently undergoing administrator verification. You will be able to launch secure polls as soon as your account is approved.
-                </p>
-              </div>
-            </div>
-            <div className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-300 self-start md:self-auto shrink-0">
-              PENDING ADMIN CHECK
-            </div>
-          </div>
-        )}
 
         {/* Stats Grid */}
         <div id="dashboard-stats" className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -675,22 +656,13 @@ export default function Dashboard() {
 
           <Link
             id="create-poll-btn"
-            href={user?.approved || user?.role === 'ADMIN' ? '/dashboard/create' : '#'}
-            onClick={(e) => {
-              if (!user?.approved && user?.role !== 'ADMIN') {
-                e.preventDefault();
-                alert('Your account must be approved by an administrator before creating polls.');
-              }
-            }}
-            className={`px-5 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2 transition-all self-start sm:self-auto ${
-              user?.approved || user?.role === 'ADMIN'
-                ? 'gradient-btn text-white'
-                : 'bg-white/5 border border-white/10 text-gray-500 cursor-not-allowed'
-            }`}
+            href="/dashboard/create"
+            className="px-5 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2 transition-all self-start sm:self-auto gradient-btn text-white"
           >
             <Plus className="w-5 h-5" />
             <span>Create Poll</span>
           </Link>
+
         </div>
 
         {/* Search & Filter Bar */}
