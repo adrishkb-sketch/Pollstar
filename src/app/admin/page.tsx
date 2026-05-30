@@ -1255,7 +1255,7 @@ export default function AdminPortal() {
       name: planName,
       description: planDesc,
       price: resolvedPrice,
-      isFree: planType === 'SUBSCRIPTION' ? (resolvedPrice === 0) : (parseFloat(planPrice || '0') === 0),
+      isFree: planName.toLowerCase() === 'free',
       currency: planCurrency,
       billingCycle: resolvedCycle,
       planType,
@@ -2131,10 +2131,13 @@ export default function AdminPortal() {
 
                       {/* Display trial, pack & limits information */}
                       <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span>Superiority Rank:</span>
-                          <strong className="text-yellow-400 font-bold">Rank {p.rank ?? 0}</strong>
-                        </div>
+                        {/* Only show Superiority Rank for SUBSCRIPTION plans */}
+                        {p.planType === 'SUBSCRIPTION' && (
+                          <div className="flex items-center justify-between">
+                            <span>Superiority Rank:</span>
+                            <strong className="text-yellow-400 font-bold">Rank {p.rank ?? 0}</strong>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span>Subscribed Users:</span>
                           <strong className="text-purple-300 font-bold">{p._count?.users ?? 0} Members</strong>
@@ -2168,12 +2171,32 @@ export default function AdminPortal() {
                       </div>
 
                       <div className="pt-2">
-                        {p.isFree ? (
-                          <span className="font-outfit text-3xl font-black text-white">FREE</span>
+                        {/* A plan is FREE only if literally named 'Free'. Offers that bring price to 0 are NOT free plans */}
+                        {p.name.toLowerCase() === 'free' ? (
+                          <span className="font-outfit text-3xl font-black text-gray-400">FREE Plan</span>
+                        ) : p.price === 0 && p.originalPrice && p.originalPrice > 0 ? (
+                          // Price is 0 due to a temporary FREE OFFER (not an actual free plan)
+                          <>
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-outfit text-2xl font-black text-emerald-400">FREE Offer</span>
+                              <span className="text-sm text-red-400/70 font-semibold line-through">{currSymbol}{p.originalPrice.toFixed(2)}</span>
+                            </div>
+                            {p.offerEndDate && (
+                              <span className="text-[9px] text-amber-400 font-bold">⏳ Ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
+                            )}
+                          </>
                         ) : (
                           <>
-                            <span className="font-outfit text-3xl font-black text-white">{currSymbol}{p.price.toFixed(2)}</span>
-                            <span className="text-gray-500 text-[11px] font-bold"> / Cycle</span>
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-outfit text-3xl font-black text-white">{currSymbol}{p.price.toFixed(2)}</span>
+                              {p.originalPrice && p.originalPrice > p.price && (
+                                <span className="text-sm text-red-400/70 font-semibold line-through">{currSymbol}{p.originalPrice.toFixed(2)}</span>
+                              )}
+                            </div>
+                            <span className="text-gray-500 text-[11px] font-bold">/ Cycle</span>
+                            {p.offerEndDate && (
+                              <span className="text-[9px] text-amber-400 font-bold block mt-0.5">⏳ Offer ends: {new Date(p.offerEndDate).toLocaleDateString()}</span>
+                            )}
                           </>
                         )}
                       </div>
@@ -4478,18 +4501,22 @@ export default function AdminPortal() {
                   </select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Superiority Rank (1-N)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 1"
-                    value={planRank}
-                    onChange={e => setPlanRank(e.target.value)}
-                    className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
-                  />
-                </div>
+                {/* Superiority Rank only applies to subscription tiers */}
+                {planType === 'SUBSCRIPTION' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Superiority Rank (1-N)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 1"
+                      value={planRank}
+                      onChange={e => setPlanRank(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                  </div>
+                )}
               </div>
+
 
               {/* Validity Section for non-subscription and non-addon packs */}
               {planType !== 'SUBSCRIPTION' && planType !== 'ADDON' && (

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
-import { computePlanExpiresAt, formatBillingCycle } from '@/lib/planExpiry';
+import { computePlanExpiresAt, formatBillingCycle, checkAndCleanExpiredPlanOffers } from '@/lib/planExpiry';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -26,6 +26,8 @@ async function getAuthUser() {
 
 export async function POST(req: Request) {
   try {
+    await checkAndCleanExpiredPlanOffers();
+
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -116,3 +116,82 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
     console.error('[planExpiry] checkAndExpirePlan error:', err);
   }
 }
+
+/**
+ * Scans all plans in the database to see if any active base-level or duration-specific
+ * offers have expired. If an offer has expired (offerEndDate is in the past),
+ * reverts its price to originalPrice and clears the originalPrice and offerEndDate.
+ */
+export async function checkAndCleanExpiredPlanOffers(): Promise<void> {
+  try {
+    const plans = await prisma.plan.findMany();
+    const now = new Date();
+
+    for (const plan of plans) {
+      let changed = false;
+      let updatedPrice = plan.price;
+      let updatedOriginalPrice = plan.originalPrice;
+      let updatedOfferEndDate = plan.offerEndDate;
+      let updatedDurations = plan.durations;
+
+      // 1. Check base plan level offer expiration
+      if (plan.offerEndDate && new Date(plan.offerEndDate) < now) {
+        if (plan.originalPrice && plan.originalPrice > 0) {
+          updatedPrice = plan.originalPrice;
+        }
+        updatedOriginalPrice = 0.0;
+        updatedOfferEndDate = null;
+        changed = true;
+      }
+
+      // 2. Check durations pricing matrix offer expirations
+      if (plan.durations && typeof plan.durations === 'object') {
+        const durs = JSON.parse(JSON.stringify(plan.durations));
+        let dursChanged = false;
+        
+        for (const key of Object.keys(durs)) {
+          const config = durs[key];
+          if (config && config.enabled && config.offerEndDate) {
+            const dateVal = new Date(config.offerEndDate);
+            if (!isNaN(dateVal.getTime()) && dateVal < now) {
+              // Expiry occurred! Revert price to originalPrice
+              const origVal = parseFloat(config.originalPrice || '0');
+              if (origVal > 0) {
+                config.price = origVal.toFixed(2);
+              }
+              config.originalPrice = '';
+              config.offerEndDate = '';
+              dursChanged = true;
+            }
+          }
+        }
+        
+        if (dursChanged) {
+          updatedDurations = durs;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        const updateData: any = {
+          price: updatedPrice,
+          originalPrice: updatedOriginalPrice,
+          offerEndDate: updatedOfferEndDate,
+        };
+        // Only include durations if they were actually modified
+        if (updatedDurations !== plan.durations) {
+          updateData.durations = updatedDurations;
+        }
+        await prisma.plan.update({
+          where: { id: plan.id },
+          data: updateData,
+        });
+        console.log(`[planExpiry] Reverted expired offer for plan: ${plan.name}`);
+      }
+
+    }
+  } catch (err) {
+    console.error('[planExpiry] checkAndCleanExpiredPlanOffers error:', err);
+  }
+}
+

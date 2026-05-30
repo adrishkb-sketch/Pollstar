@@ -235,6 +235,10 @@ export async function POST(req: Request) {
         let packAllowedSurveys = 0;
         let packAllowedExams = 0;
 
+        let expiredCapacityPolls = 0;
+        let expiredCapacitySurveys = 0;
+        let expiredCapacityExams = 0;
+
         const nowTime = new Date();
 
         for (const inv of addonInvoices) {
@@ -243,36 +247,49 @@ export async function POST(req: Request) {
 
           // Check if this pack is still valid
           const isValid = !inv.planExpiresAt || new Date(inv.planExpiresAt) > nowTime;
-          if (!isValid) continue;
 
           const qty = (p.packQuantity ?? 0) + (p.freePerks ?? 0);
 
+          let allowedPolls = 0;
+          let allowedSurveys = 0;
+          let allowedExams = 0;
+
           switch (p.planType) {
             case 'POLL_PACK':
-              packAllowedPolls += qty;
+              allowedPolls = qty;
               break;
             case 'SURVEY_PACK':
-              packAllowedSurveys += qty;
+              allowedSurveys = qty;
               break;
             case 'EXAM_PACK':
-              packAllowedExams += qty;
+              allowedExams = qty;
               break;
             case 'COMBO_PACK': {
               const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
               const perType = types.length > 0 ? Math.floor(qty / types.length) : 0;
-              if (types.includes('POLL')) packAllowedPolls += perType;
-              if (types.includes('SURVEY')) packAllowedSurveys += perType;
-              if (types.includes('EXAM')) packAllowedExams += perType;
+              if (types.includes('POLL')) allowedPolls = perType;
+              if (types.includes('SURVEY')) allowedSurveys = perType;
+              if (types.includes('EXAM')) allowedExams = perType;
               break;
             }
             case 'ADDON': {
-              if (p.maxPolls && p.maxPolls > 0) packAllowedPolls += p.maxPolls;
-              if (p.maxSurveys && p.maxSurveys > 0) packAllowedSurveys += p.maxSurveys;
-              if (p.maxExams && p.maxExams > 0) packAllowedExams += p.maxExams;
+              if (p.maxPolls && p.maxPolls > 0) allowedPolls = p.maxPolls;
+              if (p.maxSurveys && p.maxSurveys > 0) allowedSurveys = p.maxSurveys;
+              if (p.maxExams && p.maxExams > 0) allowedExams = p.maxExams;
               break;
             }
             default:
               break;
+          }
+
+          if (isValid) {
+            packAllowedPolls += allowedPolls;
+            packAllowedSurveys += allowedSurveys;
+            packAllowedExams += allowedExams;
+          } else {
+            expiredCapacityPolls += allowedPolls;
+            expiredCapacitySurveys += allowedSurveys;
+            expiredCapacityExams += allowedExams;
           }
         }
 
@@ -290,6 +307,11 @@ export async function POST(req: Request) {
         const allTimeSurveys = Math.max(activeSurveys, deletedSurveys);
         const allTimeExams   = Math.max(activeExams,   deletedExams);
 
+        // Overlapping pack depletion: adjustedPackUsed = max(0, allTime - expiredCapacity)
+        const adjustedPackUsedPolls   = Math.max(0, allTimePolls   - expiredCapacityPolls);
+        const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys);
+        const adjustedPackUsedExams   = Math.max(0, allTimeExams   - expiredCapacityExams);
+
         // ── 3. Build combined totals ─────────────────────────────────────────────
         const totalAllowedPolls = isSubBased
           ? (subLimitPolls === -1 ? -1 : subLimitPolls + packAllowedPolls)
@@ -301,9 +323,10 @@ export async function POST(req: Request) {
           ? (subLimitExams === -1 ? -1 : subLimitExams + packAllowedExams)
           : packAllowedExams;
 
-        const totalUsedPolls = isSubBased ? subUsedPolls : allTimePolls;
-        const totalUsedSurveys = isSubBased ? subUsedSurveys : allTimeSurveys;
-        const totalUsedExams = isSubBased ? subUsedExams : allTimeExams;
+        const totalUsedPolls = isSubBased ? subUsedPolls + adjustedPackUsedPolls : adjustedPackUsedPolls;
+        const totalUsedSurveys = isSubBased ? subUsedSurveys + adjustedPackUsedSurveys : adjustedPackUsedSurveys;
+        const totalUsedExams = isSubBased ? subUsedExams + adjustedPackUsedExams : adjustedPackUsedExams;
+
 
         // Perform validation check for the current requested creation type
         const targetType = pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL';

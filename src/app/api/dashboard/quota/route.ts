@@ -106,6 +106,10 @@ export async function GET() {
     let packAllowedSurveys = 0;
     let packAllowedExams = 0;
 
+    let expiredCapacityPolls = 0;
+    let expiredCapacitySurveys = 0;
+    let expiredCapacityExams = 0;
+
     const now = new Date();
 
     for (const inv of addonInvoices) {
@@ -114,37 +118,46 @@ export async function GET() {
 
       // Check if this pack is still valid
       const isValid = !inv.planExpiresAt || new Date(inv.planExpiresAt) > now;
-      if (!isValid) continue;
-
       const qty = (p.packQuantity ?? 0) + (p.freePerks ?? 0);
+
+      let allowedPolls = 0;
+      let allowedSurveys = 0;
+      let allowedExams = 0;
 
       switch (p.planType) {
         case 'POLL_PACK':
-          packAllowedPolls += qty;
+          allowedPolls = qty;
           break;
         case 'SURVEY_PACK':
-          packAllowedSurveys += qty;
+          allowedSurveys = qty;
           break;
         case 'EXAM_PACK':
-          packAllowedExams += qty;
+          allowedExams = qty;
           break;
         case 'COMBO_PACK': {
           const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
           const perType = types.length > 0 ? Math.floor(qty / types.length) : 0;
-          if (types.includes('POLL')) packAllowedPolls += perType;
-          if (types.includes('SURVEY')) packAllowedSurveys += perType;
-          if (types.includes('EXAM')) packAllowedExams += perType;
+          if (types.includes('POLL')) allowedPolls = perType;
+          if (types.includes('SURVEY')) allowedSurveys = perType;
+          if (types.includes('EXAM')) allowedExams = perType;
           break;
         }
         case 'ADDON': {
-          // ADDON type adds extra items on top of subscription each cycle
-          if (p.maxPolls && p.maxPolls > 0) packAllowedPolls += p.maxPolls;
-          if (p.maxSurveys && p.maxSurveys > 0) packAllowedSurveys += p.maxSurveys;
-          if (p.maxExams && p.maxExams > 0) packAllowedExams += p.maxExams;
+          if (p.maxPolls && p.maxPolls > 0) allowedPolls = p.maxPolls;
+          if (p.maxSurveys && p.maxSurveys > 0) allowedSurveys = p.maxSurveys;
+          if (p.maxExams && p.maxExams > 0) allowedExams = p.maxExams;
           break;
         }
-        default:
-          break;
+      }
+
+      if (isValid) {
+        packAllowedPolls += allowedPolls;
+        packAllowedSurveys += allowedSurveys;
+        packAllowedExams += allowedExams;
+      } else {
+        expiredCapacityPolls += allowedPolls;
+        expiredCapacitySurveys += allowedSurveys;
+        expiredCapacityExams += allowedExams;
       }
     }
 
@@ -172,8 +185,12 @@ export async function GET() {
     });
 
     // ── 3. Build combined totals ─────────────────────────────────────────────
-    // For subscription-based plans: cycle limits + pack add-ons
-    // For pack plans (individual/combo): just pack quota
+    const adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls);
+    const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys);
+    const adjustedPackUsedExams = Math.max(0, allTimeExams - expiredCapacityExams);
+
+    // For subscription-based plans: cycle limits + active pack add-ons
+    // For pack plans (individual/combo): just active pack quota
     const totalAllowedPolls = isSubBased
       ? (subLimitPolls === -1 ? -1 : subLimitPolls + packAllowedPolls)
       : packAllowedPolls;
@@ -184,10 +201,10 @@ export async function GET() {
       ? (subLimitExams === -1 ? -1 : subLimitExams + packAllowedExams)
       : packAllowedExams;
 
-    // Used counts: subscription uses cycle count, packs use all-time count
-    const totalUsedPolls = isSubBased ? subUsedPolls : allTimePolls;
-    const totalUsedSurveys = isSubBased ? subUsedSurveys : allTimeSurveys;
-    const totalUsedExams = isSubBased ? subUsedExams : allTimeExams;
+    // Used counts: subscription cycle count + active pack used count
+    const totalUsedPolls = isSubBased ? subUsedPolls + adjustedPackUsedPolls : adjustedPackUsedPolls;
+    const totalUsedSurveys = isSubBased ? subUsedSurveys + adjustedPackUsedSurveys : adjustedPackUsedSurveys;
+    const totalUsedExams = isSubBased ? subUsedExams + adjustedPackUsedExams : adjustedPackUsedExams;
 
     return NextResponse.json({
       success: true,
@@ -207,9 +224,9 @@ export async function GET() {
         allowedPolls: packAllowedPolls,
         allowedSurveys: packAllowedSurveys,
         allowedExams: packAllowedExams,
-        usedPolls: allTimePolls,
-        usedSurveys: allTimeSurveys,
-        usedExams: allTimeExams,
+        usedPolls: adjustedPackUsedPolls,
+        usedSurveys: adjustedPackUsedSurveys,
+        usedExams: adjustedPackUsedExams,
       },
       total: {
         allowedPolls: totalAllowedPolls,

@@ -73,12 +73,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Plan name must be unique.' }, { status: 409 });
     }
 
+    // A plan is strictly free only if named 'Free' - offers that bring price to 0 are not 'Free' plans
+    const planIsFreeStrict = name.toLowerCase() === 'free';
+
     const newPlan = await prisma.plan.create({
       data: {
         name,
         description: description || null,
-        price: isFree ? 0 : parseFloat(price || '0'),
-        isFree: !!isFree,
+        price: planIsFreeStrict ? 0 : parseFloat(price || '0'),
+        isFree: planIsFreeStrict,
         currency: currency || 'USD',
         billingCycle: billingCycle || 'MONTHLY',
         planType: planType || 'SUBSCRIPTION',
@@ -101,7 +104,8 @@ export async function POST(req: Request) {
         durations: durations || null,
         validityValue: validityValue ? parseInt(validityValue) : null,
         validityUnit: validityUnit || null,
-        rank: rank ? parseInt(rank) : 0,
+        // Superiority rank only applies to subscription tiers
+        rank: (planType || 'SUBSCRIPTION') === 'SUBSCRIPTION' ? (rank ? parseInt(rank) : 0) : 0,
       }
     });
 
@@ -230,8 +234,13 @@ export async function PATCH(req: Request) {
       data.validityUnit = updateFields.validityUnit || null;
     }
     if (updateFields.rank !== undefined) {
-      data.rank = parseInt(updateFields.rank) || 0;
+      // Superiority rank only applies to subscription tiers
+      const effectivePlanType = updateFields.planType || plan.planType;
+      data.rank = effectivePlanType === 'SUBSCRIPTION' ? (parseInt(updateFields.rank) || 0) : 0;
     }
+    // Enforce isFree is name-based: strictly free only if plan name is 'Free'
+    const effectiveName = updateFields.name || plan.name;
+    data.isFree = effectiveName.toLowerCase() === 'free';
 
     const updatedPlan = await prisma.plan.update({
       where: { id: planId },

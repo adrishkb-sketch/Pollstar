@@ -695,10 +695,28 @@ export default function PlansPage() {
 
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">One-Off Price</span>
-                      <span className="text-3xl font-black text-white font-outfit">
-                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                      </span>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        {p.price === 0 && p.originalPrice && p.originalPrice > 0 ? (
+                          <span className="text-2xl font-black text-emerald-400 font-outfit">FREE Offer!</span>
+                        ) : (
+                          <span className="text-3xl font-black text-white font-outfit">
+                            {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                          </span>
+                        )}
+                        {p.originalPrice && p.originalPrice > p.price && (
+                          <span className="text-sm text-red-400/70 font-semibold line-through">
+                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                        <div className="mt-1.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-400 flex items-center gap-1">
+                          <span>⏳</span>
+                          <span>Offer ends: {new Date(p.offerEndDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      )}
                     </div>
+
 
                     {/* Pack Validity indicator */}
                     {p.validityValue && p.validityUnit && (
@@ -774,9 +792,26 @@ export default function PlansPage() {
 
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Add-On Base Price</span>
-                      <span className="text-3xl font-black text-white font-outfit">
-                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                      </span>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        {p.price === 0 && p.originalPrice && p.originalPrice > 0 ? (
+                          <span className="text-2xl font-black text-emerald-400 font-outfit">FREE Offer!</span>
+                        ) : (
+                          <span className="text-3xl font-black text-white font-outfit">
+                            {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                          </span>
+                        )}
+                        {p.originalPrice && p.originalPrice > p.price && (
+                          <span className="text-sm text-red-400/70 font-semibold line-through">
+                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                        <div className="mt-1.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-400 flex items-center gap-1">
+                          <span>⏳</span>
+                          <span>Offer ends: {new Date(p.offerEndDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">

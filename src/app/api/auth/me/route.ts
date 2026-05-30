@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken, generateAccessToken } from '@/lib/jwt';
-import { checkAndExpirePlan } from '@/lib/planExpiry';
+import { checkAndExpirePlan, checkAndCleanExpiredPlanOffers } from '@/lib/planExpiry';
 
 export async function GET() {
   try {
@@ -32,6 +32,9 @@ export async function GET() {
         { status: 401 }
       );
     }
+
+    // Clean up any expired offers first (non-fatal)
+    await checkAndCleanExpiredPlanOffers();
 
     // Ensure default plan exists
     let freePlan = await prisma.plan.findUnique({

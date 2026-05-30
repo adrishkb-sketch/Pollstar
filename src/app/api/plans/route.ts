@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { checkAndCleanExpiredPlanOffers } from '@/lib/planExpiry';
 
 const ADDON_TYPES = ['ADDON', 'POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'];
 
 export async function GET() {
   try {
+    await checkAndCleanExpiredPlanOffers();
+
     const allPlans = await prisma.plan.findMany({
       where: { isActive: true },
       orderBy: { price: 'asc' }
     });
+
 
     // 1. Subscription plans (Recurring access to all features)
     const plans = allPlans.filter(p => p.planType === 'SUBSCRIPTION');
