@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { sendPollInvitationEmail, sendPollClosedEmail, sendPollScheduleUpdatedEmail, sendExamResultsReleasedEmail } from '@/lib/nodemailer';
+import { checkFeatureAccess } from '@/lib/featureGate';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -266,13 +267,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
 
+    // Validate if collaborations feature is allowed for both the poll creator and the current logged-in user
+    let creatorCollaborationAllowed = true;
+    let userCollaborationAllowed = true;
+
+    if (poll.creatorId) {
+      const creatorAccess = await checkFeatureAccess(poll.creatorId, 'collaborations');
+      creatorCollaborationAllowed = creatorAccess.allowed;
+    }
+    if (user) {
+      const userAccess = await checkFeatureAccess(user.id, 'collaborations');
+      userCollaborationAllowed = userAccess.allowed;
+    }
+
     return NextResponse.json({
       success: true,
       poll: cleanedPoll,
       isOwner: isCreatorOrAdmin,
       isCollaborator: !!isCollaborator,
       collaboratorRole,
-      activeCollaborators
+      activeCollaborators,
+      creatorCollaborationAllowed,
+      userCollaborationAllowed
     });
   } catch (error: any) {
     console.error('Fetch Poll API Error:', error);

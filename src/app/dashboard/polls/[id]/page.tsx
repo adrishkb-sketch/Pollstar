@@ -93,6 +93,8 @@ export default function PollInsights({ params }: PageProps) {
   const [collaboratorRole, setCollaboratorRole] = useState<string>('VIEWER');
   const [activeCollaborators, setActiveCollaborators] = useState<any[]>([]);
   const [focusedField, setFocusedField] = useState<string>('');
+  const [creatorCollaborationAllowed, setCreatorCollaborationAllowed] = useState(true);
+  const [userCollaborationAllowed, setUserCollaborationAllowed] = useState(true);
 
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -197,6 +199,8 @@ export default function PollInsights({ params }: PageProps) {
         setIsOwner(data.isOwner);
         setCollaboratorRole(data.collaboratorRole || 'VIEWER');
         setActiveCollaborators(data.activeCollaborators || []);
+        setCreatorCollaborationAllowed(data.creatorCollaborationAllowed !== false);
+        setUserCollaborationAllowed(data.userCollaborationAllowed !== false);
         setLiveStats(data.poll.stats || {});
         setLiveTotalVotes(data.poll.totalVotes || 0);
         setLiveVotesList(data.poll.votes || []);
@@ -237,6 +241,8 @@ export default function PollInsights({ params }: PageProps) {
           } : data.poll);
           setCollaboratorRole(data.collaboratorRole || 'VIEWER');
           setActiveCollaborators(data.activeCollaborators || []);
+          setCreatorCollaborationAllowed(data.creatorCollaborationAllowed !== false);
+          setUserCollaborationAllowed(data.userCollaborationAllowed !== false);
           setLiveStats(data.poll.stats || {});
           setLiveTotalVotes(data.poll.totalVotes || 0);
           setLiveVotesList(data.poll.votes || []);
@@ -1142,6 +1148,34 @@ export default function PollInsights({ params }: PageProps) {
   }, [activeTab, pollId]);
 
   const renderCollaboratorsPanel = () => {
+    if (!creatorCollaborationAllowed || !userCollaborationAllowed) {
+      return (
+        <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-12 text-center max-w-xl mx-auto space-y-6 animate-fade-in print:hidden">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto animate-pulse">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="font-outfit text-xl font-extrabold text-white">Collaboration Gated</h3>
+            <p className="text-gray-400 text-xs leading-relaxed font-medium">
+              {!creatorCollaborationAllowed 
+                ? "The session creator's subscription plan does not support workspace collaborations. Only premium tier accounts with collaborations enabled can invite team members."
+                : "Your current subscription plan does not support workspace collaborations. Both the session owner and the collaborator must have a plan with collaborations enabled to work together."}
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <Link
+              href="/dashboard/plans"
+              className="px-6 py-2.5 rounded-xl gradient-btn text-white text-xs font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 inline-block"
+            >
+              🔄 Upgrade Subscription Plan
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-8 space-y-8 animate-fade-in print:hidden">
         <div className="flex items-center justify-between border-b border-white/5 pb-5">
@@ -2446,6 +2480,32 @@ export default function PollInsights({ params }: PageProps) {
 
   const renderEditPanel = () => {
     const isViewer = collaboratorRole === 'VIEWER';
+
+    if (!isOwner && (!creatorCollaborationAllowed || !userCollaborationAllowed)) {
+      return (
+        <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-12 text-center max-w-xl mx-auto space-y-6 animate-fade-in print:hidden">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto animate-pulse">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="font-outfit text-xl font-extrabold text-white">Co-Editing Restrained</h3>
+            <p className="text-gray-400 text-xs leading-relaxed font-medium">
+              To co-edit this session layout as a collaborator, both your account and the session creator's account must have the "Real-time Creator Collaboration" feature enabled in your subscription plans.
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <Link
+              href="/dashboard/plans"
+              className="px-6 py-2.5 rounded-xl gradient-btn text-white text-xs font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 inline-block"
+            >
+              🔄 View Upgrade Options
+            </Link>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-8 space-y-8 animate-fade-in print:hidden">
