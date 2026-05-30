@@ -303,14 +303,20 @@ export async function POST(req: Request) {
           prisma.deletedPoll.count({ where: { creatorId: user.id, pollType: 'EXAM' } }),
         ]);
 
-        const allTimePolls   = Math.max(activePolls,   deletedPolls);
-        const allTimeSurveys = Math.max(activeSurveys, deletedSurveys);
-        const allTimeExams   = Math.max(activeExams,   deletedExams);
+        // Correct formula: active + deleted (separate tables, not duplicates)
+        const allTimePolls   = activePolls   + deletedPolls;
+        const allTimeSurveys = activeSurveys + deletedSurveys;
+        const allTimeExams   = activeExams   + deletedExams;
 
-        // Overlapping pack depletion: adjustedPackUsed = max(0, allTime - expiredCapacity)
-        const adjustedPackUsedPolls   = Math.max(0, allTimePolls   - expiredCapacityPolls);
-        const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys);
-        const adjustedPackUsedExams   = Math.max(0, allTimeExams   - expiredCapacityExams);
+        // For subscription plans, pack usage only kicks in beyond the base sub allowance.
+        // Without this, sub usage AND pack usage are both counted causing 2x overcounting.
+        const subBasePolls   = isSubBased ? (subLimitPolls   === -1 ? Infinity : subLimitPolls)   : 0;
+        const subBaseSurveys = isSubBased ? (subLimitSurveys === -1 ? Infinity : subLimitSurveys) : 0;
+        const subBaseExams   = isSubBased ? (subLimitExams   === -1 ? Infinity : subLimitExams)   : 0;
+
+        const adjustedPackUsedPolls   = Math.max(0, allTimePolls   - expiredCapacityPolls   - subBasePolls);
+        const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys - subBaseSurveys);
+        const adjustedPackUsedExams   = Math.max(0, allTimeExams   - expiredCapacityExams   - subBaseExams);
 
         // ── 3. Build combined totals ─────────────────────────────────────────────
         const totalAllowedPolls = isSubBased

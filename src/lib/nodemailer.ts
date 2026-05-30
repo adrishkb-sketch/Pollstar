@@ -128,43 +128,59 @@ export async function sendPollInvitationEmail(
 }
 
 /**
- * Sends a Vote Confirmation / Cryptographic Ballot Receipt Email.
+ * Sends a Submission Confirmation email — adapts language for polls, surveys, and exams.
  */
 export async function sendVoteConfirmationEmail({
   email,
   pollTitle,
   voteId,
   resultsUrl,
+  pollType,
 }: {
   email: string;
   pollTitle: string;
   voteId: string;
   resultsUrl: string;
+  pollType?: string;
 }): Promise<boolean> {
-  const subject = `🗳️ Vote Cast Confirmed: "${pollTitle}"`;
+  const isSurvey = pollType === 'SURVEY';
+  const subject = isSurvey
+    ? `✅ Survey Response Confirmed: "${pollTitle}"`
+    : `🗳️ Vote Cast Confirmed: "${pollTitle}"`;
+  const badgeText = isSurvey ? '✓ Survey Response Recorded' : '✓ Vote Successfully Cast';
+  const headingText = isSurvey ? 'Response Securely Recorded' : 'Ballot Receipt Secured';
+  const bodyText = isSurvey
+    ? 'Your survey responses have been securely recorded in the Pollstar ecosystem.'
+    : 'Your vote has been securely recorded and cryptographically sealed in the Pollstar ecosystem.';
+  const detailsLabel = isSurvey ? 'Response Details:' : 'Ballot Details:';
+  const idLabel = isSurvey ? 'Response Cryptographic ID:' : 'Cryptographic Receipt Hash:';
+  const resultsLabel = isSurvey ? 'View Survey Results' : 'View Live Results';
+  const resultsCaption = isSurvey
+    ? 'Scan the QR code or click the button below to view the survey report:'
+    : 'Scan this QR code or click the button below to check real-time results:';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&bgcolor=0b0f19&color=ffffff&data=${encodeURIComponent(resultsUrl)}`;
   const html = `
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <span style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.1em;">✓ Vote Successfully Cast</span>
+        <span style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.1em;">${badgeText}</span>
       </div>
-      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Ballot Receipt Secured</h2>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">${headingText}</h2>
       <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
-        Your vote has been securely recorded and cryptographically sealed in the Pollstar ecosystem.
+        ${bodyText}
       </p>
       
       <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
-        <strong style="color: #f3f4f6; font-size: 15px; display: block; margin-bottom: 4px;">Ballot Details:</strong>
-        <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 10px;">Poll Name: <strong style="color: #ffffff">${pollTitle}</strong></span>
-        <span style="color: #9ca3af; font-size: 13px; display: block;">Cryptographic Receipt Hash:</span>
+        <strong style="color: #f3f4f6; font-size: 15px; display: block; margin-bottom: 4px;">${detailsLabel}</strong>
+        <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 10px;">${isSurvey ? 'Survey' : 'Poll'} Name: <strong style="color: #ffffff">${pollTitle}</strong></span>
+        <span style="color: #9ca3af; font-size: 13px; display: block;">${idLabel}</span>
         <code style="font-family: monospace; font-size: 11px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 4px 8px; color: #818cf8; display: block; margin-top: 4px; word-break: break-all;">${voteId}</code>
       </div>
 
       <div style="text-align: center; margin-bottom: 24px;">
-        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">Scan this QR code or click the button below to check real-time results:</p>
-        <img src="${qrCodeUrl}" alt="Check Live Results QR" style="border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 16px; width: 130px; height: 130px;" />
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">${resultsCaption}</p>
+        <img src="${qrCodeUrl}" alt="Check Results QR" style="border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 16px; width: 130px; height: 130px;" />
         <br/>
-        <a href="${resultsUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">View Live Results</a>
+        <a href="${resultsUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">${resultsLabel}</a>
       </div>
 
       <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
@@ -188,7 +204,7 @@ export async function sendVoteConfirmationEmail({
   console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
   console.log(`├────────────────────────────────────────────────────────┤`);
   console.log(`│ To:      ${email.padEnd(46)} │`);
-  console.log(`│ Subject: Vote Confirmation Receipt                    │`);
+  console.log(`│ Subject: ${isSurvey ? 'Survey Response Confirmed' : 'Vote Confirmation Receipt'} │`);
   console.log(`│ Hash:    ${voteId.padEnd(46)} │`);
   console.log(`│ QR Code link: ${resultsUrl.padEnd(41)} │`);
   console.log(`└────────────────────────────────────────────────────────┘\n`);
@@ -284,31 +300,45 @@ export async function sendPollClosedEmail({
 }
 
 /**
- * Sends a low-priority voter gateway entry alert.
+ * Sends a low-priority access alert — adapts language for surveys, exams, and polls.
  */
 export async function sendLowPriorityAccessEmail({
   email,
   pollTitle,
   pollUrl,
+  pollType,
 }: {
   email: string;
   pollTitle: string;
   pollUrl: string;
+  pollType?: string;
 }): Promise<boolean> {
-  const subject = `🗳️ Direct Access Gateway: "${pollTitle}"`;
+  const isSurvey = pollType === 'SURVEY';
+  const isExam = pollType === 'EXAM';
+  const typeLabel = isExam ? 'Exam' : (isSurvey ? 'Survey' : 'Poll');
+  const subject = isSurvey
+    ? `📋 Survey Access Confirmed: "${pollTitle}"`
+    : (isExam ? `📝 Exam Access Confirmed: "${pollTitle}"` : `🗳️ Direct Access Gateway: "${pollTitle}"`);
+  const headingText = isExam ? 'Exam Session Accessed' : (isSurvey ? 'Survey Session Accessed' : 'Electoral Profile Accessed');
+  const bodyText = isExam
+    ? `Your profile has been verified for the exam <strong style="color: #ffffff">"${pollTitle}"</strong>.`
+    : (isSurvey
+      ? `Your profile has been verified for the survey <strong style="color: #ffffff">"${pollTitle}"</strong>.`
+      : `Your voter profile has successfully logged into the ballot of <strong style="color: #ffffff">"${pollTitle}"</strong>.`);
+  const buttonText = isExam ? 'Begin Exam' : (isSurvey ? 'Begin Survey' : 'Access Ballot');
   const html = `
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
       <div style="text-align: center; margin-bottom: 24px;">
         <span style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.1em;">✓ Secure Gateway Access</span>
       </div>
-      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Electoral Profile Accessed</h2>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">${headingText}</h2>
       <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
-        Your voter profile has successfully logged into the ballot of <strong style="color: #ffffff">"${pollTitle}"</strong>.
+        ${bodyText}
       </p>
       
       <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 24px;">
         <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">Since this session is configured as a direct gateway session, OTP verification was bypassed for your convenience.</p>
-        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">Access Ballot</a>
+        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">${buttonText}</a>
       </div>
 
       <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
@@ -332,15 +362,15 @@ export async function sendLowPriorityAccessEmail({
   console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
   console.log(`├────────────────────────────────────────────────────────┤`);
   console.log(`│ To:      ${email.padEnd(46)} │`);
-  console.log(`│ Subject: Low Priority Access Alert                     │`);
-  console.log(`│ Poll:    ${pollTitle.substring(0, 30).padEnd(46)} │`);
+  console.log(`│ Subject: ${typeLabel} Direct Access Alert              │`);
+  console.log(`│ ${typeLabel}:    ${pollTitle.substring(0, 30).padEnd(46)} │`);
   console.log(`└────────────────────────────────────────────────────────┘\n`);
 
   return true;
 }
 
 /**
- * Sends a Poll Schedule Update notification email.
+ * Sends a Poll/Survey/Exam Schedule Update notification email.
  */
 export async function sendPollScheduleUpdatedEmail({
   email,
@@ -348,60 +378,66 @@ export async function sendPollScheduleUpdatedEmail({
   newStartTime,
   newEndTime,
   pollUrl,
+  pollType,
 }: {
   email: string;
   pollTitle: string;
   newStartTime: Date;
   newEndTime: Date;
   pollUrl: string;
+  pollType?: string;
 }): Promise<boolean> {
-  const subject = `📅 Electoral Schedule Updated: "${pollTitle}"`;
-  const formatDateTime = (date: Date) => {
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Kolkata',
-      timeZoneName: 'short',
+  const isSurvey = pollType === 'SURVEY';
+  const isExam = pollType === 'EXAM';
+  const typeLabel = isExam ? 'Exam' : (isSurvey ? 'Survey' : 'Poll');
+  const subject = isSurvey
+    ? `📅 Survey Schedule Updated: "${pollTitle}"`
+    : (isExam ? `📅 Exam Schedule Updated: "${pollTitle}"` : `📅 Electoral Schedule Updated: "${pollTitle}"`);
+  const headingText = isExam ? 'Exam Timing Updated' : (isSurvey ? 'Survey Window Updated' : 'Voting Window Rescheduled');
+  const bodyText = isExam
+    ? `The administrator has updated the schedule for the exam <strong style="color: #ffffff">"${pollTitle}"</strong>.`
+    : (isSurvey
+      ? `The administrator has updated the participation window for the survey <strong style="color: #ffffff">"${pollTitle}"</strong>.`
+      : `The administrator has updated the voting window for the poll <strong style="color: #ffffff">"${pollTitle}"</strong>.`);
+  const timingLabel = isExam ? 'Updated Exam Schedule:' : (isSurvey ? 'Updated Survey Window:' : 'New Electoral Timing Details:');
+  const buttonText = isExam ? 'Access Exam' : (isSurvey ? 'Access Survey' : 'Access Secure Ballot');
+  const footerText = isExam
+    ? 'Pollstar Assessment Platform. Secure, Verifiable, High-Fidelity.'
+    : (isSurvey ? 'Pollstar Survey Platform. Secure, Verifiable, High-Fidelity.' : 'Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.');
+  const formatDateTime = (date: Date) =>
+    date.toLocaleString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', timeZoneName: 'short',
     });
-  };
 
   const html = `
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
       <div style="text-align: center; margin-bottom: 24px;">
         <span style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.1em;">📅 Schedule Adjusted</span>
       </div>
-      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Voting Window Rescheduled</h2>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">${headingText}</h2>
       <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
-        The administrator has updated the voting window for the poll <strong style="color: #ffffff">"${pollTitle}"</strong>.
+        ${bodyText}
       </p>
 
       <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
-        <strong style="color: #f3f4f6; font-size: 14px; display: block; margin-bottom: 10px;">New Electoral Timing Details:</strong>
+        <strong style="color: #f3f4f6; font-size: 14px; display: block; margin-bottom: 10px;">${timingLabel}</strong>
         <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 6px;">Start Time: <strong style="color: #ffffff">${formatDateTime(newStartTime)}</strong></span>
         <span style="color: #9ca3af; font-size: 13px; display: block;">End Deadline: <strong style="color: #ef4444">${formatDateTime(newEndTime)}</strong></span>
       </div>
 
       <div style="text-align: center; margin-bottom: 24px;">
-        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">Access Secure Ballot</a>
+        <a href="${pollUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">${buttonText}</a>
       </div>
 
       <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
-        Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.
+        ${footerText}
       </p>
     </div>
   `;
 
   if (transporter) {
-    await transporter.sendMail({
-      from: SMTP_FROM,
-      to: email,
-      subject,
-      html,
-    });
+    await transporter.sendMail({ from: SMTP_FROM, to: email, subject, html });
     return true;
   }
 
@@ -410,7 +446,7 @@ export async function sendPollScheduleUpdatedEmail({
   console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
   console.log(`├────────────────────────────────────────────────────────┤`);
   console.log(`│ To:      ${email.padEnd(46)} │`);
-  console.log(`│ Subject: Poll Schedule Adjusted                        │`);
+  console.log(`│ Subject: ${typeLabel} Schedule Adjusted                │`);
   console.log(`│ Start:   ${formatDateTime(newStartTime).padEnd(46)} │`);
   console.log(`│ End:     ${formatDateTime(newEndTime).padEnd(46)} │`);
   console.log(`└────────────────────────────────────────────────────────┘\n`);

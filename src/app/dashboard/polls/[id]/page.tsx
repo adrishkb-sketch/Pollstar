@@ -4185,6 +4185,241 @@ function PollInsightsContent({ params }: PageProps) {
         </div>
       )}
 
+      {/* ── AI-POWERED SURVEY ANALYTICS DASHBOARD ─────────────────────────── */}
+      {poll.pollType === 'SURVEY' && liveTotalVotes > 0 && (() => {
+        const votes = poll.votes || [];
+        const questions = poll.questions || [];
+        const totalResponses = liveTotalVotes;
+
+        // Completion rate per page
+        const maxPage = Math.max(...questions.map((q: any) => q.pageNumber || 1), 1);
+        const pageCompletionRates = Array.from({ length: maxPage }, (_, i) => {
+          const pageNum = i + 1;
+          const pageQs = questions.filter((q: any) => (q.pageNumber || 1) === pageNum);
+          if (pageQs.length === 0) return { page: pageNum, rate: 0 };
+          const answered = votes.filter((v: any) => {
+            try {
+              const ans = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+              return pageQs.some((q: any) => ans && ans[q.id] !== undefined && ans[q.id] !== '');
+            } catch { return false; }
+          }).length;
+          return { page: pageNum, rate: totalResponses > 0 ? Math.round((answered / totalResponses) * 100) : 0 };
+        });
+
+        // Per-question response rates & option distributions
+        const questionInsights = questions.map((q: any) => {
+          const qStats = liveStats[q.id] || {};
+          const totalForQ = Object.values(qStats).reduce((a: number, s: any) => a + (s.count || 0), 0) as number;
+          const options = q.options || [];
+          const distribution = options.map((opt: any) => {
+            const cnt = qStats[opt.id]?.count || 0;
+            return { text: opt.text, count: cnt, pct: totalForQ > 0 ? Math.round((cnt / totalForQ) * 100) : 0 };
+          }).sort((a: any, b: any) => b.count - a.count);
+          const responseRate = totalResponses > 0 ? Math.round((totalForQ / totalResponses) * 100) : 0;
+          return { q, distribution, responseRate, totalForQ };
+        });
+
+        // Device breakdown from IP data
+        const deviceCounts = { mobile: 0, desktop: 0, tablet: 0 };
+        votes.forEach((v: any) => {
+          const ua = v.userAgent || '';
+          if (/tablet|ipad/i.test(ua)) deviceCounts.tablet++;
+          else if (/mobile|android|iphone/i.test(ua)) deviceCounts.mobile++;
+          else deviceCounts.desktop++;
+        });
+        const totalDevices = deviceCounts.mobile + deviceCounts.desktop + deviceCounts.tablet || 1;
+
+        // Time-of-day distribution (buckets: Morning 6-12, Afternoon 12-18, Evening 18-24, Night 0-6)
+        const timeBuckets = [0, 0, 0, 0];
+        votes.forEach((v: any) => {
+          if (!v.createdAt) return;
+          const h = new Date(v.createdAt).getHours();
+          if (h >= 6 && h < 12) timeBuckets[0]++;
+          else if (h >= 12 && h < 18) timeBuckets[1]++;
+          else if (h >= 18 && h < 24) timeBuckets[2]++;
+          else timeBuckets[3]++;
+        });
+        const timeBucketLabels = ['🌅 Morning', '☀️ Afternoon', '🌆 Evening', '🌙 Night'];
+        const maxTimeBucket = Math.max(...timeBuckets, 1);
+
+        // Drop-off: questions with significantly lower response rates
+        const dropOffQuestions = questionInsights
+          .filter((qi: any) => qi.responseRate < 60 && qi.q.options?.length > 0)
+          .slice(0, 3);
+
+        // Consensus score: avg of top-option %, signals agreement level
+        const consensusScores = questionInsights
+          .filter((qi: any) => qi.distribution.length > 0)
+          .map((qi: any) => qi.distribution[0]?.pct || 0);
+        const avgConsensus = consensusScores.length > 0
+          ? Math.round(consensusScores.reduce((a: number, b: number) => a + b, 0) / consensusScores.length)
+          : 0;
+        const consensusLabel = avgConsensus >= 70 ? 'High Agreement' : avgConsensus >= 45 ? 'Moderate Diversity' : 'High Opinion Diversity';
+        const consensusColor = avgConsensus >= 70 ? 'text-emerald-400' : avgConsensus >= 45 ? 'text-amber-400' : 'text-rose-400';
+
+        return (
+          <div className="space-y-6 mt-2">
+            {/* Header */}
+            <div className="flex items-center space-x-3 border-b border-white/5 pb-4">
+              <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <Brain className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-outfit text-lg font-bold text-white">AI-Powered Survey Intelligence</h3>
+                <p className="text-[10px] text-gray-500 font-semibold">Deep analytics · {totalResponses} responses analysed · Demographics · Sentiment · Drop-off</p>
+              </div>
+            </div>
+
+            {/* Summary KPI Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Responses', value: totalResponses, icon: '📋', color: 'bg-purple-500/10 border-purple-500/20 text-purple-400' },
+                { label: 'Completion Rate', value: `${pageCompletionRates[pageCompletionRates.length - 1]?.rate ?? 0}%`, icon: '✅', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' },
+                { label: 'Avg Consensus', value: `${avgConsensus}%`, icon: '🤝', color: 'bg-amber-500/10 border-amber-500/20 text-amber-400' },
+                { label: 'Questions Asked', value: questions.length, icon: '❓', color: 'bg-blue-500/10 border-blue-500/20 text-blue-400' },
+              ].map((kpi) => (
+                <div key={kpi.label} className="glass-card rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
+                  <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-sm mb-1 ${kpi.color}`}>{kpi.icon}</div>
+                  <span className="font-outfit text-2xl font-extrabold text-white">{kpi.value}</span>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{kpi.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Opinion Consensus Meter */}
+            <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-outfit text-sm font-bold text-white">🧠 Opinion Consensus Index</h4>
+                <span className={`text-xs font-extrabold ${consensusColor}`}>{consensusLabel}</span>
+              </div>
+              <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${avgConsensus >= 70 ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : avgConsensus >= 45 ? 'bg-gradient-to-r from-amber-400 to-orange-400' : 'bg-gradient-to-r from-rose-500 to-pink-500'}`}
+                  style={{ width: `${avgConsensus}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-gray-500">Measures how aligned responses are. High agreement = dominant opinion. High diversity = polarised views.</p>
+            </div>
+
+            {/* Demographics: Device + Time of Day */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Device Distribution */}
+              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
+                <h4 className="font-outfit text-sm font-bold text-white">📱 Device Demographics</h4>
+                {[
+                  { label: '🖥️ Desktop', count: deviceCounts.desktop, color: 'bg-emerald-500' },
+                  { label: '📱 Mobile', count: deviceCounts.mobile, color: 'bg-indigo-500' },
+                  { label: '📟 Tablet', count: deviceCounts.tablet, color: 'bg-purple-500' },
+                ].map((dev) => (
+                  <div key={dev.label} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-300 font-semibold">{dev.label}</span>
+                      <span className="text-gray-400">{Math.round((dev.count / totalDevices) * 100)}% <span className="text-gray-600">({dev.count})</span></span>
+                    </div>
+                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${dev.color} transition-all duration-700`} style={{ width: `${Math.round((dev.count / totalDevices) * 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Time of Day Distribution */}
+              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
+                <h4 className="font-outfit text-sm font-bold text-white">🕐 Response Time Distribution</h4>
+                {timeBucketLabels.map((label, i) => (
+                  <div key={label} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-300 font-semibold">{label}</span>
+                      <span className="text-gray-400">{timeBuckets[i]} <span className="text-gray-600">response{timeBuckets[i] !== 1 ? 's' : ''}</span></span>
+                    </div>
+                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-700"
+                        style={{ width: `${Math.round((timeBuckets[i] / maxTimeBucket) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Page Completion Funnel */}
+            {maxPage > 1 && (
+              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
+                <h4 className="font-outfit text-sm font-bold text-white">📉 Page Completion Funnel</h4>
+                <div className="space-y-3">
+                  {pageCompletionRates.map((pr) => (
+                    <div key={pr.page} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-300 font-semibold">Page {pr.page}</span>
+                        <span className={`font-bold ${pr.rate >= 80 ? 'text-emerald-400' : pr.rate >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>{pr.rate}%</span>
+                      </div>
+                      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${pr.rate >= 80 ? 'bg-emerald-500' : pr.rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                          style={{ width: `${pr.rate}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-500">Shows the % of respondents who answered at least one question on each survey page.</p>
+              </div>
+            )}
+
+            {/* Question-Level Insights */}
+            <div className="space-y-4">
+              <h4 className="font-outfit text-sm font-bold text-white">📊 Per-Question Response Breakdown</h4>
+              {questionInsights.filter((qi: any) => qi.distribution.length > 0).map((qi: any, idx: number) => (
+                <div key={qi.q.id} className="glass-card rounded-2xl p-5 border border-white/5 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Q{idx + 1}</span>
+                      <p className="text-sm font-semibold text-white mt-0.5 leading-snug">{qi.q.questionText}</p>
+                    </div>
+                    <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg ${qi.responseRate >= 80 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : qi.responseRate >= 50 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      {qi.responseRate}% responded
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {qi.distribution.map((opt: any, i: number) => (
+                      <div key={i} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-gray-300 truncate max-w-[70%]">{opt.text}</span>
+                          <span className="text-gray-400 font-mono">{opt.pct}% <span className="text-gray-600">({opt.count})</span></span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${i === 0 ? 'bg-gradient-to-r from-purple-500 to-indigo-500' : 'bg-gradient-to-r from-white/20 to-white/10'}`}
+                            style={{ width: `${opt.pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Drop-off Risk Alerts */}
+            {dropOffQuestions.length > 0 && (
+              <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 space-y-3">
+                <h4 className="font-outfit text-sm font-bold text-amber-300 flex items-center gap-2">⚠️ Drop-off Risk Detected</h4>
+                <p className="text-[10px] text-gray-400">The following questions had significantly lower response rates, suggesting respondents may be skipping or abandoning at these points:</p>
+                <div className="space-y-2">
+                  {dropOffQuestions.map((qi: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/3 border border-white/5">
+                      <span className="text-xs text-gray-300 truncate max-w-[70%]">{qi.q.questionText}</span>
+                      <span className="text-xs font-bold text-rose-400">{qi.responseRate}% response rate</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ── STANDARD ANALYTICS (Poll / Survey only) ──────────────────────── */}
       {poll.pollType !== 'EXAM' && (
         <>

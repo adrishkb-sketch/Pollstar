@@ -654,6 +654,7 @@ export async function POST(
             pollTitle: poll.title,
             voteId: savedVote.id,
             resultsUrl,
+            pollType: poll.pollType,
           });
         }
       } catch (err) {

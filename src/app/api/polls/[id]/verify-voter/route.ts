@@ -262,6 +262,7 @@ export async function POST(
           email: allowedVoter.email,
           pollTitle: poll.title,
           pollUrl,
+          pollType: poll.pollType,
         }).catch((e) => console.error('Failed to send low priority access notice:', e));
 
         const voterToken = jwt.sign(

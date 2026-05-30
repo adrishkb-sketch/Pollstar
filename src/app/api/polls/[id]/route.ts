@@ -803,6 +803,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               newStartTime: finalStart,
               newEndTime: finalEnd,
               pollUrl,
+              pollType: poll.pollType,
             }).catch((e) => console.error('Failed to send schedule update email to voter:', voter.email, e));
           });
         } else if (poll.votes && poll.votes.length) {
@@ -814,6 +815,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               newStartTime: finalStart,
               newEndTime: finalEnd,
               pollUrl,
+              pollType: poll.pollType,
             }).catch((e) => console.error('Failed to send schedule update email to voter:', email, e));
           });
         }

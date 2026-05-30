@@ -173,9 +173,10 @@ export async function GET() {
       prisma.deletedPoll.count({ where: { creatorId: user.id, pollType: 'EXAM' } }),
     ]);
 
-    const allTimePolls   = Math.max(activePolls,   deletedPolls);
-    const allTimeSurveys = Math.max(activeSurveys, deletedSurveys);
-    const allTimeExams   = Math.max(activeExams,   deletedExams);
+    // Correct formula: active + deleted (they live in separate tables, not the same records)
+    const allTimePolls   = activePolls   + deletedPolls;
+    const allTimeSurveys = activeSurveys + deletedSurveys;
+    const allTimeExams   = activeExams   + deletedExams;
 
     // Fetch deletion-history ledger for the dashboard "Deleted Items" panel
     const deletedPollsList = await prisma.deletedPoll.findMany({
@@ -185,9 +186,26 @@ export async function GET() {
     });
 
     // ── 3. Build combined totals ─────────────────────────────────────────────
-    const adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls);
-    const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys);
-    const adjustedPackUsedExams = Math.max(0, allTimeExams - expiredCapacityExams);
+    let adjustedPackUsedPolls = 0;
+    let adjustedPackUsedSurveys = 0;
+    let adjustedPackUsedExams = 0;
+
+    if (isSubBased) {
+      // For subscription plans, pack usage is only triggered by creations exceeding the subscription limits.
+      // If the subscription limit is unlimited (-1), then pack usage is 0.
+      const baseSubLimitPolls = subLimitPolls === -1 ? Infinity : subLimitPolls;
+      const baseSubLimitSurveys = subLimitSurveys === -1 ? Infinity : subLimitSurveys;
+      const baseSubLimitExams = subLimitExams === -1 ? Infinity : subLimitExams;
+
+      adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls - baseSubLimitPolls);
+      adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys - baseSubLimitSurveys);
+      adjustedPackUsedExams = Math.max(0, allTimeExams - expiredCapacityExams - baseSubLimitExams);
+    } else {
+      // For pack-only plans, usage is simply the adjusted all-time creations minus expired capacities.
+      adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls);
+      adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys);
+      adjustedPackUsedExams = Math.max(0, allTimeExams - expiredCapacityExams);
+    }
 
     // For subscription-based plans: cycle limits + active pack add-ons
     // For pack plans (individual/combo): just active pack quota
