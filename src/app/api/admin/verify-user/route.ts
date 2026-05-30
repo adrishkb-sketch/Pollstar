@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       where: { id: userId }
     });
 
-    if (!targetUser) {
+    if (!targetUser || !targetUser.verified) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

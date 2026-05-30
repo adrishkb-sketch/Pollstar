@@ -33,6 +33,9 @@ export async function GET() {
     }
 
     const creators = await prisma.user.findMany({
+      where: {
+        verified: true,
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         plan: true,
@@ -76,7 +79,7 @@ export async function PATCH(req: Request) {
       where: { id: userId },
     });
 
-    if (!targetUser) {
+    if (!targetUser || !targetUser.verified) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -175,7 +178,7 @@ export async function DELETE(req: Request) {
       where: { id: userId },
     });
 
-    if (!targetUser) {
+    if (!targetUser || !targetUser.verified) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
