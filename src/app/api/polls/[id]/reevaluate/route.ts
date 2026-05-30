@@ -120,7 +120,7 @@ export async function POST(
       where: { id: pollId },
       include: {
         settings: true,
-        questions: true,
+        questions: { include: { options: true } },
         votes: true,
       },
     });
@@ -164,44 +164,99 @@ export async function POST(
       let answersChanged = false;
 
       poll.questions.forEach((q) => {
-        // Only Short/Long Text answers can be semantic-similarity regraded
-        if (q.type !== 'SHORT_TEXT' && q.type !== 'LONG_TEXT') return;
-
         const qb = breakdown[q.id];
         // If teacher manually overrode, skip!
         if (qb && qb.isOverridden) return;
 
-        const correctAnsStr = q.correctAnswer || '';
-        const userAns = qb?.answer || answersObj[q.id];
+        const maxMarks = q.marks || 0.0;
+        const userAns = qb?.answer !== undefined ? qb.answer : answersObj[q.id];
 
-        if (userAns !== undefined && userAns !== null && correctAnsStr.trim() !== '') {
-          const maxMarks = q.marks || 0.0;
-          const sim = computeSemanticSimilarity(String(userAns), correctAnsStr);
-          const rawMarks = sim.score * maxMarks;
-          const newMarks = Math.round(rawMarks * 2) / 2;
+        // --- SINGLE MCQ regrading ---
+        if (q.type === 'SINGLE') {
+          const correctOpt = (q as any).options?.find((opt: any) => opt.text === q.correctAnswer || opt.id === q.correctAnswer);
+          if (!q.correctAnswer) return; // no model answer set
+          const isCorrect = correctOpt
+            ? String(userAns) === String(correctOpt.id)
+            : String(userAns) === String(q.correctAnswer);
+          const correctText = correctOpt ? correctOpt.text : q.correctAnswer;
 
-          breakdown[q.id] = {
-            ...(qb || {}),
-            answer: userAns,
-            marksAwarded: newMarks,
-            maxMarks,
-            feedback: sim.feedback,
-            isAIGraded: true,
-            isGraded: true,
-          };
+          let rules: any = {};
+          if (typeof q.logicRules === 'string') { try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {} }
+          else if (q.logicRules && typeof q.logicRules === 'object') { rules = q.logicRules; }
+          const enableNeg = !!rules.enableNegativeMarking;
+          const penalty = typeof rules.negativeMarkingPenalty === 'number' ? rules.negativeMarkingPenalty : 0.25;
+
+          let newMarks: number;
+          let newFeedback: string;
+          if (userAns === undefined || userAns === null) {
+            newMarks = 0; newFeedback = "No answer provided.";
+          } else if (isCorrect) {
+            newMarks = maxMarks; newFeedback = "Correct answer selected! Full marks awarded.";
+          } else {
+            newMarks = enableNeg ? -penalty : 0;
+            newFeedback = `Incorrect. Correct answer was: "${correctText}".${enableNeg ? ` Penalty -${penalty} applied.` : ''}`;
+          }
+
+          breakdown[q.id] = { ...(qb || {}), answer: userAns ?? '', marksAwarded: newMarks, maxMarks, feedback: newFeedback, isAIGraded: false, isGraded: true };
           answersChanged = true;
-        } else if (correctAnsStr.trim() === '') {
-          // If model answer was removed, mark as unmarked
-          breakdown[q.id] = {
-            ...(qb || {}),
-            answer: userAns || "",
-            marksAwarded: 0.0,
-            maxMarks: q.marks || 0.0,
-            feedback: "Sample/model answer not provided by examiner. Pending manual marking.",
-            isAIGraded: true,
-            isGraded: false,
-          };
+
+        // --- MULTI_SELECT regrading ---
+        } else if (q.type === 'MULTI_SELECT') {
+          if (!q.correctAnswers) return;
+          let correctList: string[] = [];
+          try { correctList = typeof q.correctAnswers === 'string' ? JSON.parse(q.correctAnswers) : (Array.isArray(q.correctAnswers) ? q.correctAnswers : []); } catch(e) {}
+
+          let rules: any = {};
+          if (typeof q.logicRules === 'string') { try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {} }
+          else if (q.logicRules && typeof q.logicRules === 'object') { rules = q.logicRules; }
+          const markingScheme = rules.markingScheme || 'PARTIAL';
+          const enableNeg = !!rules.enableNegativeMarking;
+          const penalty = typeof rules.negativeMarkingPenalty === 'number' ? rules.negativeMarkingPenalty : 0.25;
+
+          const correctIds = correctList.map((cVal: string) => {
+            const found = (q as any).options?.find((opt: any) => opt.text === cVal || opt.id === cVal);
+            return found ? found.id : cVal;
+          });
+          const correctSet = new Set(correctIds);
+          const userList = Array.isArray(userAns) ? userAns : [];
+          let correctSelected = 0, incorrectSelectedCount = 0;
+          userList.forEach((id: string) => { if (correctSet.has(id)) correctSelected++; else incorrectSelectedCount++; });
+
+          let newMarks = 0;
+          let newFeedback = '';
+          if (markingScheme === 'ALL_OR_NOTHING') {
+            const perfect = correctSelected === correctSet.size && incorrectSelectedCount === 0 && userList.length === correctSet.size;
+            newMarks = perfect ? maxMarks : (enableNeg ? -penalty : 0);
+            newFeedback = perfect ? "All correct. Full marks." : `Incorrect — All-or-Nothing.${enableNeg ? ` Penalty -${penalty}.` : ''}`;
+          } else if (markingScheme === 'ZERO_ON_INCORRECT') {
+            if (incorrectSelectedCount > 0) { newMarks = 0; newFeedback = "Wrong option(s) chosen — score zeroed."; }
+            else { newMarks = Math.round(((correctSelected / Math.max(1, correctSet.size)) * maxMarks) * 2) / 2; newFeedback = `${correctSelected}/${correctSet.size} correct, no wrong. Partial credit.`; }
+          } else if (markingScheme === 'PARTIAL_WITH_PENALTY') {
+            const base = (correctSelected / Math.max(1, correctSet.size)) * maxMarks;
+            newMarks = Math.max(0, Math.round((base - incorrectSelectedCount * penalty) * 2) / 2);
+            newFeedback = `Partial: ${correctSelected}/${correctSet.size} correct, ${incorrectSelectedCount} wrong. Penalty deducted.`;
+          } else {
+            const base = (correctSelected / Math.max(1, correctSet.size)) * maxMarks;
+            const pen = enableNeg ? incorrectSelectedCount * penalty : 0;
+            newMarks = Math.max(enableNeg ? -maxMarks : 0, Math.round((base - pen) * 2) / 2);
+            newFeedback = `Partial: ${correctSelected}/${correctSet.size} correct.${enableNeg ? ` Penalty -${pen.toFixed(1)}.` : ''}`;
+          }
+
+          breakdown[q.id] = { ...(qb || {}), answer: userAns ?? [], marksAwarded: newMarks, maxMarks, feedback: newFeedback, isAIGraded: false, isGraded: true };
           answersChanged = true;
+
+        // --- SHORT_TEXT / LONG_TEXT semantic regrading ---
+        } else if (q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') {
+          const correctAnsStr = q.correctAnswer || '';
+          if (userAns !== undefined && userAns !== null && correctAnsStr.trim() !== '') {
+            const sim = computeSemanticSimilarity(String(userAns), correctAnsStr);
+            const newMarks = Math.round(sim.score * maxMarks * 2) / 2;
+            breakdown[q.id] = { ...(qb || {}), answer: userAns, marksAwarded: newMarks, maxMarks, feedback: sim.feedback, isAIGraded: true, isGraded: true };
+            answersChanged = true;
+          } else if (correctAnsStr.trim() === '') {
+            breakdown[q.id] = { ...(qb || {}), answer: userAns || '', marksAwarded: 0.0, maxMarks, feedback: "Model answer not provided. Pending manual marking.", isAIGraded: true, isGraded: false };
+            answersChanged = true;
+          }
         }
       });
 

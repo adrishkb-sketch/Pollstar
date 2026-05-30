@@ -450,6 +450,7 @@ export async function POST(
             });
 
             if (markingScheme === 'ALL_OR_NOTHING') {
+              // ALL_OR_NOTHING: must select exactly all correct options and nothing else
               const allCorrectSelected = correctSelected === correctSet.size && incorrectSelectedCount === 0;
               if (allCorrectSelected && userList.length === correctSet.size) {
                 marksAwarded = maxMarks;
@@ -457,29 +458,49 @@ export async function POST(
               } else {
                 if (enableNegativeMark) {
                   marksAwarded = -negPenalty;
-                  feedback = `Incorrect selection. All-or-nothing scheme applied. Negative penalty of -${negPenalty} applied.`;
+                  feedback = `Incorrect selection. All-or-nothing scheme — full marks or nothing. Negative penalty of -${negPenalty} applied.`;
                 } else {
                   marksAwarded = 0.0;
                   feedback = "Incorrect selection. All-or-nothing scheme applied (0 marks).";
                 }
               }
-            } else {
-              // PARTIAL marking scheme
+            } else if (markingScheme === 'PARTIAL_WITH_PENALTY') {
+              // PARTIAL_WITH_PENALTY: proportional credit for correct, minus fixed penalty for each wrong choice
               if (correctSelected > 0 && correctSet.size > 0) {
                 const baseMarks = (correctSelected / correctSet.size) * maxMarks;
                 const penaltyAmount = incorrectSelectedCount * negPenalty;
-                if (enableNegativeMark) {
-                  marksAwarded = Math.max(-maxMarks, baseMarks - penaltyAmount);
-                  feedback = `Partial selection correct (${correctSelected}/${correctSet.size} options, ${incorrectSelectedCount} wrong). Penalty of -${penaltyAmount} applied.`;
-                } else {
-                  marksAwarded = baseMarks;
-                  feedback = `Partial selection correct (${correctSelected}/${correctSet.size} options). Partial credit awarded.`;
-                }
-                marksAwarded = Math.round(marksAwarded * 2) / 2; // multi of 0.5
+                marksAwarded = Math.max(0, Math.round((baseMarks - penaltyAmount) * 2) / 2);
+                feedback = `Partial: ${correctSelected}/${correctSet.size} correct options selected, ${incorrectSelectedCount} wrong. Base: ${baseMarks.toFixed(1)}, Penalty: -${penaltyAmount.toFixed(1)}. Marks: ${marksAwarded}.`;
+              } else if (incorrectSelectedCount > 0) {
+                marksAwarded = 0.0;
+                feedback = `All selected options were incorrect. Penalty applied, score floored at 0.`;
+              } else {
+                marksAwarded = 0.0;
+                feedback = "No options selected.";
+              }
+            } else if (markingScheme === 'ZERO_ON_INCORRECT') {
+              // ZERO_ON_INCORRECT: proportional credit, but 0 if any wrong option was chosen
+              if (incorrectSelectedCount > 0) {
+                marksAwarded = 0.0;
+                feedback = `Incorrect option(s) selected — score zeroed. Zero-on-Incorrect scheme requires only correct selections.`;
+              } else if (correctSelected > 0 && correctSet.size > 0) {
+                marksAwarded = Math.round(((correctSelected / correctSet.size) * maxMarks) * 2) / 2;
+                feedback = `${correctSelected}/${correctSet.size} correct options selected (no wrong choices). Partial credit awarded.`;
+              } else {
+                marksAwarded = 0.0;
+                feedback = "No options selected.";
+              }
+            } else {
+              // PARTIAL (default): proportional credit per correct option, with optional per-wrong-option penalty
+              if (correctSelected > 0 && correctSet.size > 0) {
+                const baseMarks = (correctSelected / correctSet.size) * maxMarks;
+                const penaltyAmount = enableNegativeMark ? incorrectSelectedCount * negPenalty : 0;
+                marksAwarded = Math.max(enableNegativeMark ? -maxMarks : 0, Math.round((baseMarks - penaltyAmount) * 2) / 2);
+                feedback = `Partial: ${correctSelected}/${correctSet.size} correct options, ${incorrectSelectedCount} wrong.${enableNegativeMark ? ` Penalty -${penaltyAmount.toFixed(1)} applied.` : ''} Marks: ${marksAwarded}.`;
               } else {
                 if (enableNegativeMark && incorrectSelectedCount > 0) {
                   marksAwarded = -negPenalty;
-                  feedback = `Incorrect selection. Negative penalty of -${negPenalty} applied.`;
+                  feedback = `No correct options selected. Negative penalty of -${negPenalty} applied.`;
                 } else {
                   marksAwarded = 0.0;
                   feedback = "No correct options selected. No marks awarded.";

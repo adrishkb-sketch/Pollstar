@@ -49,6 +49,21 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
     }
   }, [pollId, emailParam]);
 
+  useEffect(() => {
+    if (data && searchParams.get('print') === 'true') {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [data, searchParams]);
+
+  useEffect(() => {
+    if (data?.result?.poll?.title) {
+      document.title = `${data.result.poll.title} - Graded Analysis Report`;
+    }
+  }, [data]);
+
   const toggleExpand = (qId: string) => {
     setExpandedQuestions(prev => ({ ...prev, [qId]: !prev[qId] }));
   };
@@ -245,6 +260,13 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
           <span>Back to Home</span>
         </Link>
 
+        {examinee.markingStatus !== 'FULLY_MARKED' && (
+          <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-amber-400 font-semibold text-xs flex items-center gap-2 shadow-lg animate-pulse">
+            <AlertCircle className="w-5 h-5" />
+            <span>⚠️ Marks Pending: Final manual grading is in progress. Some scores may change.</span>
+          </div>
+        )}
+
         {/* Print stylesheets override for professional A4 PDF generation */}
         <style>{`
           @media print {
@@ -347,110 +369,119 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
           </div>
 
           {/* Peer Rank & Comparative Diagnostics */}
-          {(() => {
-            const stats = data?.result?.cohortStats || { peerRank: 1, totalSubmissions: 1, classAverage: 0.0, highestScore: 0.0 };
-            return (
-              <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                {/* Peer Rank card */}
-                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Cohort Standing</span>
-                    <Award className="w-5 h-5 text-amber-400 animate-bounce" />
-                  </div>
-                  <div className="space-y-1 mt-4">
-                    <span className="text-3xl font-mono font-black text-white">
-                      Rank #{stats.peerRank}
-                    </span>
-                    <span className="text-[10px] text-gray-400 block font-medium">
-                      Out of {stats.totalSubmissions} examinee submissions.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Class Average comparison card */}
-                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Class Comparison</span>
-                    <Clock className="w-5 h-5 text-indigo-400" />
-                  </div>
-                  <div className="space-y-2 mt-4">
-                    <div className="flex justify-between text-xs font-mono font-bold text-white">
-                      <span>Average:</span>
-                      <span className="text-indigo-400">{stats.classAverage}</span>
+          {poll.settings?.enableSmartDebrief ? (
+            (() => {
+              const stats = data?.result?.cohortStats || { peerRank: 1, totalSubmissions: 1, classAverage: 0.0, highestScore: 0.0 };
+              return (
+                <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  {/* Peer Rank card */}
+                  <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Cohort Standing</span>
+                      <Award className="w-5 h-5 text-amber-400 animate-bounce" />
                     </div>
-                    <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
-                      <div 
-                        className="h-full bg-indigo-500 rounded-full" 
-                        style={{ width: `${Math.min(100, (stats.classAverage / (scoreTotal || 1)) * 100)}%` }}
-                      />
+                    <div className="space-y-1 mt-4">
+                      <span className="text-3xl font-mono font-black text-white">
+                        Rank #{stats.peerRank}
+                      </span>
+                      <span className="text-[10px] text-gray-400 block font-medium">
+                        Out of {stats.totalSubmissions} examinee submissions.
+                      </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 block font-medium">
-                      Class High: <strong className="text-emerald-400">{stats.highestScore} Marks</strong>
-                    </span>
                   </div>
-                </div>
 
-                {/* Testing Duration & Proctor Integrity */}
-                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Session Proctoring</span>
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  {/* Class Average comparison card */}
+                  <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Class Comparison</span>
+                      <Clock className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div className="space-y-2 mt-4">
+                      <div className="flex justify-between text-xs font-mono font-bold text-white">
+                        <span>Average:</span>
+                        <span className="text-indigo-400">{stats.classAverage}</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+                        <div 
+                          className="h-full bg-indigo-500 rounded-full" 
+                          style={{ width: `${Math.min(100, (stats.classAverage / (scoreTotal || 1)) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-400 block font-medium">
+                        Class High: <strong className="text-emerald-400">{stats.highestScore} Marks</strong>
+                      </span>
+                    </div>
                   </div>
-                  <div className="space-y-1 mt-4">
-                    <span className={`text-sm font-bold block ${isSuspicious ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {isSuspicious ? '⚠️ Tab Switched Warning' : '✅ Full Focus Active'}
-                    </span>
-                    <span className="text-[10px] text-gray-400 block font-medium">
-                      Time spent: {timeSpentStr}
-                    </span>
+
+                  {/* Testing Duration & Proctor Integrity */}
+                  <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Session Proctoring</span>
+                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="space-y-1 mt-4">
+                      <span className={`text-sm font-bold block ${isSuspicious ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {isSuspicious ? '⚠️ Tab Switched Warning' : '✅ Full Focus Active'}
+                      </span>
+                      <span className="text-[10px] text-gray-400 block font-medium">
+                        Time spent: {timeSpentStr}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()
+          ) : (
+            <div className="md:col-span-3 glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col items-center justify-center text-center">
+              <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Comparative Insights</span>
+              <p className="text-xs text-gray-400 mt-3 max-w-sm">Comparative metrics and cohort standing analytics are disabled for this examination.</p>
+            </div>
+          )}
 
         </div>
 
         {/* PERSONALIZED AI CONCEPT TUTOR CARD */}
-        {incorrectQuestions.length > 0 ? (
-          <div className="glass-card rounded-3xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4 shadow-xl">
-            <div className="flex items-center space-x-2.5">
-              <GraduationCap className="w-6 h-6 text-indigo-400 animate-pulse" />
-              <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
-                <span>🎓 AI Concept Tutor</span>
-                <span className="text-[10px] uppercase tracking-wider font-extrabold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded">Personalized Coaching</span>
-              </h3>
-            </div>
-            <p className="text-gray-300 text-xs leading-relaxed">
-              Based on your response performance, we identified some areas that would benefit from conceptual revision. Spend a few minutes reviewing these core concepts to solidify your understanding:
-            </p>
+        {poll.settings?.enableSmartDebrief && (
+          incorrectQuestions.length > 0 ? (
+            <div className="glass-card rounded-3xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4 shadow-xl">
+              <div className="flex items-center space-x-2.5">
+                <GraduationCap className="w-6 h-6 text-indigo-400 animate-pulse" />
+                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-1.5">
+                  <span>🎓 AI Concept Tutor</span>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded">Personalized Coaching</span>
+                </h3>
+              </div>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Based on your response performance, we identified some areas that would benefit from conceptual revision. Spend a few minutes reviewing these core concepts to solidify your understanding:
+              </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {incorrectQuestions.map((q: any, index: number) => (
-                <div key={q.id} className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 space-y-1.5">
-                  <span className="text-[9px] uppercase font-bold font-mono text-indigo-400">Concept #{index + 1}: {q.questionText.slice(0, 30)}...</span>
-                  <h4 className="font-bold text-white text-xs leading-snug">
-                    Correct Concept:
-                  </h4>
-                  <p className="text-gray-400 text-[11px] leading-relaxed">
-                    {q.type === 'SINGLE' ? (
-                      `The correct choice is option "${q.options.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer}". Make sure to align options on technical correctness.`
-                    ) : (
-                      `Check correct answer parameters: "${q.correctAnswer}". AI Suggestion: ${q.feedback}`
-                    )}
-                  </p>
-                </div>
-              ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {incorrectQuestions.map((q: any, index: number) => (
+                  <div key={q.id} className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 space-y-1.5">
+                    <span className="text-[9px] uppercase font-bold font-mono text-indigo-400">Concept #{index + 1}: {q.questionText.slice(0, 30)}...</span>
+                    <h4 className="font-bold text-white text-xs leading-snug">
+                      Correct Concept:
+                    </h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      {q.type === 'SINGLE' ? (
+                        `The correct choice is option "${q.options.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer}". Make sure to align options on technical correctness.`
+                      ) : (
+                        `Check correct answer parameters: "${q.correctAnswer}". AI Suggestion: ${q.feedback}`
+                      )}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="glass-card rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-6 space-y-3.5 shadow-xl text-center">
-            <Sparkles className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
-            <h3 className="font-outfit text-base font-bold text-white">🏆 Flawless Score! Perfect Mastery</h3>
-            <p className="text-gray-300 text-xs leading-relaxed max-w-lg mx-auto">
-              Sensational! You achieved full marks across every single question in this examination. You have demonstrated perfect conceptual mastery. No conceptual tutoring needed!
-            </p>
-          </div>
+          ) : (
+            <div className="glass-card rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-6 space-y-3.5 shadow-xl text-center">
+              <Sparkles className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
+              <h3 className="font-outfit text-base font-bold text-white">🏆 Flawless Score! Perfect Mastery</h3>
+              <p className="text-gray-300 text-xs leading-relaxed max-w-lg mx-auto">
+                Sensational! You achieved full marks across every single question in this examination. You have demonstrated perfect conceptual mastery. No conceptual tutoring needed!
+              </p>
+            </div>
+          )
         )}
 
         {/* Detailed Question Review List */}
@@ -547,15 +578,17 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#030712]/50 border border-white/5 space-y-2">
-                        <div className="flex items-center gap-1.5 text-indigo-400 font-bold">
-                          <Sparkles className="w-4 h-4" />
-                          <span>AI Diagnostics Review</span>
+                      {poll.settings?.enableSmartDebrief && (
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-white/5 space-y-2">
+                          <div className="flex items-center gap-1.5 text-indigo-400 font-bold">
+                            <Sparkles className="w-4 h-4" />
+                            <span>AI Diagnostics Review</span>
+                          </div>
+                          <p className="text-gray-400 leading-relaxed text-xs italic">
+                            "{q.feedback}"
+                          </p>
                         </div>
-                        <p className="text-gray-400 leading-relaxed text-xs italic">
-                          "{q.feedback}"
-                        </p>
-                      </div>
+                      )}
 
                     </div>
                   )}

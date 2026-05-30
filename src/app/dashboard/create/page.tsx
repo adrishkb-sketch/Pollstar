@@ -1389,7 +1389,7 @@ export default function CreatePoll() {
       posterUrl,
       pollType,
       isOpenVoting,
-      isAnonymous,
+      isAnonymous: pollType === 'EXAM' ? false : isAnonymous,
       isResultPublic,
       startTime: new Date(startTime).toISOString(),
       endTime: new Date(endTime).toISOString(),
@@ -1544,7 +1544,7 @@ export default function CreatePoll() {
       description: ballotPriority === 'LOW' && !isOpenVoting && pollType !== 'SURVEY' ? `${description} [priority: LOW]` : description,
       posterUrl,
       isOpenVoting,
-      isAnonymous,
+      isAnonymous: pollType === 'EXAM' ? false : isAnonymous,
       isResultPublic,
       startTime: new Date(startTime).toISOString(),
       endTime: new Date(endTime).toISOString(),
@@ -1695,11 +1695,15 @@ export default function CreatePoll() {
     }
   };
 
+  // EXAM skips the anonymity/privacy step → 8 steps total
   const stepsList = pollType === 'EXAM'
-    ? ['Details', 'Questions', 'Completion', 'Audience', 'Security', 'Anti-Cheat', 'Schedule', 'Visibility', 'Settings']
+    ? ['Details', 'Questions', 'Completion', 'Audience', 'Security', 'Schedule', 'Visibility', 'Settings']
     : pollType === 'SURVEY'
       ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
       : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
+
+  // For EXAM, steps 6+ are shifted up by 1 to skip the anonymity slot
+  const renderStep = pollType === 'EXAM' && currentStep >= 6 ? currentStep + 1 : currentStep;
 
   const showPhoneColumn = pollType === 'EXAM' || verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
   const showPasswordColumn = verificationType === 'PASSWORD' || allowedVoters.some(v => v.voterAuthType === 'EMAIL_PASSWORD' || v.voterAuthType === 'PHONE_PASSWORD');
@@ -1778,7 +1782,7 @@ export default function CreatePoll() {
         {/* Top Progress bar */}
         <div className="space-y-4">
           <div className="flex justify-between items-center text-xs text-gray-500 uppercase tracking-widest font-bold">
-            <span>Step {currentStep} of 9</span>
+            <span>Step {currentStep} of {stepsList.length}</span>
             <span className="text-indigo-400">{stepsList[currentStep - 1]}</span>
           </div>
           <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden flex">
@@ -1933,7 +1937,7 @@ export default function CreatePoll() {
                   <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Questions</h2>
                   <p className="text-gray-400 text-sm mt-1">Define the questions being asked.</p>
                 </div>
-                {pollType === 'SURVEY' && (
+                {(pollType === 'SURVEY' || pollType === 'EXAM') && (
                   <div className="flex space-x-3">
                     <button
                       type="button"
@@ -2189,8 +2193,10 @@ export default function CreatePoll() {
                                 onChange={(e) => updateRules({ markingScheme: e.target.value })}
                                 className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                               >
-                                <option value="ALL_OR_NOTHING">ALL_OR_NOTHING (Strict: 0 marks if any option is incorrect or missing)</option>
-                                <option value="PARTIAL">PARTIAL (Partial credit for each correct option selected, minus incorrect penalties)</option>
+                                <option value="ALL_OR_NOTHING">ALL_OR_NOTHING (Strict: 0 marks if any choice is wrong/missing)</option>
+                                <option value="PARTIAL">PARTIAL (Proportional credit, no penalty)</option>
+                                <option value="PARTIAL_WITH_PENALTY">PARTIAL_WITH_PENALTY (Proportional credit, deduct penalty for incorrect selections)</option>
+                                <option value="ZERO_ON_INCORRECT">ZERO_ON_INCORRECT (Proportional credit, but 0 marks if any incorrect choice is made)</option>
                               </select>
                               <p className="text-[9px] text-gray-500 font-outfit block mt-1">
                                 Specify how partial and incorrect choices are scored for multiple correct choice questions.
@@ -3100,7 +3106,9 @@ export default function CreatePoll() {
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'voterAuthType')}
                                   className="w-full bg-[#030712] border border-white/10 rounded-xl px-2 py-1 text-white outline-none focus:border-purple-500 font-semibold"
                                 >
-                                  <option value="GLOBAL">Global (Inherit)</option>
+                                  <option value="GLOBAL">
+                                    Global (Inherit: {verificationMethod === 'PHONE' ? 'Phone + Password' : (verificationType === 'PASSWORD' ? 'Email + Password' : 'Email + OTP')})
+                                  </option>
                                   <option value="EMAIL_OTP">Email + OTP</option>
                                   <option value="EMAIL_PASSWORD">Email + Password</option>
                                   <option value="PHONE_PASSWORD">Phone + Password</option>
@@ -3313,8 +3321,8 @@ export default function CreatePoll() {
             </div>
           )}
 
-          {/* STEP 6: Privacy / Anonymity Settings */}
-          {currentStep === 6 && (
+          {/* STEP 6: Privacy / Anonymity Settings (skipped for EXAM — renderStep jumps to 7) */}
+          {renderStep === 6 && (
             pollType === 'POLL' ? (
               <div className="space-y-6 animate-fade-in-up">
                 <div>
@@ -3482,7 +3490,7 @@ export default function CreatePoll() {
           )}
 
           {/* STEP 7: Time Scheduling */}
-          {currentStep === 7 && (
+          {renderStep === 7 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Set the Schedule</h2>
@@ -3520,7 +3528,7 @@ export default function CreatePoll() {
           )}
 
           {/* STEP 8: Review & Results Visibility Toggles */}
-          {currentStep === 8 && (
+          {renderStep === 8 && (
             pollType === 'POLL' ? (
               <div className="space-y-6 animate-fade-in-up">
                 <div>
@@ -3952,7 +3960,7 @@ export default function CreatePoll() {
           )}
 
           {/* STEP 9: Advanced Features */}
-          {currentStep === 9 && (
+          {renderStep === 9 && (
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Advanced Features</h2>
@@ -4324,7 +4332,7 @@ export default function CreatePoll() {
           </button>
 
           <div className="flex items-center space-x-3">
-            {currentStep < 9 ? (
+            {currentStep < stepsList.length ? (
               <button
                 type="button"
                 onClick={nextStep}

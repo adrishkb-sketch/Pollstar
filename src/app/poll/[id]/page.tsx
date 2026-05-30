@@ -1885,7 +1885,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            {poll.isResultPublic && (
+            {poll.pollType !== 'EXAM' && poll.isResultPublic && (
               <button
                 type="button"
                 onClick={() => {
@@ -3463,23 +3463,32 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                 }
               </span>
             )}
-            {poll.pollType === 'EXAM' && (poll.settings?.enableInstantFeedback || poll.settings?.resultsReleased) && (
-              <div className="pt-4 flex justify-center">
-                <Link
-                  href={`/poll/${poll.id}/analysis?email=${encodeURIComponent(voterEmail || openEmail || voterIdentifier || '')}`}
-                  className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center space-x-2 active:scale-95 animate-pulse-slow"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>View Grade & Diagnostic Report</span>
-                </Link>
-              </div>
-            )}
+            {(() => {
+              if (poll.pollType !== 'EXAM') return null;
+              const isInstant = !!poll.settings?.enableInstantFeedback;
+              const isHideUntilEnd = !!poll.settings?.hideResultsUntilEnd;
+              const isReleasedSetting = !!poll.settings?.resultsReleased;
+              const isReleased = isInstant || (isHideUntilEnd ? new Date() > new Date(poll.endTime) : isReleasedSetting);
+
+              if (!isReleased) return null;
+              return (
+                <div className="pt-4 flex justify-center">
+                  <Link
+                    href={`/poll/${poll.id}/analysis?email=${encodeURIComponent(voterEmail || openEmail || voterIdentifier || '')}`}
+                    className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center space-x-2 active:scale-95 animate-pulse-slow"
+                  >
+                    <Award className="w-4 h-4" />
+                    <span>View Grade & Diagnostic Report</span>
+                  </Link>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* Dynamic Real-Time Results displaying below */}
-      {((votedSuccessfully && poll.isResultPublic) || (!votedSuccessfully && poll.isResultPublic && poll.isOpenVoting)) && (
+      {poll.pollType !== 'EXAM' && ((votedSuccessfully && poll.isResultPublic) || (!votedSuccessfully && poll.isResultPublic && poll.isOpenVoting)) && (
         <div className="space-y-8 animate-fade-in-up">
           <div className="flex items-center space-x-2 border-b border-white/5 pb-4">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />

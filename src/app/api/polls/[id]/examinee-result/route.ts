@@ -54,12 +54,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     // Safeguard: Check if results are released or instant feedback is enabled
-    const isReleased = !!(poll.settings?.resultsReleased || poll.settings?.enableInstantFeedback);
+    const now = new Date();
+    const isInstant = !!poll.settings?.enableInstantFeedback;
+    const isHideUntilEnd = !!poll.settings?.hideResultsUntilEnd;
+    const isReleasedSetting = !!poll.settings?.resultsReleased;
+
+    let isReleased = false;
+    if (isInstant) {
+      isReleased = true;
+    } else if (isHideUntilEnd) {
+      isReleased = now > new Date(poll.endTime);
+    } else {
+      isReleased = isReleasedSetting;
+    }
+
     if (!isReleased) {
       return NextResponse.json({
         success: false,
         resultsReleased: false,
-        message: '🔒 Exam results are currently withheld. The examiner has not released score reports yet.'
+        message: isHideUntilEnd 
+          ? '🔒 Exam results are withheld until the examination period ends.'
+          : '🔒 Exam results are currently withheld. The examiner has not released score reports yet.'
       }, { status: 200 });
     }
 
@@ -157,6 +172,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         description: poll.description,
         startTime: poll.startTime,
         endTime: poll.endTime,
+        settings: poll.settings,
       },
       examinee: {
         email: vote.email,
@@ -166,6 +182,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         flaggedSuspicious: vote.flaggedSuspicious,
         timeSpent: vote.timeSpent,
         createdAt: vote.createdAt,
+        markingStatus: answersObj?.__markingStatus || 'FULLY_MARKED',
       },
       score: examScore,
       cohortStats: {

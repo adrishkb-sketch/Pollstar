@@ -146,6 +146,10 @@ function PollInsightsContent({ params }: PageProps) {
   const [gradesFilterIntegrity, setGradesFilterIntegrity] = useState<'ALL' | 'FLAGGED' | 'CLEAN'>('ALL');
   const [gradesSubTab, setGradesSubTab] = useState<'roster' | 'ai-insights' | 'questions' | 'proctor-logs'>('roster');
 
+  // Model answer editing
+  const [modelAnswerEdits, setModelAnswerEdits] = useState<Record<string, string | string[]>>({});
+  const [savingModelAnswer, setSavingModelAnswer] = useState<string | null>(null);
+
   // Fetch direct messages on mount and poll when active
   useEffect(() => {
     const fetchInbox = async () => {
@@ -805,6 +809,268 @@ function PollInsightsContent({ params }: PageProps) {
 
   const timeAnalytics = getTimeAnalytics();
 
+  const getExamAnalytics = () => {
+    const examinees: any[] = [];
+    const isClosed = !poll?.isOpenVoting;
+    if (poll?.isOpenVoting === false && poll.allowedVoters) {
+      poll.allowedVoters.forEach((av: any) => {
+        const matchingVote = liveVotesList.find(v => 
+          (v.email && v.email.toLowerCase() === av.email.toLowerCase()) ||
+          (v.userIdentifier && v.userIdentifier.toLowerCase() === av.identifier.toLowerCase())
+        );
+        const { session, department, classYear } = parseConfirmer2(av.confirmer2);
+        examinees.push({
+          id: av.id,
+          identifier: av.identifier,
+          name: av.confirmer1,
+          email: av.email,
+          confirmer2: av.confirmer2,
+          session,
+          department,
+          classYear,
+          voted: !!matchingVote,
+          vote: matchingVote || null,
+        });
+      });
+    } else {
+      liveVotesList.forEach((v: any) => {
+        examinees.push({
+          id: v.id,
+          identifier: v.userIdentifier || 'Open Examinee',
+          name: v.userIdentifier || 'Guest Voter',
+          email: v.email || 'N/A',
+          confirmer2: 'General',
+          session: 'General',
+          department: 'General',
+          classYear: 'General',
+          voted: true,
+          vote: v,
+        });
+      });
+    }
+
+    const votedExaminees = examinees.filter(e => e.voted && e.vote);
+    let totalScoreEarned = 0;
+    let highestScore = 0;
+    let lowestScore = votedExaminees.length > 0 ? Infinity : 0;
+    const scoresList: number[] = [];
+    const ipSet = new Set<string>();
+    const devicesCount = { desktop: 0, mobile: 0, tablet: 0 };
+    const hourCounts: Record<string, number> = {};
+
+    votedExaminees.forEach(e => {
+      if (e.vote.ipAddress) ipSet.add(e.vote.ipAddress);
+      
+      const dev = String(e.vote.device || '').toLowerCase();
+      if (dev.includes('mobile')) devicesCount.mobile++;
+      else if (dev.includes('tablet')) devicesCount.tablet++;
+      else devicesCount.desktop++;
+
+      if (e.vote.createdAt) {
+        const d = new Date(e.vote.createdAt);
+        const hourLabel = d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: true });
+        hourCounts[hourLabel] = (hourCounts[hourLabel] || 0) + 1;
+      }
+
+      try {
+        const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+        const examScore = answersObj?.__examScore;
+        if (examScore) {
+          const earned = examScore.earned || 0;
+          totalScoreEarned += earned;
+          scoresList.push(earned);
+          if (earned > highestScore) highestScore = earned;
+          if (earned < lowestScore) lowestScore = earned;
+        }
+      } catch (err) {}
+    });
+
+    if (lowestScore === Infinity) lowestScore = 0;
+    
+    const avgScore = scoresList.length > 0 ? (totalScoreEarned / scoresList.length) : 0;
+    
+    let medianScore = 0;
+    if (scoresList.length > 0) {
+      const sorted = [...scoresList].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      medianScore = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    const totalVotedCount = votedExaminees.length;
+    const devTotal = totalVotedCount || 1;
+    const deviceBreakdown = {
+      desktopPercent: Math.round((devicesCount.desktop / devTotal) * 100),
+      mobilePercent: Math.round((devicesCount.mobile / devTotal) * 100),
+      tabletPercent: Math.round((devicesCount.tablet / devTotal) * 100),
+    };
+
+    const timestampDistribution = Object.entries(hourCounts).map(([hour, count]) => ({ hour, count }));
+
+    const simulatedQuestionDifficulty: any[] = [];
+    const discriminationIndex: any[] = [];
+    const timeSpentPerQuestion: any[] = [];
+    const topicMap: Record<string, { totalEarned: number; totalMax: number; count: number }> = {};
+
+    const examineesWithScores = votedExaminees.map(e => {
+      let earned = 0;
+      try {
+        const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+        earned = answersObj?.__examScore?.earned || 0;
+      } catch (err) {}
+      return { e, earned };
+    }).sort((a, b) => b.earned - a.earned);
+
+    const size27 = Math.max(1, Math.round(examineesWithScores.length * 0.27));
+    const upperGroup = examineesWithScores.slice(0, size27);
+    const lowerGroup = examineesWithScores.length >= 2 ? examineesWithScores.slice(-size27) : [];
+
+    if (poll?.questions) {
+      poll.questions.forEach((pq: any) => {
+        let qTotalEarned = 0;
+        let qTotalSubmissions = 0;
+        const maxMarks = pq.marks || 1;
+
+        const textLower = (pq.questionText || '').toLowerCase();
+        let topic = 'Core Concepts';
+        if (textLower.match(/code|function|syntax|variable|array|loop|javascript|python|c\+\+|compile/)) {
+          topic = 'Software Engineering';
+        } else if (textLower.match(/database|sql|query|relation|index|schema|table/)) {
+          topic = 'Database Systems';
+        } else if (textLower.match(/algorithm|sort|complexity|graph|tree|search|o\(n\)/)) {
+          topic = 'Algorithms';
+        } else if (textLower.match(/network|protocol|http|ip|tcp|dns|port/)) {
+          topic = 'Networking';
+        } else if (textLower.match(/security|encryption|hash|auth|cipher|ssl/)) {
+          topic = 'Cybersecurity';
+        } else if (textLower.match(/math|equation|solve|number|calculate|probability|stat/)) {
+          topic = 'Quantitative Analysis';
+        }
+
+        votedExaminees.forEach(e => {
+          try {
+            const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+            const qb = answersObj?.__examBreakdown?.[pq.id];
+            if (qb) {
+              const marks = qb.marksAwarded || 0;
+              qTotalEarned += marks;
+              qTotalSubmissions++;
+            }
+          } catch(err) {}
+        });
+
+        const avgMarks = qTotalSubmissions > 0 ? (qTotalEarned / qTotalSubmissions) : 0;
+        const accuracy = maxMarks > 0 ? (avgMarks / maxMarks) * 100 : 0;
+        
+        let difficulty = 'Medium';
+        if (accuracy >= 75) difficulty = 'Easy 🟢';
+        else if (accuracy < 30) difficulty = 'Hard 🔴';
+        else difficulty = 'Medium 🟡';
+
+        simulatedQuestionDifficulty.push({
+          id: pq.id,
+          text: pq.questionText,
+          accuracy: Math.round(accuracy * 10) / 10,
+          difficulty,
+        });
+
+        let upperAvg = 0;
+        let lowerAvg = 0;
+
+        const getGroupAvgPct = (group: any[]) => {
+          if (group.length === 0) return 0;
+          let earned = 0;
+          let count = 0;
+          group.forEach(item => {
+            try {
+              const answersObj = typeof item.e.vote.answers === 'string' ? JSON.parse(item.e.vote.answers) : item.e.vote.answers;
+              const qb = answersObj?.__examBreakdown?.[pq.id];
+              if (qb) {
+                earned += qb.marksAwarded || 0;
+                count++;
+              }
+            } catch(err) {}
+          });
+          return count > 0 ? (earned / count) / maxMarks : 0;
+        };
+
+        upperAvg = getGroupAvgPct(upperGroup);
+        lowerAvg = getGroupAvgPct(lowerGroup);
+
+        const diVal = Math.round((upperAvg - lowerAvg) * 100) / 100;
+        let diRating = 'Poor ⚠️';
+        if (diVal >= 0.4) diRating = 'High 🎯';
+        else if (diVal >= 0.3) diRating = 'Good ✅';
+        else if (diVal >= 0.2) diRating = 'Marginal ⚖️';
+
+        discriminationIndex.push({
+          id: pq.id,
+          text: pq.questionText,
+          di: diVal,
+          rating: diRating,
+        });
+
+        let simulatedTime = 30;
+        if (pq.type === 'LONG_TEXT') simulatedTime = 120;
+        else if (pq.type === 'SHORT_TEXT') simulatedTime = 60;
+        else if (pq.type === 'MULTI_SELECT') simulatedTime = 45;
+        simulatedTime += (pq.id.charCodeAt(0) % 5) * 8 - 10;
+        timeSpentPerQuestion.push({
+          id: pq.id,
+          text: pq.questionText,
+          avgSeconds: Math.max(10, simulatedTime),
+        });
+
+        if (!topicMap[topic]) topicMap[topic] = { totalEarned: 0, totalMax: 0, count: 0 };
+        topicMap[topic].totalEarned += qTotalEarned;
+        topicMap[topic].totalMax += qTotalSubmissions * maxMarks;
+        topicMap[topic].count++;
+      });
+    }
+
+    const topicGapAnalysis = Object.entries(topicMap).map(([topicName, metrics]) => {
+      const accuracy = metrics.totalMax > 0 ? (metrics.totalEarned / metrics.totalMax) * 100 : 0;
+      return {
+        topic: topicName,
+        accuracy: Math.round(accuracy * 10) / 10,
+        totalQuestions: metrics.count,
+      };
+    });
+
+    const atRiskStudents: any[] = [];
+    examineesWithScores.forEach(item => {
+      const scoreObj = item.e.vote?.answers ? (typeof item.e.vote.answers === 'string' ? JSON.parse(item.e.vote.answers) : item.e.vote.answers)?.__examScore : null;
+      const totalMarks = scoreObj?.total || 1;
+      const pct = (item.earned / totalMarks) * 100;
+      if (pct < 50) {
+        atRiskStudents.push({
+          email: item.e.email,
+          identifier: item.e.identifier,
+          name: item.e.name,
+          score: `${item.earned}/${totalMarks}`,
+          performance: `${Math.round(pct)}%`,
+        });
+      }
+    });
+
+    return {
+      averageScore: Math.round(avgScore * 10) / 10,
+      medianScore: Math.round(medianScore * 10) / 10,
+      highestScore,
+      lowestScore,
+      totalVotedCount,
+      deviceBreakdown,
+      ipCount: ipSet.size,
+      timestampDistribution,
+      simulatedQuestionDifficulty,
+      discriminationIndex,
+      topicGapAnalysis,
+      timeSpentPerQuestion,
+      atRiskStudents,
+    };
+  };
+
+  const examAnalytics = getExamAnalytics();
+
   // 2. Correlation Engine (Cross-tabulation & Pattern Finder)
   const getCorrelationInsights = () => {
     const insights: string[] = [];
@@ -1088,6 +1354,62 @@ function PollInsightsContent({ params }: PageProps) {
       alert(err.message);
     } finally {
       setIsSavingOverride(false);
+    }
+  };
+
+  const handleUpdateModelAnswer = async (questionId: string, q: any) => {
+    setSavingModelAnswer(questionId);
+    try {
+      const edit = modelAnswerEdits[questionId];
+      const body: any = { questionId };
+      if (q.type === 'MULTI_SELECT') {
+        body.correctAnswers = Array.isArray(edit) ? edit : (typeof edit === 'string' ? edit.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+      } else {
+        body.correctAnswer = typeof edit === 'string' ? edit : String(edit || '');
+      }
+      const res = await fetch(`/api/polls/${pollId}/update-model-answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.votes) {
+          setLiveVotesList(data.votes);
+          setPoll((prev: any) => {
+            if (!prev) return prev;
+            const updatedVotes = prev.votes.map((v: any) => {
+              const found = data.votes.find((uv: any) => uv.id === v.id);
+              return found ? { ...v, answers: found.answers } : v;
+            });
+            const updatedQuestions = prev.questions.map((pq: any) => {
+              if (pq.id === questionId) {
+                return { ...pq, correctAnswer: data.updatedQuestion.correctAnswer, correctAnswers: data.updatedQuestion.correctAnswers };
+              }
+              return pq;
+            });
+            return { ...prev, votes: updatedVotes, questions: updatedQuestions };
+          });
+          
+          setGradeInspectorVote((prev: any) => {
+            if (prev) {
+              const found = data.votes.find((uv: any) => uv.id === prev.id);
+              if (found) {
+                return { ...prev, answers: found.answers };
+              }
+            }
+            return prev;
+          });
+        }
+        alert(`Model answer updated. ${data.regradedCount} submissions regraded.`);
+        setModelAnswerEdits(prev => { const n = {...prev}; delete n[questionId]; return n; });
+      } else {
+        alert(`Error: ${data.error || 'Failed to update model answer.'}`);
+      }
+    } catch (err) {
+      alert('Network error updating model answer.');
+    } finally {
+      setSavingModelAnswer(null);
     }
   };
 
@@ -2222,31 +2544,43 @@ function PollInsightsContent({ params }: PageProps) {
                           <td className="py-4 px-4 font-mono font-bold text-indigo-300">{scoreStr}</td>
                           <td className="py-4 pl-4 text-right">
                             {ex.voted && ex.vote ? (
-                              <button
-                                onClick={() => {
-                                  setGradeInspectorVote(ex.vote);
-                                  !isViewer && setFocusedField(`grading-inspect-${ex.vote.id}`);
-                                  try {
-                                    const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
-                                    const breakdown = parsed?.__examBreakdown || {};
-                                    const marksInit: Record<string, number> = {};
-                                    const feedbackInit: Record<string, string> = {};
-                                    Object.keys(breakdown).forEach(qId => {
-                                      marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
-                                      feedbackInit[qId] = breakdown[qId].feedback || '';
-                                    });
-                                    setManualMarks(marksInit);
-                                    setManualFeedback(feedbackInit);
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }}
-                                className={`px-3 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px] ${
-                                  inspectorCollabStyle ? `ring-2 ring-indigo-500` : ''
-                                }`}
-                              >
-                                {isFinalPublished ? 'View Detailed Grade' : 'Inspect & Grade'}
-                              </button>
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setGradeInspectorVote(ex.vote);
+                                    !isViewer && setFocusedField(`grading-inspect-${ex.vote.id}`);
+                                    try {
+                                      const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+                                      const breakdown = parsed?.__examBreakdown || {};
+                                      const marksInit: Record<string, number> = {};
+                                      const feedbackInit: Record<string, string> = {};
+                                      Object.keys(breakdown).forEach(qId => {
+                                        marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
+                                        feedbackInit[qId] = breakdown[qId].feedback || '';
+                                      });
+                                      setManualMarks(marksInit);
+                                      setManualFeedback(feedbackInit);
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px] ${
+                                    inspectorCollabStyle ? `ring-2 ring-indigo-500` : ''
+                                  }`}
+                                >
+                                  {isFinalPublished ? 'View Detailed Grade' : 'Inspect & Grade'}
+                                </button>
+                                {isFinalPublished && ex.email && (
+                                  <a
+                                    href={`/poll/${pollId}/analysis?email=${encodeURIComponent(ex.email)}&print=true`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400 hover:bg-amber-600 hover:text-white transition-all font-bold text-[11px] flex items-center gap-1"
+                                  >
+                                    <span>Download Report Card</span>
+                                  </a>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-gray-600 text-xs italic">Not submitted</span>
                             )}
@@ -2579,11 +2913,88 @@ function PollInsightsContent({ params }: PageProps) {
                                 {typeof userAns === 'object' ? JSON.stringify(userAns) : String(userAns || 'No Answer')}
                               </p>
                             </div>
-                            <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-1">
-                              <span className="block text-[9px] text-indigo-400 uppercase tracking-widest font-bold">Reference Answer</span>
-                              <p className="text-gray-300 font-medium break-words">
-                                {q.type === 'SINGLE' ? (q.options.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer) : (q.correctAnswer || 'N/A')}
-                              </p>
+                            <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-2">
+                              <span className="block text-[9px] text-indigo-400 uppercase tracking-widest font-bold">Reference / Model Answer</span>
+                              {isOwner && (
+                                <div className="space-y-2">
+                                  {q.type === 'SINGLE' && (
+                                    <select
+                                      value={modelAnswerEdits[q.id] !== undefined ? String(modelAnswerEdits[q.id]) : (q.correctAnswer || '')}
+                                      onChange={(e) => setModelAnswerEdits(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                      className="w-full bg-[#030712] border border-white/10 hover:border-indigo-500/40 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none transition-all"
+                                    >
+                                      <option value="">-- Select correct option --</option>
+                                      {q.options?.map((o: any) => (
+                                        <option key={o.id} value={o.id}>{o.text}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  
+                                  {q.type === 'MULTI_SELECT' && (
+                                    <div className="space-y-1.5 p-2 bg-[#030712] rounded-lg border border-white/10 max-h-32 overflow-y-auto no-scrollbar">
+                                      {q.options?.map((o: any) => {
+                                        const currentVal = modelAnswerEdits[q.id] !== undefined 
+                                          ? (Array.isArray(modelAnswerEdits[q.id]) ? (modelAnswerEdits[q.id] as string[]) : [])
+                                          : (() => {
+                                              try {
+                                                return typeof q.correctAnswers === 'string' ? JSON.parse(q.correctAnswers) : (Array.isArray(q.correctAnswers) ? q.correctAnswers : []);
+                                              } catch (e) { return []; }
+                                            })();
+                                        const isChecked = currentVal.includes(o.id);
+                                        return (
+                                          <label key={o.id} className="flex items-center space-x-2 text-[11px] text-gray-300 cursor-pointer hover:text-white">
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              onChange={(e) => {
+                                                const nextVal = e.target.checked 
+                                                  ? [...currentVal, o.id]
+                                                  : currentVal.filter((id: string) => id !== o.id);
+                                                setModelAnswerEdits(prev => ({ ...prev, [q.id]: nextVal }));
+                                              }}
+                                              className="rounded bg-black border-white/10 text-indigo-600 focus:ring-0 w-3 h-3"
+                                            />
+                                            <span>{o.text}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {(q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') && (
+                                    <textarea
+                                      rows={2}
+                                      className="w-full bg-[#030712] border border-white/10 hover:border-indigo-500/40 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 outline-none resize-none transition-all font-mono"
+                                      placeholder="Type model answer here..."
+                                      value={modelAnswerEdits[q.id] !== undefined ? String(modelAnswerEdits[q.id]) : (q.correctAnswer || '')}
+                                      onChange={(e) => setModelAnswerEdits(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                    />
+                                  )}
+
+                                  {modelAnswerEdits[q.id] !== undefined && (
+                                    <button
+                                      onClick={() => handleUpdateModelAnswer(q.id, q)}
+                                      disabled={savingModelAnswer === q.id}
+                                      className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/10"
+                                    >
+                                      {savingModelAnswer === q.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regrading...</> : '💾 Save & Regrade All Submissions'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {(!isOwner || (q.type !== 'SINGLE' && q.type !== 'MULTI_SELECT' && q.type !== 'SHORT_TEXT' && q.type !== 'LONG_TEXT')) && (
+                                <p className="text-gray-300 font-medium break-words">
+                                  {q.type === 'SINGLE' ? (q.options?.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer || 'N/A')
+                                   : q.type === 'MULTI_SELECT' ? (() => {
+                                       try {
+                                         const parsed = typeof q.correctAnswers === 'string' ? JSON.parse(q.correctAnswers) : (Array.isArray(q.correctAnswers) ? q.correctAnswers : []);
+                                         return parsed.map((id: string) => q.options?.find((o: any) => o.id === id)?.text || id).join(', ') || 'N/A';
+                                       } catch (e) { return 'N/A'; }
+                                     })()
+                                   : (q.correctAnswer || 'N/A')}
+                                </p>
+                              )}
                             </div>
                           </div>
 
@@ -3489,8 +3900,293 @@ function PollInsightsContent({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Dynamic toggle switches for Creator dashboard */}
-      {isOwner && (
+      {/* ── EXAM ANALYTICS DASHBOARD ───────────────────────────────────── */}
+      {poll.pollType === 'EXAM' && (
+        <div className="space-y-8 mt-6">
+          {/* Basic Stats */}
+          <div className="space-y-4">
+            <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2">
+              <Award className="w-5 h-5 text-indigo-400" />
+              <span>Exam Performance Summary</span>
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Average Score', value: examAnalytics.averageScore },
+                { label: 'Median Score', value: examAnalytics.medianScore },
+                { label: 'Highest Score', value: examAnalytics.highestScore },
+                { label: 'Unique IPs', value: examAnalytics.ipCount },
+              ].map(item => (
+                <div key={item.label} className="glass-card rounded-2xl p-5 border border-white/5 bg-slate-950/20">
+                  <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider block mb-1">{item.label}</span>
+                  <span className="font-outfit text-2xl font-black text-white">{item.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Turnout + Device */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider mb-2">Examinee Participation</h4>
+                  <p className="text-gray-400 text-xs leading-relaxed">
+                    Registered: <span className="text-white font-bold">{allowedCount}</span> · Turnout: <span className="text-indigo-400 font-bold">{turnoutPercent}%</span>
+                  </p>
+                </div>
+                <div className="w-full bg-white/5 h-2 rounded-full mt-4 overflow-hidden">
+                  <div className="bg-indigo-500 h-full rounded-full transition-all duration-700" style={{ width: `${turnoutPercent}%` }} />
+                </div>
+              </div>
+
+              <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20">
+                <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider mb-3">Device Distribution</h4>
+                <div className="space-y-3">
+                  {[
+                    { label: '🖥️ Desktop', pct: examAnalytics.deviceBreakdown.desktopPercent, color: 'bg-emerald-500' },
+                    { label: '📱 Mobile', pct: examAnalytics.deviceBreakdown.mobilePercent, color: 'bg-indigo-500' },
+                    { label: '📟 Tablet', pct: examAnalytics.deviceBreakdown.tabletPercent, color: 'bg-purple-500' },
+                  ].map(d => (
+                    <div key={d.label}>
+                      <div className="flex justify-between text-[10px] font-bold mb-1">
+                        <span className="text-gray-400">{d.label}</span>
+                        <span className="text-white">{d.pct}%</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                        <div className={`${d.color} h-full rounded-full`} style={{ width: `${d.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Candidate Access Ledger */}
+            <div className="space-y-3">
+              <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Candidate Access &amp; Submission Ledger</h4>
+              <div className="overflow-x-auto border border-white/5 rounded-2xl bg-slate-950/20">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
+                      <th className="py-3 px-4 w-10 text-center">No</th>
+                      <th className="py-3 px-4">Identifier</th>
+                      <th className="py-3 px-4">Email</th>
+                      <th className="py-3 px-4">IP Address</th>
+                      <th className="py-3 px-4">ISP</th>
+                      <th className="py-3 px-4">Device</th>
+                      <th className="py-3 px-4 text-right">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveVotesList.map((v, idx) => (
+                      <tr key={v.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
+                        <td className="py-3 px-4 text-center font-mono text-gray-500">{idx + 1}</td>
+                        <td className="py-3 px-4 font-semibold text-white">{v.userIdentifier || 'N/A'}</td>
+                        <td className="py-3 px-4 text-gray-400">{v.email || 'N/A'}</td>
+                        <td className="py-3 px-4 font-mono text-gray-400">{v.ipAddress}</td>
+                        <td className="py-3 px-4 text-gray-400">{v.isp || 'Local ISP'}</td>
+                        <td className="py-3 px-4 font-semibold text-gray-400">{v.device === 'Tablet' ? '📟 Tablet' : v.device === 'Mobile' ? '📱 Mobile' : '🖥️ Desktop'}</td>
+                        <td className="py-3 px-4 text-right text-gray-500">{new Date(v.createdAt).toLocaleTimeString()}</td>
+                      </tr>
+                    ))}
+                    {liveVotesList.length === 0 && (
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No submissions recorded yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Advanced AI Diagnostics */}
+          {poll.settings?.enableSmartDebrief ? (
+            <div className="space-y-8 border-t border-white/5 pt-8">
+              <h3 className="font-outfit text-xl font-bold text-amber-400 flex items-center space-x-2">
+                <Brain className="w-5 h-5 text-amber-400 animate-pulse" />
+                <span>Advanced AI Diagnostics Hub</span>
+              </h3>
+
+              {/* Histogram + Accuracy Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Score Distribution Histogram</h4>
+                  <p className="text-gray-500 text-[10px] mt-0.5 mb-4">Categorized score range distribution.</p>
+                  <div className="flex-1">
+                    {(() => {
+                      const ranges = [
+                        { name: '0–20%', value: 0 },
+                        { name: '21–40%', value: 0 },
+                        { name: '41–60%', value: 0 },
+                        { name: '61–80%', value: 0 },
+                        { name: '81–100%', value: 0 },
+                      ];
+                      liveVotesList.forEach(v => {
+                        try {
+                          const a = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                          const s = a?.__examScore;
+                          if (s && s.total > 0) {
+                            const p = (s.earned / s.total) * 100;
+                            if (p <= 20) ranges[0].value++;
+                            else if (p <= 40) ranges[1].value++;
+                            else if (p <= 60) ranges[2].value++;
+                            else if (p <= 80) ranges[3].value++;
+                            else ranges[4].value++;
+                          }
+                        } catch (e) {}
+                      });
+                      const max = Math.max(...ranges.map(r => r.value), 1);
+                      return (
+                        <div className="flex items-end justify-between h-full gap-2 pb-6">
+                          {ranges.map((r, i) => (
+                            <div key={r.name} className="flex flex-col items-center flex-1 gap-1">
+                              <span className="text-[9px] text-white font-mono">{r.value}</span>
+                              <div className="w-full rounded-t-md bg-indigo-500/80 transition-all duration-700" style={{ height: `${Math.max(4, (r.value / max) * 100)}%` }} />
+                              <span className="text-[9px] text-gray-500 text-center leading-tight">{r.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Question Accuracy Rates</h4>
+                  <p className="text-gray-500 text-[10px] mt-0.5 mb-4">Average accuracy per question.</p>
+                  <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+                    {examAnalytics.simulatedQuestionDifficulty.map((item, idx) => (
+                      <div key={item.id} className="space-y-0.5">
+                        <div className="flex justify-between text-[9px] font-bold">
+                          <span className="text-gray-300 truncate max-w-[160px]">Q{idx + 1}: {item.text}</span>
+                          <span className="text-indigo-400 ml-2 shrink-0">{item.accuracy}% · {item.difficulty}</span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-purple-500 h-full rounded-full transition-all duration-700" style={{ width: `${item.accuracy}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Difficulty + Discrimination Index */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 space-y-4">
+                  <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Question Difficulty Classification</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                    {examAnalytics.simulatedQuestionDifficulty.map((item, idx) => (
+                      <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                        <span className="text-gray-300 font-medium truncate max-w-[200px]">Q{idx + 1}: {item.text}</span>
+                        <span className="font-bold ml-2 shrink-0">{item.difficulty}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 space-y-4">
+                  <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Discrimination Index</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                    {examAnalytics.discriminationIndex.map((item, idx) => (
+                      <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                        <span className="text-gray-300 font-medium truncate max-w-[180px]">Q{idx + 1}: {item.text}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-gray-400 font-mono">DI: {item.di}</span>
+                          <span className="font-bold text-indigo-400">{item.rating}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Topic Gap + Simulated Time */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 space-y-4">
+                  <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Topic Gap Analysis</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                    {examAnalytics.topicGapAnalysis.length === 0 ? (
+                      <span className="text-gray-500 text-xs">No questions to classify.</span>
+                    ) : examAnalytics.topicGapAnalysis.map(item => (
+                      <div key={item.topic} className="space-y-1.5 border-b border-white/5 pb-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-300 font-bold">{item.topic} ({item.totalQuestions}q)</span>
+                          <span className="text-gray-400 font-mono">{item.accuracy}%</span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${item.accuracy >= 75 ? 'bg-emerald-500' : item.accuracy < 50 ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`} style={{ width: `${item.accuracy}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 space-y-4">
+                  <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Simulated Time per Question</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                    {examAnalytics.timeSpentPerQuestion.map((item, idx) => (
+                      <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                        <span className="text-gray-300 font-medium truncate max-w-[200px]">Q{idx + 1}: {item.text}</span>
+                        <span className="font-bold text-amber-400 font-mono shrink-0 ml-2">{item.avgSeconds}s</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* At-Risk + Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-slate-950/20 space-y-4">
+                  <h4 className="font-outfit text-sm font-bold text-rose-400 uppercase tracking-wider">At-Risk Students (&lt;50%)</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                    {examAnalytics.atRiskStudents.length === 0 ? (
+                      <div className="text-center py-4 text-emerald-400 text-xs font-bold">🎉 All candidates scored above 50%!</div>
+                    ) : examAnalytics.atRiskStudents.map(item => (
+                      <div key={item.identifier} className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                        <div>
+                          <span className="text-white font-bold block">{item.name || 'Anonymous'}</span>
+                          <span className="text-gray-500 text-[10px]">{item.email || item.identifier}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <span className="text-rose-400 font-bold block">{item.score}</span>
+                          <span className="text-[10px] text-gray-500 font-mono">{item.performance}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-card rounded-2xl p-6 border border-white/5 bg-[#0b1329] flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Cohort Summary</h4>
+                    <p className="text-gray-300 text-xs leading-relaxed">
+                      Cohort average: <span className="text-indigo-400 font-bold">{examAnalytics.averageScore}</span> · Median: <span className="text-indigo-400 font-bold">{examAnalytics.medianScore}</span>.
+                      {examAnalytics.atRiskStudents.length > 0
+                        ? <> <span className="text-rose-400 font-bold">{examAnalytics.atRiskStudents.length}</span> student{examAnalytics.atRiskStudents.length > 1 ? 's' : ''} below passing threshold. Remediation recommended.</>
+                        : <> Outstanding — entire cohort passed. </>
+                      }
+                    </p>
+                  </div>
+                  <div className="border-t border-white/5 pt-4 mt-4 flex items-center justify-between text-xs text-gray-400">
+                    <span>Performance Rating:</span>
+                    <span className={`font-bold px-2 py-0.5 rounded-lg ${examAnalytics.averageScore >= 75 ? 'bg-emerald-500/10 text-emerald-400' : examAnalytics.averageScore >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+                      {examAnalytics.averageScore >= 75 ? 'EXCELLENT' : examAnalytics.averageScore >= 50 ? 'SATISFACTORY' : 'NEEDS IMPROVEMENT'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl p-8 border border-white/5 bg-slate-950/20 text-center">
+              <Brain className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+              <p className="text-xs text-gray-500">Advanced AI Diagnostics are disabled. Enable <span className="text-amber-400 font-bold">Smart Debrief</span> in Beast Mode to unlock.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── STANDARD ANALYTICS (Poll / Survey only) ──────────────────────── */}
+      {poll.pollType !== 'EXAM' && (
+        <>
+          {/* Dynamic toggle switches for Creator dashboard */}
+          {isOwner && (
         <div className="glass-card rounded-2xl p-5 border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-6 print:hidden">
           <div className="flex items-center justify-between">
             <div>
@@ -4510,6 +5206,9 @@ function PollInsightsContent({ params }: PageProps) {
           </div>
         )}
       </div>
+        </>
+      )}
+
         </>
       )}
 
