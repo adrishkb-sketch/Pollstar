@@ -305,6 +305,12 @@ function PollInsightsContent({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [poll, pollId, focusedField]);
 
+  useEffect(() => {
+    if (activeTab === 'collaborators') {
+      fetchCollaborators();
+    }
+  }, [activeTab, pollId]);
+
   // Live Ticker percentage calculation & change detection hook
   useEffect(() => {
     if (!poll || !liveStats || !poll.questions?.[0]) return;
@@ -1541,11 +1547,8 @@ function PollInsightsContent({ params }: PageProps) {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'collaborators') {
-      fetchCollaborators();
-    }
-  }, [activeTab, pollId]);
+
+
 
   const renderCollaboratorsPanel = () => {
     if (!creatorCollaborationAllowed || !userCollaborationAllowed) {
