@@ -53,8 +53,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'This poll is not an examination' }, { status: 400 });
     }
 
-    // Safeguard: Check if results are released
-    if (!poll.settings?.resultsReleased) {
+    // Safeguard: Check if results are released or instant feedback is enabled
+    const isReleased = !!(poll.settings?.resultsReleased || poll.settings?.enableInstantFeedback);
+    if (!isReleased) {
       return NextResponse.json({
         success: false,
         resultsReleased: false,

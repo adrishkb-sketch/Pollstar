@@ -1647,7 +1647,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
     // 3. Confirm checkbox (always required)
     if (!confirmVoteChecked) {
-      setError('Please check the confirmation box to submit your vote.');
+      setError(poll?.pollType === 'EXAM' ? 'Please check the confirmation box to submit your exam.' : (poll?.pollType === 'SURVEY' ? 'Please check the confirmation box to submit your survey.' : 'Please check the confirmation box to submit your vote.'));
       setVoteLoading(false);
       return;
     }
@@ -1665,12 +1665,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         });
       } catch (err: any) {
         console.error('Compulsory geolocation permission error:', err);
-        setError(`Location Access Required: To guarantee ${poll?.pollType === 'SURVEY' ? 'response' : 'vote'} uniqueness and prevent security manipulation, you must enable and grant location permissions in your browser to submit your ${poll?.pollType === 'SURVEY' ? 'responses' : 'ballot'}.`);
+        setError(`Location Access Required: To guarantee ${poll?.pollType === 'EXAM' ? 'exam' : (poll?.pollType === 'SURVEY' ? 'response' : 'vote')} uniqueness and prevent security manipulation, you must enable and grant location permissions in your browser to submit your ${poll?.pollType === 'EXAM' ? 'exam paper' : (poll?.pollType === 'SURVEY' ? 'responses' : 'ballot')}.`);
         setVoteLoading(false);
         return;
       }
     } else {
-      setError(`Location Access Required: Your browser does not support Geolocation, which is mandatory to submit a secure ${poll?.pollType === 'SURVEY' ? 'response' : 'vote'} on this platform.`);
+      setError(`Location Access Required: Your browser does not support Geolocation, which is mandatory to submit a secure ${poll?.pollType === 'EXAM' ? 'exam' : (poll?.pollType === 'SURVEY' ? 'response' : 'vote')} on this platform.`);
       setVoteLoading(false);
       return;
     }
@@ -1717,7 +1717,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit vote');
+        throw new Error(data.error || (poll?.pollType === 'EXAM' ? 'Failed to submit exam paper' : (poll?.pollType === 'SURVEY' ? 'Failed to submit survey' : 'Failed to submit vote')));
       }
 
       setVotedSuccessfully(true);
@@ -3209,7 +3209,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                       />
                     </div>
                     <p className="text-gray-400 text-xs leading-relaxed group-hover:text-gray-300 transition-colors">
-                      I confirm my responses are accurate and final. I understand that <strong className="text-gray-200">my survey submission cannot be changed or resubmitted</strong> once submitted.
+                      I confirm my responses are accurate and final. I understand that <strong className="text-gray-200">{
+                        poll.pollType === 'EXAM' 
+                          ? 'my exam attempt cannot be changed or resubmitted' 
+                          : (poll.pollType === 'SURVEY' ? 'my survey submission cannot be changed or resubmitted' : 'my vote cannot be changed or resubmitted')
+                      }</strong> once submitted.
                     </p>
                   </label>
 
@@ -3247,7 +3251,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : (
                         <>
-                          <span>Submit Survey</span>
+                          <span>
+                            {poll.pollType === 'EXAM' 
+                              ? 'Submit Exam' 
+                              : (poll.pollType === 'SURVEY' ? 'Submit Survey' : 'Cast Vote')
+                            }
+                          </span>
                           <CheckCircle className="w-4 h-4" />
                         </>
                       )}
@@ -3377,7 +3386,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                     />
                   </div>
                   <p className="text-gray-400 text-xs leading-relaxed group-hover:text-gray-300 transition-colors">
-                    I explicitly confirm that my selections are final. I understand that <strong className="text-gray-200">my vote cannot be changed or resubmitted</strong> once cast.
+                    I explicitly confirm that my selections are final. I understand that <strong className="text-gray-200">{
+                      poll.pollType === 'EXAM'
+                        ? 'my exam attempt cannot be changed or resubmitted'
+                        : 'my vote cannot be changed or resubmitted'
+                    }</strong> once {poll.pollType === 'EXAM' ? 'submitted' : 'cast'}.
                   </p>
                 </label>
 
@@ -3398,7 +3411,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                       {voteLoading ? (
                         <Loader2 className="w-6 h-6 animate-spin" />
                       ) : (
-                        <span>Submit Secure Vote</span>
+                        <span>{poll.pollType === 'EXAM' ? 'Submit Secure Exam' : 'Submit Secure Vote'}</span>
                       )}
                     </button>
 
@@ -3428,17 +3441,38 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
           <div className="space-y-2">
             <h3 className="font-outfit text-2xl font-bold text-white">
-              {poll.pollType === 'SURVEY' ? 'Survey Submitted Successfully!' : 'Vote Submitted Successfully!'}
+              {poll.pollType === 'EXAM' 
+                ? 'Exam Submitted Successfully!' 
+                : (poll.pollType === 'SURVEY' ? 'Survey Submitted Successfully!' : 'Vote Submitted Successfully!')
+              }
             </h3>
             <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-              {poll.settings?.postSurveyAction || (poll.pollType === 'SURVEY' 
-                ? 'Thank you for participating! Your valuable feedback and responses have been securely recorded.' 
-                : 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.')}
+              {poll.settings?.postSurveyAction || (
+                poll.pollType === 'EXAM' 
+                  ? 'Your answers have been securely recorded. If instant results release is enabled, you can view your diagnostic report below.' 
+                  : (poll.pollType === 'SURVEY' 
+                      ? 'Thank you for participating! Your valuable feedback and responses have been securely recorded.' 
+                      : 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.')
+              )}
             </p>
             {flaggedSuspicious && (
               <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
-                ⚠️ {poll.pollType === 'SURVEY' ? 'Response flagged for Administrator review' : 'Cast flagged for Administrator inspection'}
+                ⚠️ {poll.pollType === 'EXAM' 
+                  ? 'Exam attempt flagged for Proctor inspection' 
+                  : (poll.pollType === 'SURVEY' ? 'Response flagged for Administrator review' : 'Cast flagged for Administrator inspection')
+                }
               </span>
+            )}
+            {poll.pollType === 'EXAM' && (poll.settings?.enableInstantFeedback || poll.settings?.resultsReleased) && (
+              <div className="pt-4 flex justify-center">
+                <Link
+                  href={`/poll/${poll.id}/analysis?email=${encodeURIComponent(voterEmail || openEmail || voterIdentifier || '')}`}
+                  className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center space-x-2 active:scale-95 animate-pulse-slow"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>View Grade & Diagnostic Report</span>
+                </Link>
+              </div>
             )}
           </div>
         </div>
