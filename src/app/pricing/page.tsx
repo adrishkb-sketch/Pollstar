@@ -255,7 +255,7 @@ export default function PublicPricingPage() {
 
                 <div className="pt-6 mt-6 border-t border-white/5">
                   <Link
-                    href={user ? '/dashboard/plans' : '/register'}
+                    href={user ? '/dashboard/plans' : '/login'}
                     className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                   >
                     {user ? 'View Active Purchase options' : 'Get Started Now'}
@@ -328,10 +328,10 @@ export default function PublicPricingPage() {
 
                 <div className="pt-6 mt-6 border-t border-white/5">
                   <Link
-                    href={user ? '/dashboard/plans' : '/register'}
+                    href={user ? '/dashboard/plans' : '/login'}
                     className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                   >
-                    {user ? 'Purchase Credits Pack' : 'Sign Up to Purchase'}
+                    {user ? 'Purchase Credits Pack' : 'Login to Purchase'}
                   </Link>
                 </div>
               </div>
@@ -388,10 +388,10 @@ export default function PublicPricingPage() {
 
                 <div className="pt-6 mt-6 border-t border-white/5">
                   <Link
-                    href={user ? '/dashboard/plans' : '/register'}
+                    href={user ? '/dashboard/plans' : '/login'}
                     className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                   >
-                    {user ? 'Unlock Feature Add-On' : 'Sign Up to Unlock'}
+                    {user ? 'Unlock Feature Add-On' : 'Login to Unlock'}
                   </Link>
                 </div>
               </div>
