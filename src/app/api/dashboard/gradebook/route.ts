@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { checkFeatureAccess } from '@/lib/featureGate';
+import { checkAndExpirePlan } from '@/lib/planExpiry';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -25,8 +26,11 @@ async function getAuthUser() {
 
   if (!payload) return null;
 
+  await checkAndExpirePlan(payload.userId);
+
   return prisma.user.findUnique({
     where: { id: payload.userId },
+    include: { plan: true },
   });
 }
 
@@ -200,10 +204,93 @@ export async function GET(req: Request) {
       return rowData;
     });
 
+    // Calculate enabled types based on plans and active pack addon invoices
+    const enabledTypes = new Set<string>();
+    if (user.role === 'ADMIN') {
+      enabledTypes.add('POLL');
+      enabledTypes.add('SURVEY');
+      enabledTypes.add('EXAM');
+    } else {
+      const now = new Date();
+      const plan = user.plan;
+      if (plan) {
+        const isPack = ['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK', 'ADDON'].includes(plan.planType);
+        if (isPack) {
+          if (plan.planType === 'POLL_PACK') enabledTypes.add('POLL');
+          else if (plan.planType === 'SURVEY_PACK') enabledTypes.add('SURVEY');
+          else if (plan.planType === 'EXAM_PACK') enabledTypes.add('EXAM');
+          else if (plan.planType === 'COMBO_PACK') {
+            const comboTypes: string[] = Array.isArray(plan.comboTypes) ? (plan.comboTypes as string[]) : [];
+            comboTypes.forEach(t => enabledTypes.add(t));
+          } else if (plan.planType === 'ADDON') {
+            if (plan.maxPolls && plan.maxPolls > 0) enabledTypes.add('POLL');
+            if (plan.maxSurveys && plan.maxSurveys > 0) enabledTypes.add('SURVEY');
+            if (plan.maxExams && plan.maxExams > 0) enabledTypes.add('EXAM');
+          }
+        } else {
+          let subLimitPolls: number = plan.name.toLowerCase() === 'free' ? 3 : (plan.maxPolls ?? -1);
+          let subLimitSurveys: number = plan.name.toLowerCase() === 'free' ? 3 : (plan.maxSurveys ?? -1);
+          let subLimitExams: number = plan.name.toLowerCase() === 'free' ? 3 : (plan.maxExams ?? -1);
+
+          if (plan.durations && plan.name.toLowerCase() !== 'free') {
+            const durs = plan.durations as any;
+            const cycle = user.planBillingCycle || 'MONTHLY';
+            if (durs[cycle] && durs[cycle].enabled) {
+              const cfg = durs[cycle];
+              if (cfg.maxPolls !== undefined && cfg.maxPolls !== '') subLimitPolls = parseInt(cfg.maxPolls);
+              if (cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') subLimitSurveys = parseInt(cfg.maxSurveys);
+              if (cfg.maxExams !== undefined && cfg.maxExams !== '') subLimitExams = parseInt(cfg.maxExams);
+            }
+          }
+
+          if (subLimitPolls !== 0) enabledTypes.add('POLL');
+          if (subLimitSurveys !== 0) enabledTypes.add('SURVEY');
+          if (subLimitExams !== 0) enabledTypes.add('EXAM');
+        }
+      }
+
+      // Add addon invoices
+      const addonInvoices = await prisma.invoice.findMany({
+        where: { userId: user.id, isAddon: true },
+        include: { plan: true },
+      });
+
+      for (const inv of addonInvoices) {
+        const p = inv.plan;
+        if (!p) continue;
+        const isValid = !inv.planExpiresAt || new Date(inv.planExpiresAt) > now;
+        if (!isValid) continue;
+
+        switch (p.planType) {
+          case 'POLL_PACK':
+            enabledTypes.add('POLL');
+            break;
+          case 'SURVEY_PACK':
+            enabledTypes.add('SURVEY');
+            break;
+          case 'EXAM_PACK':
+            enabledTypes.add('EXAM');
+            break;
+          case 'COMBO_PACK': {
+            const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
+            types.forEach(t => enabledTypes.add(t));
+            break;
+          }
+          case 'ADDON': {
+            if (p.maxPolls && p.maxPolls > 0) enabledTypes.add('POLL');
+            if (p.maxSurveys && p.maxSurveys > 0) enabledTypes.add('SURVEY');
+            if (p.maxExams && p.maxExams > 0) enabledTypes.add('EXAM');
+            break;
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       headers: columnsHeader,
       rows,
+      enabledTypes: Array.from(enabledTypes),
     });
   } catch (error: any) {
     console.error('Cumulative Gradebook API Error:', error);

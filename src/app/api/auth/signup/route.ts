@@ -98,8 +98,18 @@ export async function POST(req: Request) {
       create: { email, otp, expiresAt },
     });
 
-    // Send email
-    await sendOTPEmail(email, otp);
+    // Send email — propagate failure so user sees real error
+    try {
+      await sendOTPEmail(email, otp);
+    } catch (emailErr: any) {
+      console.error('Signup OTP Email Send Failed:', emailErr);
+      // Clean up the OTP record so user can retry cleanly
+      await prisma.oTP.delete({ where: { email } }).catch(() => {});
+      return NextResponse.json(
+        { error: 'We could not deliver the verification email. Please check the email address and try again, or contact support.' },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

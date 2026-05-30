@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'POLL' | 'SURVEY'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'POLL' | 'SURVEY' | 'EXAM'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ONGOING' | 'UPCOMING' | 'CLOSED' | 'DRAFT'>('ALL');
 
   // Poll Settings & Collaboration states
@@ -927,7 +927,7 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex rounded-xl border border-white/8 overflow-hidden shrink-0">
-              {(['ALL', 'POLL', 'SURVEY'] as const).map(t => (
+              {(['ALL', 'POLL', 'SURVEY', 'EXAM'] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
@@ -937,7 +937,7 @@ export default function Dashboard() {
                       : 'bg-white/3 text-gray-400 hover:text-white hover:bg-white/8'
                   }`}
                 >
-                  {t === 'ALL' ? 'All Types' : t === 'POLL' ? '🗳 Polls' : '📋 Surveys'}
+                  {t === 'ALL' ? 'All Types' : t === 'POLL' ? '🗳 Polls' : t === 'SURVEY' ? '📋 Surveys' : '📝 Exams'}
                 </button>
               ))}
             </div>
@@ -1011,9 +1011,11 @@ export default function Dashboard() {
                           <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
                             poll.pollType === 'SURVEY'
                               ? 'bg-violet-500/10 border-violet-500/20 text-violet-400'
-                              : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                              : poll.pollType === 'EXAM'
+                                ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
+                                : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                           }`}>
-                            {poll.pollType === 'SURVEY' ? '📋 Survey' : '🗳 Poll'}
+                            {poll.pollType === 'SURVEY' ? '📋 Survey' : poll.pollType === 'EXAM' ? '📝 Exam' : '🗳 Poll'}
                           </span>
                           {poll.creatorId !== user?.id && (
                             <span className="px-2 py-1 rounded-lg text-[10px] font-bold border bg-indigo-500/10 border-indigo-500/20 text-indigo-300">

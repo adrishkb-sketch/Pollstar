@@ -40,8 +40,17 @@ export async function POST(req: Request) {
       create: { email: cleanEmail, otp, expiresAt },
     });
 
-    // Send reset email
-    await sendResetPasswordEmail(user.email, otp);
+    // Send reset email — surface any SMTP failure
+    try {
+      await sendResetPasswordEmail(user.email, otp);
+    } catch (emailErr: any) {
+      console.error('Reset Password Email Send Failed:', emailErr);
+      await prisma.oTP.delete({ where: { email: cleanEmail } }).catch(() => {});
+      return NextResponse.json(
+        { error: 'We could not deliver the reset email. Please try again later or contact support.' },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Vote, LogOut, Loader2, Check, Download, 
   Search, ShieldAlert, Award, FileSpreadsheet,
-  Edit2, Save, X, RefreshCw, Filter, ShieldCheck
+  Edit2, Save, X, RefreshCw, Filter, ShieldCheck, Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import DashboardHeader from '@/components/DashboardHeader';
@@ -24,6 +24,8 @@ export default function GradebookPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'EXAM' | 'SURVEY' | 'POLL'>('ALL');
+  const [selectedGradebook, setSelectedGradebook] = useState<'POLL' | 'SURVEY' | 'EXAM' | null>(null);
+  const [enabledTypes, setEnabledTypes] = useState<string[]>([]);
   
   // Inline editing states
   const [editingCell, setEditingCell] = useState<{ rowKey: string; colId: string; voteId: string } | null>(null);
@@ -46,6 +48,7 @@ export default function GradebookPage() {
       const data = await res.json();
       setHeaders(data.headers || []);
       setRows(data.rows || []);
+      setEnabledTypes(data.enabledTypes || []);
     } catch (err: any) {
       setError(err.message);
     }
@@ -78,6 +81,7 @@ export default function GradebookPage() {
         const gbData = await gbRes.json();
         setHeaders(gbData.headers || []);
         setRows(gbData.rows || []);
+        setEnabledTypes(gbData.enabledTypes || []);
       } catch (err) {
         setError('Failed to load session details.');
       } finally {
@@ -175,13 +179,13 @@ export default function GradebookPage() {
 
   // CSV Export Utility
   const handleExportCSV = () => {
-    if (rows.length === 0) return;
+    if (filteredRows.length === 0) return;
 
-    // Generate CSV content
-    const csvHeaders = ['Candidate Name', 'Email', 'Phone', ...headers.map(h => `${h.title} (${h.type})`)];
-    const csvRows = rows.map(r => {
+    // Generate CSV content using filteredHeaders and filteredRows
+    const csvHeaders = ['Candidate Name', 'Email', 'Phone', ...filteredHeaders.map(h => `${h.title} (${h.type})`)];
+    const csvRows = filteredRows.map(r => {
       const cols = [r.name, r.email, r.phone];
-      headers.forEach(h => {
+      filteredHeaders.forEach(h => {
         const cell = r[h.id];
         if (cell) {
           cols.push(cell.score || '-');
@@ -196,7 +200,8 @@ export default function GradebookPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Pollstar_Cumulative_Gradebook_${new Date().toISOString().slice(0, 10)}.csv`);
+    const gradebookName = selectedGradebook ? `${selectedGradebook}_` : '';
+    link.setAttribute('download', `Pollstar_${gradebookName}Gradebook_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -204,16 +209,24 @@ export default function GradebookPage() {
 
   // Filtering columns and rows
   const filteredHeaders = headers.filter(h => {
-    if (typeFilter === 'ALL') return true;
-    return h.type === typeFilter;
+    if (selectedGradebook === null) return true;
+    return h.type === selectedGradebook;
   });
 
   const filteredRows = rows.filter(r => {
-    return (
+    const matchesSearch = (
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.phone.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    if (!matchesSearch) return false;
+
+    // If a gradebook is selected, only show rows where student participated in at least one item of that type
+    if (selectedGradebook !== null) {
+      return filteredHeaders.some(h => r[h.id] && r[h.id].status !== 'NONE');
+    }
+    return true;
   });
 
   if (loading) {
@@ -297,6 +310,118 @@ export default function GradebookPage() {
     );
   }
 
+  if (selectedGradebook === null) {
+    return (
+      <div className="flex-1 flex flex-col min-h-screen bg-[#030712]">
+        {/* Header */}
+        <DashboardHeader user={user} />
+
+        {/* Main Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 space-y-8 relative">
+          <div className="absolute top-1/4 left-1/3 w-[450px] h-[450px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+          
+          {/* Top title and description */}
+          <div className="space-y-1">
+            <h2 className="font-outfit text-2xl font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-6 h-6 text-indigo-400" />
+              <span>Unified Cohort Gradebooks</span>
+            </h2>
+            <p className="text-gray-400 text-sm mt-0.5 leading-relaxed">
+              Select a session type below to view its dedicated, real-time cumulative gradebook spreadsheet.
+            </p>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6">
+            {/* Polls Gradebook Card */}
+            <div 
+              onClick={() => enabledTypes.includes('POLL') && setSelectedGradebook('POLL')}
+              className={`group relative glass-card rounded-3xl p-8 border text-center transition-all duration-300 ${
+                enabledTypes.includes('POLL')
+                  ? 'border-indigo-500/20 hover:border-indigo-500/50 hover:bg-indigo-500/5 hover:-translate-y-1 cursor-pointer'
+                  : 'border-white/5 opacity-45 grayscale cursor-not-allowed'
+              }`}
+            >
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400 group-hover:scale-110 transition-all duration-300">
+                <Vote className="w-8 h-8" />
+              </div>
+              <h3 className="font-outfit text-xl font-bold text-white mt-6">🗳️ Polls Gradebook</h3>
+              <p className="text-gray-400 text-xs mt-3 leading-relaxed">
+                Track student response counts, voting choices, and participation metrics for all interactive polls.
+              </p>
+              {!enabledTypes.includes('POLL') ? (
+                <div className="mt-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Not enabled in your plan</span>
+                </div>
+              ) : (
+                <span className="mt-6 inline-block text-xs font-bold text-indigo-400 group-hover:text-indigo-300 transition-colors">
+                  Open Gradebook →
+                </span>
+              )}
+            </div>
+
+            {/* Surveys Gradebook Card */}
+            <div 
+              onClick={() => enabledTypes.includes('SURVEY') && setSelectedGradebook('SURVEY')}
+              className={`group relative glass-card rounded-3xl p-8 border text-center transition-all duration-300 ${
+                enabledTypes.includes('SURVEY')
+                  ? 'border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-500/5 hover:-translate-y-1 cursor-pointer'
+                  : 'border-white/5 opacity-45 grayscale cursor-not-allowed'
+              }`}
+            >
+              <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto text-violet-400 group-hover:scale-110 transition-all duration-300">
+                <FileSpreadsheet className="w-8 h-8" />
+              </div>
+              <h3 className="font-outfit text-xl font-bold text-white mt-6">📋 Surveys Gradebook</h3>
+              <p className="text-gray-400 text-xs mt-3 leading-relaxed">
+                Review multi-question response rosters, demographics, and textual feedback for ongoing survey cycles.
+              </p>
+              {!enabledTypes.includes('SURVEY') ? (
+                <div className="mt-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Not enabled in your plan</span>
+                </div>
+              ) : (
+                <span className="mt-6 inline-block text-xs font-bold text-violet-400 group-hover:text-violet-300 transition-colors">
+                  Open Gradebook →
+                </span>
+              )}
+            </div>
+
+            {/* Exams Gradebook Card */}
+            <div 
+              onClick={() => enabledTypes.includes('EXAM') && setSelectedGradebook('EXAM')}
+              className={`group relative glass-card rounded-3xl p-8 border text-center transition-all duration-300 ${
+                enabledTypes.includes('EXAM')
+                  ? 'border-cyan-500/20 hover:border-cyan-500/50 hover:bg-cyan-500/5 hover:-translate-y-1 cursor-pointer'
+                  : 'border-white/5 opacity-45 grayscale cursor-not-allowed'
+              }`}
+            >
+              <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400 group-hover:scale-110 transition-all duration-300">
+                <Award className="w-8 h-8" />
+              </div>
+              <h3 className="font-outfit text-xl font-bold text-white mt-6">📝 Exams Gradebook</h3>
+              <p className="text-gray-400 text-xs mt-3 leading-relaxed">
+                Manage candidate scores, calculate correct/incorrect ratios, and execute manual mark overrides.
+              </p>
+              {!enabledTypes.includes('EXAM') ? (
+                <div className="mt-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Not enabled in your plan</span>
+                </div>
+              ) : (
+                <span className="mt-6 inline-block text-xs font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors">
+                  Open Gradebook →
+                </span>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#030712]">
       {/* Header */}
@@ -309,18 +434,24 @@ export default function GradebookPage() {
         {/* Top title and actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-1">
+            <button
+              onClick={() => setSelectedGradebook(null)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1.5 transition-all mb-2 active:scale-95"
+            >
+              ← Switch Gradebook
+            </button>
             <h2 className="font-outfit text-2xl font-bold text-white flex items-center gap-2">
               <FileSpreadsheet className="w-6 h-6 text-indigo-400" />
-              <span>Unified Cohort Gradebook</span>
+              <span>{selectedGradebook === 'POLL' ? '🗳️ Polls' : selectedGradebook === 'SURVEY' ? '📋 Surveys' : '📝 Exams'} Gradebook</span>
             </h2>
             <p className="text-gray-400 text-sm mt-0.5 leading-relaxed">
-              Real-time cumulative spreadsheets compiling scores and choices matching students across multiple exams, surveys, and polls.
+              Real-time cumulative spreadsheet compiling scores and choices matching students for your {selectedGradebook.toLowerCase()} sessions.
             </p>
           </div>
 
           <button
             onClick={handleExportCSV}
-            disabled={rows.length === 0}
+            disabled={filteredRows.length === 0}
             className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
@@ -339,23 +470,6 @@ export default function GradebookPage() {
               className="w-full bg-[#030712] border border-white/10 hover:border-white/15 focus:border-indigo-500 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition-all"
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-bold uppercase tracking-wider">
-              <Filter className="w-3.5 h-3.5 text-gray-500" />
-              <span>Show Columns:</span>
-            </div>
-            <select
-              value={typeFilter}
-              onChange={(e: any) => setTypeFilter(e.target.value)}
-              className="bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Columns</option>
-              <option value="EXAM">Exams Only</option>
-              <option value="SURVEY">Surveys Only</option>
-              <option value="POLL">Polls Only</option>
-            </select>
           </div>
         </div>
 

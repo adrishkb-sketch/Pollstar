@@ -43,17 +43,13 @@ export async function sendOTPEmail(email: string, otp: string): Promise<boolean>
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Debug Console Fallback (Compulsory display for testing)
@@ -98,17 +94,13 @@ export async function sendPollInvitationEmail(
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Debug Console Fallback
@@ -170,17 +162,13 @@ export async function sendVoteConfirmationEmail({
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending receipt:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -231,17 +219,13 @@ export async function sendPollClosedEmail({
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending closed notice:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -291,17 +275,13 @@ export async function sendLowPriorityAccessEmail({
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending low-priority access notice:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -373,17 +353,13 @@ export async function sendPollScheduleUpdatedEmail({
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending schedule update notice:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -432,17 +408,13 @@ export async function sendCreatorApprovalEmail(email: string): Promise<boolean> 
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending creator approval notice:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox logs
@@ -492,17 +464,13 @@ export async function sendPollCollaboratorInvitationEmail(
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending collab notice:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Debug Console Fallback
@@ -571,17 +539,13 @@ export async function sendExamResultsReleasedEmail({
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending results release:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -615,17 +579,13 @@ export async function sendNewsletterBroadcastEmail(email: string, title: string,
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending newsletter broadcast:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Fallback sandbox
@@ -656,17 +616,13 @@ export async function sendResetPasswordEmail(email: string, otp: string): Promis
   `;
 
   if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject,
-        html,
-      });
-      return true;
-    } catch (error) {
-      console.error('SMTP Mail Error sending reset password email:', error);
-    }
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
   }
 
   // Debug Console Fallback
