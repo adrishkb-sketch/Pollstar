@@ -542,6 +542,12 @@ export default function Dashboard() {
   const totalExamsCount = polls.filter((p: any) => p.pollType === 'EXAM').length;
   const activeSessionsCount = polls.filter((p: any) => p.status === 'ACTIVE').length;
 
+  // Derive enabled categories from quota
+  const enabledCategories: string[] = quota?.enabledCategories ?? ['POLL', 'SURVEY', 'EXAM'];
+  const canPoll = enabledCategories.includes('POLL');
+  const canSurvey = enabledCategories.includes('SURVEY');
+  const canExam = enabledCategories.includes('EXAM');
+
   // Filtered list for the grid
   const filteredPolls = polls.filter((p: any) => {
     const matchesSearch = !searchQuery ||
@@ -573,7 +579,7 @@ export default function Dashboard() {
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       {/* Header */}
-      <DashboardHeader user={user} />
+      <DashboardHeader user={user} enabledCategories={enabledCategories} />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 space-y-8">
@@ -641,30 +647,33 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div id="dashboard-stats" className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-          <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
+          <div className={`glass-card rounded-2xl p-6 flex items-center justify-between transition-all ${!canPoll ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
             <div>
               <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Polls</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{totalPollsCount}</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{canPoll ? totalPollsCount : '—'}</span>
+              {!canPoll && <span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider">Not in Plan</span>}
             </div>
             <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400">
               <Vote className="w-7 h-7" />
             </div>
           </div>
 
-          <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
+          <div className={`glass-card rounded-2xl p-6 flex items-center justify-between transition-all ${!canSurvey ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
             <div>
               <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Surveys</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{totalSurveysCount}</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{canSurvey ? totalSurveysCount : '—'}</span>
+              {!canSurvey && <span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider">Not in Plan</span>}
             </div>
             <div className="p-4 bg-violet-500/10 rounded-2xl text-violet-400">
               <BarChart3 className="w-7 h-7" />
             </div>
           </div>
 
-          <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
+          <div className={`glass-card rounded-2xl p-6 flex items-center justify-between transition-all ${!canExam ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
             <div>
               <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Exams</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{totalExamsCount}</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{canExam ? totalExamsCount : '—'}</span>
+              {!canExam && <span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider">Not in Plan</span>}
             </div>
             <div className="p-4 bg-cyan-500/10 rounded-2xl text-cyan-400">
               <Award className="w-7 h-7" />
@@ -846,12 +855,23 @@ export default function Dashboard() {
           return (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="font-outfit text-2xl font-bold text-white">Your Polls</h2>
+                <h2 className="font-outfit text-2xl font-bold text-white">Your Sessions</h2>
                 <p className="text-gray-400 text-sm mt-0.5">Manage and view real-time analytical reports for your sessions.</p>
               </div>
 
               <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-                {pollsExhausted ? (
+                {/* Poll Create Button */}
+                {!canPoll ? (
+                  <Link href="/dashboard/plans" title="Polls not included in your plan. Upgrade to get access."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/60 text-gray-500 text-xs border border-orange-500/20 cursor-pointer flex-1 sm:flex-initial hover:border-orange-500/40"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5 text-orange-500/60" />
+                      <span>Create Poll</span>
+                    </div>
+                    <span className="text-[8px] text-orange-400/80 font-semibold mt-0.5 uppercase tracking-wide">Not in Plan → Upgrade</span>
+                  </Link>
+                ) : pollsExhausted ? (
                   <button
                     disabled
                     title="You have exhausted your poll quota. Please buy an add-on or upgrade your plan."
@@ -874,7 +894,18 @@ export default function Dashboard() {
                   </Link>
                 )}
 
-                {surveysExhausted ? (
+                {/* Survey Create Button */}
+                {!canSurvey ? (
+                  <Link href="/dashboard/plans" title="Surveys not included in your plan. Upgrade to get access."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/60 text-gray-500 text-xs border border-orange-500/20 cursor-pointer flex-1 sm:flex-initial hover:border-orange-500/40"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5 text-orange-500/60" />
+                      <span>Create Survey</span>
+                    </div>
+                    <span className="text-[8px] text-orange-400/80 font-semibold mt-0.5 uppercase tracking-wide">Not in Plan → Upgrade</span>
+                  </Link>
+                ) : surveysExhausted ? (
                   <button
                     disabled
                     title="You have exhausted your survey quota. Please buy an add-on or upgrade your plan."
@@ -897,7 +928,18 @@ export default function Dashboard() {
                   </Link>
                 )}
 
-                {examsExhausted ? (
+                {/* Exam Create Button */}
+                {!canExam ? (
+                  <Link href="/dashboard/plans" title="Exams not included in your plan. Upgrade to get access."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/60 text-gray-500 text-xs border border-orange-500/20 cursor-pointer flex-1 sm:flex-initial hover:border-orange-500/40"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5 text-orange-500/60" />
+                      <span>Create Exam</span>
+                    </div>
+                    <span className="text-[8px] text-orange-400/80 font-semibold mt-0.5 uppercase tracking-wide">Not in Plan → Upgrade</span>
+                  </Link>
+                ) : examsExhausted ? (
                   <button
                     disabled
                     title="You have exhausted your exam quota. Please buy an add-on or upgrade your plan."

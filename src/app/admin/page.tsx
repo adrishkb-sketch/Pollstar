@@ -247,6 +247,9 @@ export default function AdminPortal() {
   const [planValidityValue, setPlanValidityValue] = useState('');
   const [planValidityUnit, setPlanValidityUnit] = useState('WEEKS');
   const [planRank, setPlanRank] = useState('0');
+  const [planMaxParticipantsPoll, setPlanMaxParticipantsPoll] = useState('100');
+  const [planMaxParticipantsSurvey, setPlanMaxParticipantsSurvey] = useState('100');
+  const [planMaxParticipantsExam, setPlanMaxParticipantsExam] = useState('100');
   
   // Price slashes & durations pricing states
   const [planOriginalPrice, setPlanOriginalPrice] = useState('0.0');
@@ -1137,17 +1140,20 @@ export default function AdminPortal() {
     setPlanMaxPolls('-1');
     setPlanMaxSurveys('-1');
     setPlanMaxExams('-1');
+    setPlanMaxParticipantsPoll('100');
+    setPlanMaxParticipantsSurvey('100');
+    setPlanMaxParticipantsExam('100');
     setPlanValidityValue('');
     setPlanValidityUnit('WEEKS');
     setPlanRank('0');
     setPlanOriginalPrice('0.0');
     setPlanOfferEndDate('');
     setPlanDurations({
-      MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0' },
-      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+      MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' }
     });
 
     const resetFeats: Record<string, boolean> = {};
@@ -1183,17 +1189,20 @@ export default function AdminPortal() {
     setPlanMaxPolls(plan.maxPolls !== null && plan.maxPolls !== undefined ? plan.maxPolls.toString() : '-1');
     setPlanMaxSurveys(plan.maxSurveys !== null && plan.maxSurveys !== undefined ? plan.maxSurveys.toString() : '-1');
     setPlanMaxExams(plan.maxExams !== null && plan.maxExams !== undefined ? plan.maxExams.toString() : '-1');
+    setPlanMaxParticipantsPoll(plan.maxParticipantsPoll !== null && plan.maxParticipantsPoll !== undefined ? plan.maxParticipantsPoll.toString() : '100');
+    setPlanMaxParticipantsSurvey(plan.maxParticipantsSurvey !== null && plan.maxParticipantsSurvey !== undefined ? plan.maxParticipantsSurvey.toString() : '100');
+    setPlanMaxParticipantsExam(plan.maxParticipantsExam !== null && plan.maxParticipantsExam !== undefined ? plan.maxParticipantsExam.toString() : '100');
     setPlanValidityValue(plan.validityValue !== null && plan.validityValue !== undefined ? plan.validityValue.toString() : '');
     setPlanValidityUnit(plan.validityUnit || 'WEEKS');
     setPlanRank((plan.rank !== null && plan.rank !== undefined) ? plan.rank.toString() : '0');
     setPlanOriginalPrice((plan.originalPrice || 0.0).toString());
     setPlanOfferEndDate(plan.offerEndDate ? new Date(plan.offerEndDate).toISOString().substring(0, 16) : '');
     setPlanDurations(plan.durations || {
-      MONTHLY: { enabled: true, price: plan.price.toString(), originalPrice: (plan.originalPrice || 0.0).toString() },
-      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
-      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+      MONTHLY: { enabled: true, price: plan.price.toString(), originalPrice: (plan.originalPrice || 0.0).toString(), maxPolls: plan.maxPolls !== null && plan.maxPolls !== undefined ? plan.maxPolls.toString() : '-1', maxSurveys: plan.maxSurveys !== null && plan.maxSurveys !== undefined ? plan.maxSurveys.toString() : '-1', maxExams: plan.maxExams !== null && plan.maxExams !== undefined ? plan.maxExams.toString() : '-1', maxParticipantsPoll: plan.maxParticipantsPoll !== null && plan.maxParticipantsPoll !== undefined ? plan.maxParticipantsPoll.toString() : '100', maxParticipantsSurvey: plan.maxParticipantsSurvey !== null && plan.maxParticipantsSurvey !== undefined ? plan.maxParticipantsSurvey.toString() : '100', maxParticipantsExam: plan.maxParticipantsExam !== null && plan.maxParticipantsExam !== undefined ? plan.maxParticipantsExam.toString() : '100' },
+      QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+      LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' }
     });
 
     let resolvedFeats: Record<string, boolean> = {};

@@ -88,11 +88,11 @@ export async function GET() {
     const planType = plan?.planType || 'SUBSCRIPTION';
     const isSubBased = !['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(planType);
 
-    // Count usage in current billing cycle (for subscription-based plans)
+    // Count usage in current billing cycle (for subscription-based plans) where invoiceId is null
     const [subUsedPolls, subUsedSurveys, subUsedExams] = await Promise.all([
-      prisma.poll.count({ where: { creatorId: user.id, pollType: 'POLL', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
-      prisma.poll.count({ where: { creatorId: user.id, pollType: 'SURVEY', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
-      prisma.poll.count({ where: { creatorId: user.id, pollType: 'EXAM', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+      prisma.poll.count({ where: { creatorId: user.id, pollType: 'POLL', invoiceId: null, createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+      prisma.poll.count({ where: { creatorId: user.id, pollType: 'SURVEY', invoiceId: null, createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+      prisma.poll.count({ where: { creatorId: user.id, pollType: 'EXAM', invoiceId: null, createdAt: { gte: cycleStart, lt: cycleEnd } } }),
     ]);
 
     // ── 2. Pack / Addon quota (all-time, lifetime) ───────────────────────────
@@ -111,6 +111,7 @@ export async function GET() {
     let expiredCapacityExams = 0;
 
     const now = new Date();
+    const activeAddons: any[] = [];
 
     for (const inv of addonInvoices) {
       const p = inv.plan;
@@ -148,16 +149,85 @@ export async function GET() {
           if (p.maxExams && p.maxExams > 0) allowedExams = p.maxExams;
           break;
         }
+        default:
+          break;
       }
 
       if (isValid) {
         packAllowedPolls += allowedPolls;
         packAllowedSurveys += allowedSurveys;
         packAllowedExams += allowedExams;
+
+        // Query precise usage for this active invoice
+        const [uPolls, uSurveys, uExams] = await Promise.all([
+          prisma.poll.count({ where: { invoiceId: inv.id, pollType: 'POLL' } }),
+          prisma.poll.count({ where: { invoiceId: inv.id, pollType: 'SURVEY' } }),
+          prisma.poll.count({ where: { invoiceId: inv.id, pollType: 'EXAM' } }),
+        ]);
+
+        activeAddons.push({
+          id: inv.id,
+          name: p.name,
+          planType: p.planType,
+          expiresAt: inv.planExpiresAt ? inv.planExpiresAt.toISOString() : null,
+          allowedPolls,
+          allowedSurveys,
+          allowedExams,
+          usedPolls: uPolls,
+          usedSurveys: uSurveys,
+          usedExams: uExams,
+          maxParticipantsPoll: p.maxParticipantsPoll,
+          maxParticipantsSurvey: p.maxParticipantsSurvey,
+          maxParticipantsExam: p.maxParticipantsExam,
+        });
       } else {
         expiredCapacityPolls += allowedPolls;
         expiredCapacitySurveys += allowedSurveys;
         expiredCapacityExams += allowedExams;
+      }
+    }
+
+    // ── Compute enabled categories based on active plans ────────────────────
+    const enabledCategories: string[] = [];
+
+    const addCatsForPlan = (p: any) => {
+      if (p.planType === 'SUBSCRIPTION') {
+        if (!enabledCategories.includes('POLL')) enabledCategories.push('POLL');
+        if (!enabledCategories.includes('SURVEY')) enabledCategories.push('SURVEY');
+        if (!enabledCategories.includes('EXAM')) enabledCategories.push('EXAM');
+      } else if (p.planType === 'POLL_PACK') {
+        if (!enabledCategories.includes('POLL')) enabledCategories.push('POLL');
+      } else if (p.planType === 'SURVEY_PACK') {
+        if (!enabledCategories.includes('SURVEY')) enabledCategories.push('SURVEY');
+      } else if (p.planType === 'EXAM_PACK') {
+        if (!enabledCategories.includes('EXAM')) enabledCategories.push('EXAM');
+      } else if (p.planType === 'COMBO_PACK') {
+        const comboTypes: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
+        if (comboTypes.includes('POLL') && !enabledCategories.includes('POLL')) enabledCategories.push('POLL');
+        if (comboTypes.includes('SURVEY') && !enabledCategories.includes('SURVEY')) enabledCategories.push('SURVEY');
+        if (comboTypes.includes('EXAM') && !enabledCategories.includes('EXAM')) enabledCategories.push('EXAM');
+      } else if (p.planType === 'ADDON') {
+        if (p.maxPolls && p.maxPolls > 0 && !enabledCategories.includes('POLL')) enabledCategories.push('POLL');
+        if (p.maxSurveys && p.maxSurveys > 0 && !enabledCategories.includes('SURVEY')) enabledCategories.push('SURVEY');
+        if (p.maxExams && p.maxExams > 0 && !enabledCategories.includes('EXAM')) enabledCategories.push('EXAM');
+      }
+    };
+
+    // Base plan
+    if (plan && plan.isActive) {
+      const isBasePlanActive = !user.planExpiresAt || new Date(user.planExpiresAt) > now || user.isLifetimePlan;
+      if (isBasePlanActive) addCatsForPlan(plan);
+    }
+    // Free plan users get access to all categories by default (limited by quota)
+    if (isFreePlan) {
+      if (!enabledCategories.includes('POLL')) enabledCategories.push('POLL');
+      if (!enabledCategories.includes('SURVEY')) enabledCategories.push('SURVEY');
+      if (!enabledCategories.includes('EXAM')) enabledCategories.push('EXAM');
+    }
+    // Addon invoices
+    for (const inv of addonInvoices) {
+      if (inv.plan && (!inv.planExpiresAt || new Date(inv.planExpiresAt) > now)) {
+        addCatsForPlan(inv.plan);
       }
     }
 
@@ -186,20 +256,19 @@ export async function GET() {
     });
 
     // ── 3. Build combined totals ─────────────────────────────────────────────
-    let adjustedPackUsedPolls = 0;
-    let adjustedPackUsedSurveys = 0;
-    let adjustedPackUsedExams = 0;
+    let adjustedPackUsedPolls = activeAddons.reduce((acc, a) => acc + a.usedPolls, 0);
+    let adjustedPackUsedSurveys = activeAddons.reduce((acc, a) => acc + a.usedSurveys, 0);
+    let adjustedPackUsedExams = activeAddons.reduce((acc, a) => acc + a.usedExams, 0);
 
     if (isSubBased) {
-      // For subscription plans, pack usage is only triggered by creations exceeding the subscription limits.
-      // If the subscription limit is unlimited (-1), then pack usage is 0.
+      // Fallback/Legacy logic if activeAddons sum doesn't capture all historical pack usage
       const baseSubLimitPolls = subLimitPolls === -1 ? Infinity : subLimitPolls;
       const baseSubLimitSurveys = subLimitSurveys === -1 ? Infinity : subLimitSurveys;
       const baseSubLimitExams = subLimitExams === -1 ? Infinity : subLimitExams;
 
-      adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls - baseSubLimitPolls);
-      adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys - baseSubLimitSurveys);
-      adjustedPackUsedExams = Math.max(0, allTimeExams - expiredCapacityExams - baseSubLimitExams);
+      adjustedPackUsedPolls = Math.max(adjustedPackUsedPolls, Math.max(0, allTimePolls - expiredCapacityPolls - baseSubLimitPolls));
+      adjustedPackUsedSurveys = Math.max(adjustedPackUsedSurveys, Math.max(0, allTimeSurveys - expiredCapacitySurveys - baseSubLimitSurveys));
+      adjustedPackUsedExams = Math.max(adjustedPackUsedExams, Math.max(0, allTimeExams - expiredCapacityExams - baseSubLimitExams));
     } else {
       // For pack-only plans, usage is simply the adjusted all-time creations minus expired capacities.
       adjustedPackUsedPolls = Math.max(0, allTimePolls - expiredCapacityPolls);
@@ -228,6 +297,8 @@ export async function GET() {
       success: true,
       planType,
       isSubBased,
+      enabledCategories,
+      activeAddons,
       subscription: {
         limitPolls: subLimitPolls,
         limitSurveys: subLimitSurveys,
@@ -237,6 +308,9 @@ export async function GET() {
         usedExams: subUsedExams,
         cycleStart: cycleStart.toISOString(),
         cycleEnd: cycleEnd.toISOString(),
+        maxParticipantsPoll: plan?.maxParticipantsPoll || null,
+        maxParticipantsSurvey: plan?.maxParticipantsSurvey || null,
+        maxParticipantsExam: plan?.maxParticipantsExam || null,
       },
       packs: {
         allowedPolls: packAllowedPolls,

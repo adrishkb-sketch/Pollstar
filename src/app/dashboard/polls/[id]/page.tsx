@@ -9,7 +9,7 @@ import {
   Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
   Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay,
   Unlock, Timer, MessageSquare, Send, Mail,
-  Layers, Filter, PieChart, Hash, History
+  Layers, Filter, PieChart, Hash, History, Lock as LockIcon
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -3582,6 +3582,27 @@ function PollInsightsContent({ params }: PageProps) {
           </div>
         )}
       </div>
+
+      {/* Participant Limit Exceeded Upgrade Banner */}
+      {poll && poll.rawTotalVotes > poll.participantLimit && (
+        <div className="p-5 rounded-2xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse-glow">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+              <LockIcon className="w-4 h-4 text-amber-500" />
+              <span>Response Capacity Limit Reached</span>
+            </div>
+            <p className="text-gray-300 text-xs leading-relaxed">
+              This session has received <strong className="text-white">{poll.rawTotalVotes}</strong> responses, but your current plan only supports viewing the first <strong className="text-white">{poll.participantLimit}</strong>. All remaining responses are securely stored but locked.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/plans"
+            className="px-4 py-2.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-gray-900 text-xs transition-all active:scale-95 text-center shrink-0 border border-amber-400/20"
+          >
+            Upgrade Plan to Unlock
+          </Link>
+        </div>
+      )}
 
       {/* Premium Tab Selector */}
       <div className="flex border-b border-white/5 pb-1 gap-6 print:hidden">

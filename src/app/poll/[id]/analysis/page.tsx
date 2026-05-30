@@ -133,6 +133,35 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
     );
   }
 
+  // 1b. Lock screen (participant limit exceeded)
+  if (data && data.isLocked) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center p-6">
+        <div className="glass-card max-w-md w-full border border-amber-500/20 bg-[#080d1a] rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto shadow-[0_0_20px_rgba(245,158,11,0.15)] animate-pulse">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-outfit text-lg font-bold text-white uppercase tracking-wider">Report Locked</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Your exam/survey graded report is currently locked because the examiner's plan participant limit has been exceeded.
+            </p>
+          </div>
+          <div className="text-[10px] text-gray-500 font-mono leading-relaxed bg-[#030712] p-3 rounded-xl border border-white/5">
+            Please ask your instructor to upgrade their plan to unlock additional response views. All submissions are securely recorded.
+          </div>
+          <button 
+            onClick={fetchResults}
+            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Check for Unlock</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Requires Authentication / Email lookup
   if (data && data.requiresLogin) {
     return (

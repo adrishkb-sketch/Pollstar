@@ -447,6 +447,52 @@ export default function CreatePoll() {
 
   const [userPlan, setUserPlan] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
+  const [quotaData, setQuotaData] = useState<any>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>(''); // empty string is subscription
+
+  const getAllocationOptions = () => {
+    if (!quotaData) return [];
+    const options = [];
+
+    // Check if subscription option is valid for this type
+    const sub = quotaData.subscription;
+    const isSubValid = quotaData.isSubBased && sub;
+    
+    if (isSubValid) {
+      const allowed = pollType === 'SURVEY' ? sub.limitSurveys : pollType === 'EXAM' ? sub.limitExams : sub.limitPolls;
+      const used = pollType === 'SURVEY' ? sub.usedSurveys : pollType === 'EXAM' ? sub.usedExams : sub.usedPolls;
+      const remaining = allowed === -1 ? 'Unlimited' : Math.max(0, allowed - used);
+      const partLimit = pollType === 'SURVEY' ? sub.maxParticipantsSurvey : pollType === 'EXAM' ? sub.maxParticipantsExam : sub.maxParticipantsPoll;
+
+      options.push({
+        id: '', // Subscription is represented by empty string
+        name: `${quotaData.planType === 'FREE' || !userPlan ? 'Free Tier' : userPlan.name} (Subscription)`,
+        remaining,
+        participantLimit: partLimit ? `${partLimit} voters` : 'Plan default',
+      });
+    }
+
+    // Addons
+    const addons = quotaData.activeAddons || [];
+    for (const add of addons) {
+      const allowed = pollType === 'SURVEY' ? add.allowedSurveys : pollType === 'EXAM' ? add.allowedExams : add.allowedPolls;
+      const used = pollType === 'SURVEY' ? add.usedSurveys : pollType === 'EXAM' ? add.usedExams : add.usedPolls;
+      
+      if (allowed > 0 || allowed === -1) {
+        const remaining = allowed === -1 ? 'Unlimited' : Math.max(0, allowed - used);
+        const partLimit = pollType === 'SURVEY' ? add.maxParticipantsSurvey : pollType === 'EXAM' ? add.maxParticipantsExam : add.maxParticipantsPoll;
+
+        options.push({
+          id: add.id,
+          name: `${add.name} (Credit Pack)`,
+          remaining,
+          participantLimit: partLimit ? `${partLimit} voters` : 'Pack default',
+        });
+      }
+    }
+
+    return options;
+  };
 
   const isFeatureLocked = (key: string): boolean => {
     if (!userPlan) return false;
@@ -679,6 +725,15 @@ export default function CreatePoll() {
       })
       .catch((e) => console.error(e));
 
+    fetch('/api/dashboard/quota')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success) {
+          setQuotaData(data);
+        }
+      })
+      .catch((e) => console.error(e));
+
     const start = new Date();
     const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days later
     
@@ -711,6 +766,17 @@ export default function CreatePoll() {
     setStartTime(formatIST(start));
     setEndTime(formatIST(end));
   }, []);
+
+  // Auto pre-select correct allocation option based on chosen pollType
+  useEffect(() => {
+    const options = getAllocationOptions();
+    if (options.length > 0) {
+      const isValid = options.some(opt => opt.id === selectedInvoiceId);
+      if (!isValid) {
+        setSelectedInvoiceId(options[0].id);
+      }
+    }
+  }, [pollType, quotaData]);
 
   // Load poll details if editing
   useEffect(() => {
@@ -1510,6 +1576,7 @@ export default function CreatePoll() {
       identifierLabel: isOpenVoting ? 'Roll Number' : identifierLabel,
       confirmer1Label: isOpenVoting ? 'Student Name' : confirmer1Label,
       confirmer2Label: isOpenVoting ? 'Parent Name' : (useConfirmer2 ? confirmer2Label : ''),
+      invoiceId: selectedInvoiceId || undefined,
     };
 
     try {
@@ -1834,6 +1901,51 @@ export default function CreatePoll() {
                   {pollType}
                 </span>
               </div>
+
+              {/* Allocation Selector */}
+              {(() => {
+                const options = getAllocationOptions();
+                if (options.length <= 1) return null;
+                return (
+                  <div className="space-y-3 p-5 rounded-2xl border border-white/5 bg-white/2">
+                    <label className="block text-indigo-300 text-xs font-extrabold uppercase tracking-wider">
+                      Allocate Creation To:
+                    </label>
+                    <p className="text-[10px] text-gray-500">You have multiple active plans/add-ons. Choose where to deduct this creation credit.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                      {options.map((opt) => {
+                        const isSelected = selectedInvoiceId === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setSelectedInvoiceId(opt.id)}
+                            className={`p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-indigo-500/10 border-indigo-500/40 text-white shadow-lg shadow-indigo-500/5 ring-1 ring-indigo-500/30'
+                                : 'bg-white/2 border-white/5 text-gray-400 hover:border-white/10 hover:bg-white/4'
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-3 right-3 p-1 rounded-full bg-indigo-500 text-white">
+                                <Check className="w-2.5 h-2.5" />
+                              </div>
+                            )}
+                            <div>
+                              <h5 className="font-bold text-xs text-white">{opt.name}</h5>
+                              <p className="text-[10px] text-gray-500 mt-1">Participant Limit: <strong className="text-gray-400">{opt.participantLimit}</strong></p>
+                            </div>
+                            <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[9px] uppercase tracking-wider font-bold">
+                              <span>Remaining creations:</span>
+                              <span className={isSelected ? 'text-indigo-400' : 'text-gray-400'}>{opt.remaining}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-6">
                 <div>

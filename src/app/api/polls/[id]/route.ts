@@ -112,9 +112,57 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       poll.status = 'ENDED';
     }
 
-    // Check if requester is creator, admin, or collaborator
-    const isCollaborator = user && poll.collaborators.some((c: any) => c.userId === user.id);
-    const isCreatorOrAdmin = user && (poll.creatorId === user.id || user.role === 'ADMIN' || isCollaborator);
+    // Fetch associated invoice or plan to determine participant limit
+    let participantLimit = 5000; // default backup
+    if (poll.invoiceId) {
+      const inv = await prisma.invoice.findUnique({
+        where: { id: poll.invoiceId },
+        include: { plan: true }
+      });
+      if (inv && inv.plan) {
+        const limitVal = poll.pollType === 'SURVEY' 
+          ? inv.plan.maxParticipantsSurvey 
+          : poll.pollType === 'EXAM' 
+            ? inv.plan.maxParticipantsExam 
+            : inv.plan.maxParticipantsPoll;
+        if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
+          participantLimit = limitVal;
+        }
+      }
+    } else {
+      const creator = await prisma.user.findUnique({
+        where: { id: poll.creatorId },
+        include: { plan: true }
+      });
+      if (creator && creator.plan) {
+        const plan = creator.plan;
+        let limit = poll.pollType === 'SURVEY' 
+          ? plan.maxParticipantsSurvey 
+          : poll.pollType === 'EXAM' 
+            ? plan.maxParticipantsExam 
+            : plan.maxParticipantsPoll;
+
+        // Check if there are duration overrides for this plan
+        if (plan.durations && creator.planBillingCycle) {
+          const durs = plan.durations as any;
+          const cycle = creator.planBillingCycle;
+          if (durs[cycle] && durs[cycle].enabled) {
+            const cfg = durs[cycle];
+            if (poll.pollType === 'POLL' && cfg.maxParticipantsPoll) limit = parseInt(cfg.maxParticipantsPoll);
+            if (poll.pollType === 'SURVEY' && cfg.maxParticipantsSurvey) limit = parseInt(cfg.maxParticipantsSurvey);
+            if (poll.pollType === 'EXAM' && cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
+          }
+        }
+        if (limit !== null && limit !== undefined && limit !== -1) {
+          participantLimit = limit;
+        }
+      }
+    }
+
+    // Sort votes by creation time so first N are the oldest (earliest) ones
+    const sortedVotes = [...poll.votes].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const rawTotalVotes = sortedVotes.length;
+    const truncatedVotes = sortedVotes.slice(0, participantLimit);
 
     // Build statistics
     const stats: Record<string, any> = {};
@@ -126,7 +174,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     // Calculate normal choices or ranked border points
-    poll.votes.forEach((v) => {
+    truncatedVotes.forEach((v) => {
       try {
         const answers = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
         Object.keys(answers).forEach((qId) => {
@@ -166,6 +214,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
     });
 
+    // Check if requester is creator, admin, or collaborator
+    const isCollaborator = user && poll.collaborators.some((c: any) => c.userId === user.id);
+    const isCreatorOrAdmin = user && (poll.creatorId === user.id || user.role === 'ADMIN' || isCollaborator);
+
     // Clean data if the user is a normal voter (not creator/admin)
     const cleanedPoll = {
       id: poll.id,
@@ -182,12 +234,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       questions: poll.questions,
       settings: poll.settings,
       stats,
-      totalVotes: poll.votes.length,
+      participantLimit,
+      totalVotes: truncatedVotes.length,
+      rawTotalVotes,
       creator: poll.creator,
       // Only include logs and allowed voter list if creator or admin
       allowedVoters: isCreatorOrAdmin ? poll.allowedVoters : undefined,
       votes: isCreatorOrAdmin
-        ? poll.votes.map((v) => {
+        ? truncatedVotes.map((v) => {
             const showIdentity = !poll.isAnonymous || (user && user.role === 'ADMIN');
             return {
               id: v.id,
@@ -203,7 +257,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             };
           })
         : (poll.isResultPublic
-            ? poll.votes.map((v) => ({
+            ? truncatedVotes.map((v) => ({
                 id: v.id,
                 ipAddress: 'Masked',
                 isp: v.isp || 'Unknown ISP',

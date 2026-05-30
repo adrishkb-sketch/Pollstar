@@ -133,6 +133,30 @@ export async function POST(
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
+    // Absolute maximum participant gating check
+    const currentVotesCount = await prisma.vote.count({
+      where: { pollId: poll.id }
+    });
+    const maxLimits = await prisma.plan.aggregate({
+      where: { isActive: true },
+      _max: {
+        maxParticipantsPoll: true,
+        maxParticipantsSurvey: true,
+        maxParticipantsExam: true
+      }
+    });
+    const absoluteMax = Math.max(
+      maxLimits._max.maxParticipantsPoll || 5000,
+      maxLimits._max.maxParticipantsSurvey || 5000,
+      maxLimits._max.maxParticipantsExam || 5000
+    );
+    if (currentVotesCount >= absoluteMax) {
+      return NextResponse.json(
+        { error: `This session has reached its absolute maximum limit of ${absoluteMax} participants and is no longer accepting responses.` },
+        { status: 403 }
+      );
+    }
+
     if (poll.status !== 'ACTIVE') {
       return NextResponse.json(
         { error: 'This poll is not currently open for voting.' },

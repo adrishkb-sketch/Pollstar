@@ -60,11 +60,12 @@ export async function POST(req: Request) {
       packQuantity, freePerks, comboTypes, badgeColor, badgeLabel,
       hasFreeTrial, freeTrialDays, freeTrialFeatures, pollSubtypes,
       isActive, features, maxPolls, maxSurveys, maxExams,
+      maxParticipantsPoll, maxParticipantsSurvey, maxParticipantsExam,
       originalPrice, offerEndDate, durations,
       validityValue, validityUnit, rank
     } = body;
 
-    if (!name || !features) {
+    if (!name || (!features && planType !== 'SUBSCRIPTION')) {
       return NextResponse.json({ error: 'Plan name and features are required.' }, { status: 400 });
     }
 
@@ -95,10 +96,13 @@ export async function POST(req: Request) {
         freeTrialFeatures: freeTrialFeatures || null,
         pollSubtypes: pollSubtypes || null,
         isActive: isActive !== false,
-        features,
+        features: features || {},
         maxPolls: maxPolls === null || maxPolls === undefined || maxPolls === '' || parseInt(maxPolls) === -1 ? null : parseInt(maxPolls),
         maxSurveys: maxSurveys === null || maxSurveys === undefined || maxSurveys === '' || parseInt(maxSurveys) === -1 ? null : parseInt(maxSurveys),
         maxExams: maxExams === null || maxExams === undefined || maxExams === '' || parseInt(maxExams) === -1 ? null : parseInt(maxExams),
+        maxParticipantsPoll: maxParticipantsPoll === null || maxParticipantsPoll === undefined || maxParticipantsPoll === '' || parseInt(maxParticipantsPoll) === -1 ? null : parseInt(maxParticipantsPoll),
+        maxParticipantsSurvey: maxParticipantsSurvey === null || maxParticipantsSurvey === undefined || maxParticipantsSurvey === '' || parseInt(maxParticipantsSurvey) === -1 ? null : parseInt(maxParticipantsSurvey),
+        maxParticipantsExam: maxParticipantsExam === null || maxParticipantsExam === undefined || maxParticipantsExam === '' || parseInt(maxParticipantsExam) === -1 ? null : parseInt(maxParticipantsExam),
         originalPrice: originalPrice ? parseFloat(originalPrice) : 0.0,
         offerEndDate: offerEndDate ? new Date(offerEndDate) : null,
         durations: durations || null,
@@ -217,6 +221,15 @@ export async function PATCH(req: Request) {
     }
     if (updateFields.maxExams !== undefined) {
       data.maxExams = updateFields.maxExams === null || updateFields.maxExams === undefined || updateFields.maxExams === '' || parseInt(updateFields.maxExams) === -1 ? null : parseInt(updateFields.maxExams);
+    }
+    if (updateFields.maxParticipantsPoll !== undefined) {
+      data.maxParticipantsPoll = updateFields.maxParticipantsPoll === null || updateFields.maxParticipantsPoll === undefined || updateFields.maxParticipantsPoll === '' || parseInt(updateFields.maxParticipantsPoll) === -1 ? null : parseInt(updateFields.maxParticipantsPoll);
+    }
+    if (updateFields.maxParticipantsSurvey !== undefined) {
+      data.maxParticipantsSurvey = updateFields.maxParticipantsSurvey === null || updateFields.maxParticipantsSurvey === undefined || updateFields.maxParticipantsSurvey === '' || parseInt(updateFields.maxParticipantsSurvey) === -1 ? null : parseInt(updateFields.maxParticipantsSurvey);
+    }
+    if (updateFields.maxParticipantsExam !== undefined) {
+      data.maxParticipantsExam = updateFields.maxParticipantsExam === null || updateFields.maxParticipantsExam === undefined || updateFields.maxParticipantsExam === '' || parseInt(updateFields.maxParticipantsExam) === -1 ? null : parseInt(updateFields.maxParticipantsExam);
     }
     if (updateFields.originalPrice !== undefined) {
       data.originalPrice = updateFields.originalPrice ? parseFloat(updateFields.originalPrice) : 0.0;

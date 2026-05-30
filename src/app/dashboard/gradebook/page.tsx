@@ -26,6 +26,7 @@ export default function GradebookPage() {
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'EXAM' | 'SURVEY' | 'POLL'>('ALL');
   const [selectedGradebook, setSelectedGradebook] = useState<'POLL' | 'SURVEY' | 'EXAM' | null>(null);
   const [enabledTypes, setEnabledTypes] = useState<string[]>([]);
+  const [hasExceededLimit, setHasExceededLimit] = useState(false);
   
   // Inline editing states
   const [editingCell, setEditingCell] = useState<{ rowKey: string; colId: string; voteId: string } | null>(null);
@@ -49,6 +50,7 @@ export default function GradebookPage() {
       setHeaders(data.headers || []);
       setRows(data.rows || []);
       setEnabledTypes(data.enabledTypes || []);
+      setHasExceededLimit(!!data.hasExceededLimit);
     } catch (err: any) {
       setError(err.message);
     }
@@ -82,6 +84,7 @@ export default function GradebookPage() {
         setHeaders(gbData.headers || []);
         setRows(gbData.rows || []);
         setEnabledTypes(gbData.enabledTypes || []);
+        setHasExceededLimit(!!gbData.hasExceededLimit);
       } catch (err) {
         setError('Failed to load session details.');
       } finally {
@@ -458,6 +461,27 @@ export default function GradebookPage() {
             <span>Export to Excel (CSV)</span>
           </button>
         </div>
+
+        {/* Participant Limit Warning Callout Banner */}
+        {hasExceededLimit && (
+          <div className="p-5 rounded-2xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse-glow">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+                <Lock className="w-4 h-4 text-amber-500" />
+                <span>Roster Response Capacity Gated</span>
+              </div>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Some candidates' attempts have exceeded your plan's participant limits. Exceeded rows are safely recorded in the database but locked (rendered as <strong className="text-white">🔒 Locked</strong>) in this gradebook view.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/plans"
+              className="px-4 py-2.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-gray-900 text-xs transition-all active:scale-95 text-center shrink-0 border border-amber-400/20"
+            >
+              Upgrade Plan to Unlock
+            </Link>
+          </div>
+        )}
 
         {/* Filters and search box */}
         <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-4 flex flex-col md:flex-row justify-between gap-4">

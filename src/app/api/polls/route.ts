@@ -160,6 +160,8 @@ export async function POST(req: Request) {
       );
     }
 
+    let resolvedInvoiceId: string | null = body.invoiceId || null;
+
     // Plan Gating Checks
     if (user.role !== 'ADMIN') {
       const userWithPlan = await prisma.user.findUnique({
@@ -170,181 +172,165 @@ export async function POST(req: Request) {
       if (userWithPlan) {
         const plan = userWithPlan.plan;
         const isFreePlan = !plan || plan.name.toLowerCase() === 'free';
+        const targetType = pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL';
 
-        // ── 1. Subscription Billing Cycle ────────────────────────────────────
-        let cycleStart: Date;
-        let cycleEnd: Date;
+        if (resolvedInvoiceId) {
+          // Validate chosen invoice
+          const invoice = await prisma.invoice.findUnique({
+            where: { id: resolvedInvoiceId },
+            include: { plan: true }
+          });
 
-        if (isFreePlan || !userWithPlan.planExpiresAt) {
-          const now = new Date();
-          const ann = new Date(userWithPlan.createdAt);
-          ann.setFullYear(now.getFullYear());
-          ann.setMonth(now.getMonth());
-          if (ann > now) ann.setMonth(ann.getMonth() - 1);
-          cycleStart = ann;
-          cycleEnd = new Date(ann);
-          cycleEnd.setMonth(cycleEnd.getMonth() + 1);
-        } else {
-          const expEnd = new Date(userWithPlan.planExpiresAt);
-          const expStart = new Date(userWithPlan.planExpiresAt);
-          const cycle = (userWithPlan.planBillingCycle || 'MONTHLY').toUpperCase();
-          if (cycle === 'MONTHLY') expStart.setMonth(expStart.getMonth() - 1);
-          else if (cycle === 'QUARTERLY') expStart.setMonth(expStart.getMonth() - 3);
-          else if (cycle === 'YEARLY') expStart.setMonth(expStart.getMonth() - 12);
-          else if (cycle === 'TWO_YEAR' || cycle === 'TWO_YEARS') expStart.setMonth(expStart.getMonth() - 24);
-          else expStart.setMonth(expStart.getMonth() - 1);
-          cycleStart = expStart;
-          cycleEnd = expEnd;
-        }
-
-        // Base limits from plan
-        let subLimitPolls: number = isFreePlan ? 3 : (plan?.maxPolls ?? -1);
-        let subLimitSurveys: number = isFreePlan ? 3 : (plan?.maxSurveys ?? -1);
-        let subLimitExams: number = isFreePlan ? 3 : (plan?.maxExams ?? -1);
-
-        // Override with duration-specific limits if available
-        if (plan && plan.durations && !isFreePlan) {
-          const durs = plan.durations as any;
-          const cycle = userWithPlan.planBillingCycle || 'MONTHLY';
-          if (durs[cycle] && durs[cycle].enabled) {
-            const cfg = durs[cycle];
-            if (cfg.maxPolls !== undefined && cfg.maxPolls !== '') subLimitPolls = parseInt(cfg.maxPolls);
-            if (cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') subLimitSurveys = parseInt(cfg.maxSurveys);
-            if (cfg.maxExams !== undefined && cfg.maxExams !== '') subLimitExams = parseInt(cfg.maxExams);
+          if (!invoice || invoice.userId !== user.id || !invoice.isAddon) {
+            return NextResponse.json({ error: 'Invalid credit pack selected for allocation.' }, { status: 400 });
           }
-        }
 
-        // Only apply subscription limits for SUBSCRIPTION plan type (not packs)
-        const planType = plan?.planType || 'SUBSCRIPTION';
-        const isSubBased = !['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(planType);
+          if (invoice.planExpiresAt && new Date(invoice.planExpiresAt) < new Date()) {
+            return NextResponse.json({ error: 'Selected credit pack has expired.' }, { status: 403 });
+          }
 
-        // Count usage in current billing cycle (for subscription-based plans)
-        const [subUsedPolls, subUsedSurveys, subUsedExams] = await Promise.all([
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'POLL', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'SURVEY', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'EXAM', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
-        ]);
-
-        // ── 2. Pack / Addon quota (all-time, lifetime) ───────────────────────────
-        const addonInvoices = await prisma.invoice.findMany({
-          where: { userId: user.id, isAddon: true },
-          include: { plan: true },
-        });
-
-        let packAllowedPolls = 0;
-        let packAllowedSurveys = 0;
-        let packAllowedExams = 0;
-
-        let expiredCapacityPolls = 0;
-        let expiredCapacitySurveys = 0;
-        let expiredCapacityExams = 0;
-
-        const nowTime = new Date();
-
-        for (const inv of addonInvoices) {
-          const p = inv.plan;
-          if (!p) continue;
-
-          // Check if this pack is still valid
-          const isValid = !inv.planExpiresAt || new Date(inv.planExpiresAt) > nowTime;
-
+          const p = invoice.plan;
           const qty = (p.packQuantity ?? 0) + (p.freePerks ?? 0);
-
-          let allowedPolls = 0;
-          let allowedSurveys = 0;
-          let allowedExams = 0;
+          let allowed = 0;
 
           switch (p.planType) {
             case 'POLL_PACK':
-              allowedPolls = qty;
+              if (targetType !== 'POLL') return NextResponse.json({ error: 'This pack is only valid for Polls.' }, { status: 403 });
+              allowed = qty;
               break;
             case 'SURVEY_PACK':
-              allowedSurveys = qty;
+              if (targetType !== 'SURVEY') return NextResponse.json({ error: 'This pack is only valid for Surveys.' }, { status: 403 });
+              allowed = qty;
               break;
             case 'EXAM_PACK':
-              allowedExams = qty;
+              if (targetType !== 'EXAM') return NextResponse.json({ error: 'This pack is only valid for Exams.' }, { status: 403 });
+              allowed = qty;
               break;
             case 'COMBO_PACK': {
               const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
+              if (!types.includes(targetType)) return NextResponse.json({ error: `This combo pack does not include ${targetType}s.` }, { status: 403 });
               const perType = types.length > 0 ? Math.floor(qty / types.length) : 0;
-              if (types.includes('POLL')) allowedPolls = perType;
-              if (types.includes('SURVEY')) allowedSurveys = perType;
-              if (types.includes('EXAM')) allowedExams = perType;
+              allowed = perType;
               break;
             }
             case 'ADDON': {
-              if (p.maxPolls && p.maxPolls > 0) allowedPolls = p.maxPolls;
-              if (p.maxSurveys && p.maxSurveys > 0) allowedSurveys = p.maxSurveys;
-              if (p.maxExams && p.maxExams > 0) allowedExams = p.maxExams;
+              if (targetType === 'POLL') allowed = p.maxPolls ?? 0;
+              else if (targetType === 'SURVEY') allowed = p.maxSurveys ?? 0;
+              else if (targetType === 'EXAM') allowed = p.maxExams ?? 0;
               break;
             }
-            default:
-              break;
           }
 
-          if (isValid) {
-            packAllowedPolls += allowedPolls;
-            packAllowedSurveys += allowedSurveys;
-            packAllowedExams += allowedExams;
+          const used = await prisma.poll.count({
+            where: { invoiceId: invoice.id, pollType: targetType }
+          });
+
+          if (allowed !== -1 && used >= allowed) {
+            return NextResponse.json({
+              error: `You have reached the maximum allowance of ${allowed} creations on this credit pack ("${p.name}"). Please select another plan or buy a new pack.`
+            }, { status: 403 });
+          }
+        } else {
+          // If invoiceId is not specified:
+          // Check if subscription has remaining capacity.
+          let cycleStart: Date;
+          let cycleEnd: Date;
+
+          if (isFreePlan || !userWithPlan.planExpiresAt) {
+            const now = new Date();
+            const ann = new Date(userWithPlan.createdAt);
+            ann.setFullYear(now.getFullYear());
+            ann.setMonth(now.getMonth());
+            if (ann > now) ann.setMonth(ann.getMonth() - 1);
+            cycleStart = ann;
+            cycleEnd = new Date(ann);
+            cycleEnd.setMonth(cycleEnd.getMonth() + 1);
           } else {
-            expiredCapacityPolls += allowedPolls;
-            expiredCapacitySurveys += allowedSurveys;
-            expiredCapacityExams += allowedExams;
+            const expEnd = new Date(userWithPlan.planExpiresAt);
+            const expStart = new Date(userWithPlan.planExpiresAt);
+            const cycle = (userWithPlan.planBillingCycle || 'MONTHLY').toUpperCase();
+            if (cycle === 'MONTHLY') expStart.setMonth(expStart.getMonth() - 1);
+            else if (cycle === 'QUARTERLY') expStart.setMonth(expStart.getMonth() - 3);
+            else if (cycle === 'YEARLY') expStart.setMonth(expStart.getMonth() - 12);
+            else if (cycle === 'TWO_YEAR' || cycle === 'TWO_YEARS') expStart.setMonth(expStart.getMonth() - 24);
+            else expStart.setMonth(expStart.getMonth() - 1);
+            cycleStart = expStart;
+            cycleEnd = expEnd;
           }
-        }
 
-        // All-time usage counts (for pack/entity quota tracking)
-        const [activePolls, activeSurveys, activeExams, deletedPolls, deletedSurveys, deletedExams] = await Promise.all([
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'POLL' } }),
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'SURVEY' } }),
-          prisma.poll.count({ where: { creatorId: user.id, pollType: 'EXAM' } }),
-          prisma.deletedPoll.count({ where: { creatorId: user.id, pollType: 'POLL' } }),
-          prisma.deletedPoll.count({ where: { creatorId: user.id, pollType: 'SURVEY' } }),
-          prisma.deletedPoll.count({ where: { creatorId: user.id, pollType: 'EXAM' } }),
-        ]);
+          let subLimit: number = isFreePlan ? 3 : (targetType === 'POLL' ? (plan?.maxPolls ?? -1) : targetType === 'SURVEY' ? (plan?.maxSurveys ?? -1) : (plan?.maxExams ?? -1));
 
-        // Correct formula: active + deleted (separate tables, not duplicates)
-        const allTimePolls   = activePolls   + deletedPolls;
-        const allTimeSurveys = activeSurveys + deletedSurveys;
-        const allTimeExams   = activeExams   + deletedExams;
+          // Override with duration-specific limits if available
+          if (plan && plan.durations && !isFreePlan) {
+            const durs = plan.durations as any;
+            const cycle = userWithPlan.planBillingCycle || 'MONTHLY';
+            if (durs[cycle] && durs[cycle].enabled) {
+              const cfg = durs[cycle];
+              if (targetType === 'POLL' && cfg.maxPolls !== undefined && cfg.maxPolls !== '') subLimit = parseInt(cfg.maxPolls);
+              if (targetType === 'SURVEY' && cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') subLimit = parseInt(cfg.maxSurveys);
+              if (targetType === 'EXAM' && cfg.maxExams !== undefined && cfg.maxExams !== '') subLimit = parseInt(cfg.maxExams);
+            }
+          }
 
-        // For subscription plans, pack usage only kicks in beyond the base sub allowance.
-        // Without this, sub usage AND pack usage are both counted causing 2x overcounting.
-        const subBasePolls   = isSubBased ? (subLimitPolls   === -1 ? Infinity : subLimitPolls)   : 0;
-        const subBaseSurveys = isSubBased ? (subLimitSurveys === -1 ? Infinity : subLimitSurveys) : 0;
-        const subBaseExams   = isSubBased ? (subLimitExams   === -1 ? Infinity : subLimitExams)   : 0;
+          // Query sub used (where invoiceId is null)
+          const subUsed = await prisma.poll.count({
+            where: { creatorId: user.id, pollType: targetType, invoiceId: null, createdAt: { gte: cycleStart, lt: cycleEnd } }
+          });
 
-        const adjustedPackUsedPolls   = Math.max(0, allTimePolls   - expiredCapacityPolls   - subBasePolls);
-        const adjustedPackUsedSurveys = Math.max(0, allTimeSurveys - expiredCapacitySurveys - subBaseSurveys);
-        const adjustedPackUsedExams   = Math.max(0, allTimeExams   - expiredCapacityExams   - subBaseExams);
+          // Check if subscription has capacity
+          const subHasCapacity = subLimit === -1 || subUsed < subLimit;
 
-        // ── 3. Build combined totals ─────────────────────────────────────────────
-        const totalAllowedPolls = isSubBased
-          ? (subLimitPolls === -1 ? -1 : subLimitPolls + packAllowedPolls)
-          : packAllowedPolls;
-        const totalAllowedSurveys = isSubBased
-          ? (subLimitSurveys === -1 ? -1 : subLimitSurveys + packAllowedSurveys)
-          : packAllowedSurveys;
-        const totalAllowedExams = isSubBased
-          ? (subLimitExams === -1 ? -1 : subLimitExams + packAllowedExams)
-          : packAllowedExams;
+          if (subHasCapacity) {
+            // Subscription has capacity, allocate here (invoiceId remains null)
+          } else {
+            // Subscription is exceeded. Try to find the first active addon pack that has remaining capacity for this category
+            const addonInvoices = await prisma.invoice.findMany({
+              where: { userId: user.id, isAddon: true },
+              include: { plan: true },
+            });
 
-        const totalUsedPolls = isSubBased ? subUsedPolls + adjustedPackUsedPolls : adjustedPackUsedPolls;
-        const totalUsedSurveys = isSubBased ? subUsedSurveys + adjustedPackUsedSurveys : adjustedPackUsedSurveys;
-        const totalUsedExams = isSubBased ? subUsedExams + adjustedPackUsedExams : adjustedPackUsedExams;
+            let allocatedInvoice = null;
+            for (const inv of addonInvoices) {
+              const p = inv.plan;
+              if (!p) continue;
+              if (inv.planExpiresAt && new Date(inv.planExpiresAt) < new Date()) continue;
 
+              const qty = (p.packQuantity ?? 0) + (p.freePerks ?? 0);
+              let allowed = 0;
+              switch (p.planType) {
+                case 'POLL_PACK': if (targetType === 'POLL') allowed = qty; break;
+                case 'SURVEY_PACK': if (targetType === 'SURVEY') allowed = qty; break;
+                case 'EXAM_PACK': if (targetType === 'EXAM') allowed = qty; break;
+                case 'COMBO_PACK': {
+                  const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
+                  if (types.includes(targetType)) allowed = types.length > 0 ? Math.floor(qty / types.length) : 0;
+                  break;
+                }
+                case 'ADDON': {
+                  if (targetType === 'POLL') allowed = p.maxPolls ?? 0;
+                  else if (targetType === 'SURVEY') allowed = p.maxSurveys ?? 0;
+                  else if (targetType === 'EXAM') allowed = p.maxExams ?? 0;
+                  break;
+                }
+              }
 
-        // Perform validation check for the current requested creation type
-        const targetType = pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL';
-        const allowed = targetType === 'SURVEY' ? totalAllowedSurveys : targetType === 'EXAM' ? totalAllowedExams : totalAllowedPolls;
-        const used = targetType === 'SURVEY' ? totalUsedSurveys : targetType === 'EXAM' ? totalUsedExams : totalUsedPolls;
-        const activeLabel = targetType === 'SURVEY' ? 'surveys' : targetType === 'EXAM' ? 'exams' : 'polls';
-        const planName = plan ? plan.name : 'Free';
+              if (allowed > 0 || allowed === -1) {
+                const used = await prisma.poll.count({ where: { invoiceId: inv.id, pollType: targetType } });
+                if (allowed === -1 || used < allowed) {
+                  allocatedInvoice = inv;
+                  break;
+                }
+              }
+            }
 
-        if (allowed !== -1 && used >= allowed) {
-          return NextResponse.json({
-            error: `You have reached the maximum allowance of ${allowed} ${activeLabel} on your current plan ("${planName}"). Please buy a credit add-on pack or upgrade your plan to create more.`
-          }, { status: 403 });
+            if (allocatedInvoice) {
+              resolvedInvoiceId = allocatedInvoice.id;
+            } else {
+              return NextResponse.json({
+                error: `You have reached the maximum allowance of ${subLimit} creations on your current plan. Please select a credit pack addon or upgrade your plan to create more.`
+              }, { status: 403 });
+            }
+          }
         }
       }
 
@@ -391,6 +377,7 @@ export async function POST(req: Request) {
           endTime: new Date(endTime),
           status: status === 'ACTIVE' ? 'ACTIVE' : 'DRAFT',
           pollType: pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL',
+          invoiceId: resolvedInvoiceId,
         },
       });
 

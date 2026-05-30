@@ -8,9 +8,10 @@ import BrandLogo from '@/components/BrandLogo';
 
 interface DashboardHeaderProps {
   user: any;
+  enabledCategories?: string[];
 }
 
-export default function DashboardHeader({ user }: DashboardHeaderProps) {
+export default function DashboardHeader({ user, enabledCategories }: DashboardHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -20,14 +21,18 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
     router.push('/login');
   };
 
+  // Gradebook is relevant only when user has exam or survey access
+  const hasGradebook = !enabledCategories || enabledCategories.includes('EXAM') || enabledCategories.includes('SURVEY');
+
   const links = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/dashboard/profile', label: 'My Profile' },
-    { href: '/dashboard/gradebook', label: '📊 Gradebook' },
+    ...(hasGradebook ? [{ href: '/dashboard/gradebook', label: '📊 Gradebook' }] : []),
     { href: '/dashboard/plans', label: 'Plans & Features' },
     { href: '/dashboard/earnings', label: '💰 Earnings & Referrals' },
     { href: '/dashboard/notices', label: '📣 Announcements' },
   ];
+
 
   return (
     <>

@@ -90,7 +90,10 @@ function CheckoutContent() {
 
     async function loadCheckoutData() {
       try {
-        // Fetch current user details for form auto-fill
+        // Fetch current user details for form auto-fill and constraint checking
+        let userPlan: any = null;
+        let userPlanExpiresAt: any = null;
+        let isLifetime = false;
         const meRes = await fetch('/api/auth/me');
         if (meRes.ok) {
           const meData = await meRes.json();
@@ -98,6 +101,9 @@ function CheckoutContent() {
             setEmail(meData.user.email || '');
             setFullName(meData.user.fullName || '');
             setPhone(meData.user.phoneNumber || '');
+            userPlan = meData.user.plan;
+            userPlanExpiresAt = meData.user.planExpiresAt;
+            isLifetime = meData.user.isLifetimePlan;
           }
         }
 
@@ -111,6 +117,20 @@ function CheckoutContent() {
               (planData.entityPlans || []).find((p: Plan) => p.id === planId) ||
               (planData.addonPlans || []).find((p: Plan) => p.id === planId);
             if (matchedPlan) {
+              // Enforce purchase constraint: paid subscription blocks individual/combo pack purchase
+              const hasActivePaidSub = userPlan && userPlan.name?.toLowerCase() !== 'free' &&
+                userPlan.planType === 'SUBSCRIPTION' &&
+                (isLifetime || (userPlanExpiresAt && new Date(userPlanExpiresAt) > new Date()));
+
+              const isIndividualOrComboPack = ['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(matchedPlan.planType);
+
+              if (hasActivePaidSub && isIndividualOrComboPack) {
+                setError('Purchase Blocked: Individual/Combo credit packs are not available while you have an active paid subscription plan. Please purchase Add-Ons instead.');
+                setPlan(null);
+                setLoading(false);
+                return;
+              }
+
               setPlan(matchedPlan);
               let computedBasePrice = matchedPlan.price;
               if (isTrial) {

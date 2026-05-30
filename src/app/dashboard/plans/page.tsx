@@ -540,7 +540,7 @@ export default function PlansPage() {
                     })()}
 
 
-                    {/* Subscription Cards Allowed Quota Details */}
+                    {/* Quota Details */}
                     {(() => {
                       const dursConfig = p.durations ? (p.durations as any) : null;
                       const enabledDurs = dursConfig 
@@ -553,48 +553,61 @@ export default function PlansPage() {
                       let maxPollsVal = durConfig?.maxPolls !== undefined && durConfig.maxPolls !== '' ? parseInt(durConfig.maxPolls) : (p.maxPolls !== null && p.maxPolls !== undefined ? p.maxPolls : -1);
                       let maxSurveysVal = durConfig?.maxSurveys !== undefined && durConfig.maxSurveys !== '' ? parseInt(durConfig.maxSurveys) : (p.maxSurveys !== null && p.maxSurveys !== undefined ? p.maxSurveys : -1);
                       let maxExamsVal = durConfig?.maxExams !== undefined && durConfig.maxExams !== '' ? parseInt(durConfig.maxExams) : (p.maxExams !== null && p.maxExams !== undefined ? p.maxExams : -1);
+                      let maxPartPoll = durConfig?.maxParticipantsPoll !== undefined && durConfig.maxParticipantsPoll !== '' ? parseInt(durConfig.maxParticipantsPoll) : (p.maxParticipantsPoll ?? null);
+                      let maxPartSurvey = durConfig?.maxParticipantsSurvey !== undefined && durConfig.maxParticipantsSurvey !== '' ? parseInt(durConfig.maxParticipantsSurvey) : (p.maxParticipantsSurvey ?? null);
+                      let maxPartExam = durConfig?.maxParticipantsExam !== undefined && durConfig.maxParticipantsExam !== '' ? parseInt(durConfig.maxParticipantsExam) : (p.maxParticipantsExam ?? null);
 
-                      const limitPolls = maxPollsVal === null || maxPollsVal === -1 ? 'Unlimited' : maxPollsVal;
-                      const limitSurveys = maxSurveysVal === null || maxSurveysVal === -1 ? 'Unlimited' : maxSurveysVal;
-                      const limitExams = maxExamsVal === null || maxExamsVal === -1 ? 'Unlimited' : maxExamsVal;
+                      const fmt = (v: number | null) => v === null || v === -1 ? 'Unlimited' : v.toLocaleString();
 
                       return (
                         <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                          <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Per-Cycle Creation Limits</div>
                           <div className="flex items-center justify-between">
-                            <span>Max Polls Allowed:</span>
-                            <strong className="text-white font-bold">{limitPolls}</strong>
+                            <span>🗳 Polls per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxPollsVal)}</strong>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>Max Surveys Allowed:</span>
-                            <strong className="text-white font-bold">{limitSurveys}</strong>
+                            <span>📋 Surveys per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxSurveysVal)}</strong>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>Max Exams Allowed:</span>
-                            <strong className="text-white font-bold">{limitExams}</strong>
+                            <span>📝 Exams per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxExamsVal)}</strong>
                           </div>
+                          {(maxPartPoll || maxPartSurvey || maxPartExam) && (
+                            <>
+                              <div className="border-t border-white/5 pt-1.5 mt-1">
+                                <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Max Participants per Session</div>
+                                {maxPartPoll && <div className="flex items-center justify-between"><span>🗳 Per Poll:</span><strong className="text-indigo-300 font-bold">{fmt(maxPartPoll)}</strong></div>}
+                                {maxPartSurvey && <div className="flex items-center justify-between"><span>📋 Per Survey:</span><strong className="text-violet-300 font-bold">{fmt(maxPartSurvey)}</strong></div>}
+                                {maxPartExam && <div className="flex items-center justify-between"><span>📝 Per Exam:</span><strong className="text-cyan-300 font-bold">{fmt(maxPartExam)}</strong></div>}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })()}
 
-                    {/* Checklists features details */}
-                    <div className="space-y-3">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
-                      <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-purple-500/20">
-                        {FEATURES_INFO.map((feat) => {
-                          const hasFeature = getHasFeature(p.features, feat.key);
-                          return (
-                            <div key={feat.key} className="flex items-start gap-2 text-[10px] leading-relaxed">
-                              {hasFeature ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                              ) : (
-                                <Lock className="w-3.5 h-3.5 text-gray-600 shrink-0 mt-0.5" />
-                              )}
-                              <span className={hasFeature ? 'text-gray-300 font-semibold' : 'text-gray-600 line-through'}>
-                                {feat.label}
-                              </span>
-                            </div>
-                          );
-                        })}
+                    {/* For SUBSCRIPTION: show clean features summary instead of full checklist */}
+                    <div className="space-y-2">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">What's Included</span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {[
+                          '✅ All Poll features & analytics',
+                          '✅ All Survey features & analytics',
+                          '✅ All Exam & Gradebook features',
+                          '✅ All Platform & anti-fraud features',
+                          '✅ OTP verification & closed voter lists',
+                          '✅ Custom branding & premium themes',
+                          '✅ Real-time collaboration',
+                          '✅ API & Webhooks access',
+                          '✅ AI projections, sentiment & proctoring',
+                          '✅ Export & embed widget options',
+                        ].map((item, i) => (
+                          <div key={i} className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 py-0.5">
+                            <span>{item}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -756,13 +769,39 @@ export default function PlansPage() {
                     </div>
                   </div>
 
+                  {/* Entity Pack CTA — locked if user has active paid subscription */}
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    <Link
-                      href={`/checkout?planId=${p.id}&isAddon=true`}
-                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                    >
-                      Buy Credit Pack
-                    </Link>
+                    {(() => {
+                      const hasActivePaidSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' &&
+                        user?.plan?.planType === 'SUBSCRIPTION' &&
+                        (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
+
+                      if (hasActivePaidSub) {
+                        return (
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full py-3 rounded-xl font-bold bg-amber-500/5 text-amber-500/60 text-xs border border-amber-500/20 cursor-not-allowed text-center"
+                            >
+                              🔒 Not Available with Active Subscription
+                            </button>
+                            <p className="text-[9px] text-gray-600 text-center leading-relaxed">
+                              You have an active paid subscription. Individual packs are only for non-subscription users. Check out <strong className="text-gray-400">Add-Ons</strong> instead.
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Link
+                          href={`/checkout?planId=${p.id}&isAddon=true`}
+                          className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                        >
+                          Buy Credit Pack
+                        </Link>
+                      );
+                    })()}
                   </div>
                 </div>
               );

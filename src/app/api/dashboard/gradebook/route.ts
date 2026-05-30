@@ -81,6 +81,7 @@ export async function GET(req: Request) {
         scoreTotal?: number;
         voted: boolean;
         choices?: string;
+        isLocked?: boolean;
       }>;
     }>();
 
@@ -90,6 +91,18 @@ export async function GET(req: Request) {
       title: p.title,
       type: p.pollType, // POLL, SURVEY, EXAM
     }));
+
+    // Fetch user addon invoices for participant limit lookup
+    const addonInvoices = await prisma.invoice.findMany({
+      where: { userId: user.id, isAddon: true },
+      include: { plan: true },
+    });
+    const invoicePlanMap = new Map<string, any>();
+    addonInvoices.forEach(inv => {
+      if (inv.plan) invoicePlanMap.set(inv.id, inv.plan);
+    });
+    const creatorPlan = user.plan;
+    let anyExceeded = false;
 
     // Populate registry of students
     polls.forEach((p) => {
@@ -114,7 +127,49 @@ export async function GET(req: Request) {
         };
       });
 
-      // 2. Correlation from actual Votes (voted details)
+      // 2. Correlation from actual Votes (voted details) with participant limits
+      let participantLimit = 5000;
+      if (p.invoiceId) {
+        const plan = invoicePlanMap.get(p.invoiceId);
+        if (plan) {
+          const limitVal = p.pollType === 'SURVEY' 
+            ? plan.maxParticipantsSurvey 
+            : p.pollType === 'EXAM' 
+              ? plan.maxParticipantsExam 
+              : plan.maxParticipantsPoll;
+          if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
+            participantLimit = limitVal;
+          }
+        }
+      } else if (creatorPlan) {
+        let limit = p.pollType === 'SURVEY' 
+          ? creatorPlan.maxParticipantsSurvey 
+          : p.pollType === 'EXAM' 
+            ? creatorPlan.maxParticipantsExam 
+            : creatorPlan.maxParticipantsPoll;
+
+        if (creatorPlan.durations && user.planBillingCycle) {
+          const durs = creatorPlan.durations as any;
+          const cycle = user.planBillingCycle;
+          if (durs[cycle] && durs[cycle].enabled) {
+            const cfg = durs[cycle];
+            if (p.pollType === 'POLL' && cfg.maxParticipantsPoll) limit = parseInt(cfg.maxParticipantsPoll);
+            if (p.pollType === 'SURVEY' && cfg.maxParticipantsSurvey) limit = parseInt(cfg.maxParticipantsSurvey);
+            if (p.pollType === 'EXAM' && cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
+          }
+        }
+        if (limit !== null && limit !== undefined && limit !== -1) {
+          participantLimit = limit;
+        }
+      }
+
+      // Sort votes chronologically and slice
+      const sortedVotes = [...p.votes].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const allowedVoteIds = new Set(sortedVotes.slice(0, participantLimit).map(v => v.id));
+      if (sortedVotes.length > participantLimit) {
+        anyExceeded = true;
+      }
+
       p.votes.forEach((v) => {
         const email = v.email || '';
         const name = v.userIdentifier || '';
@@ -131,6 +186,20 @@ export async function GET(req: Request) {
           }
 
           const student = studentMap.get(key)!;
+          
+          if (!allowedVoteIds.has(v.id)) {
+            // This vote is locked/truncated under participant limits
+            student.attempts[p.id] = {
+              voteId: v.id,
+              pollId: p.id,
+              pollTitle: p.title,
+              pollType: p.pollType,
+              voted: true,
+              isLocked: true,
+            };
+            return;
+          }
+
           let scoreEarned: number | undefined;
           let scoreTotal: number | undefined;
           let choicesStr = '';
@@ -164,6 +233,7 @@ export async function GET(req: Request) {
             scoreEarned,
             scoreTotal,
             choices: choicesStr,
+            isLocked: false,
           };
         }
       });
@@ -181,7 +251,9 @@ export async function GET(req: Request) {
       columnsHeader.forEach((col) => {
         const attempt = student.attempts[col.id];
         if (attempt) {
-          if (attempt.pollType === 'EXAM') {
+          if (attempt.isLocked) {
+            rowData[col.id] = { status: 'LOCKED', score: '🔒 Locked (Upgrade)' };
+          } else if (attempt.pollType === 'EXAM') {
             rowData[col.id] = attempt.voted && attempt.scoreEarned !== undefined
               ? {
                   voteId: attempt.voteId,
@@ -249,12 +321,7 @@ export async function GET(req: Request) {
         }
       }
 
-      // Add addon invoices
-      const addonInvoices = await prisma.invoice.findMany({
-        where: { userId: user.id, isAddon: true },
-        include: { plan: true },
-      });
-
+      // Add addon invoices (already fetched at top, reuse)
       for (const inv of addonInvoices) {
         const p = inv.plan;
         if (!p) continue;
@@ -291,6 +358,7 @@ export async function GET(req: Request) {
       headers: columnsHeader,
       rows,
       enabledTypes: Array.from(enabledTypes),
+      hasExceededLimit: anyExceeded,
     });
   } catch (error: any) {
     console.error('Cumulative Gradebook API Error:', error);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { PollType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
@@ -49,7 +50,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
     }
 
-    if (poll.pollType !== 'EXAM') {
+    if (poll.pollType !== PollType.EXAM) {
       return NextResponse.json({ error: 'This poll is not an examination' }, { status: 400 });
     }
 
@@ -107,6 +108,43 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }, { status: 200 });
     }
 
+    // Fetch associated invoice or plan to determine participant limit
+    let participantLimit = 5000; // default backup
+    if (poll.invoiceId) {
+      const inv = await prisma.invoice.findUnique({
+        where: { id: poll.invoiceId },
+        include: { plan: true }
+      });
+      if (inv && inv.plan) {
+        const limitVal = inv.plan.maxParticipantsExam;
+        if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
+          participantLimit = limitVal;
+        }
+      }
+    } else {
+      const creator = await prisma.user.findUnique({
+        where: { id: poll.creatorId },
+        include: { plan: true }
+      });
+      if (creator && creator.plan) {
+        const plan = creator.plan;
+        let limit = plan.maxParticipantsExam;
+
+        // Check if there are duration overrides for this plan
+        if (plan.durations && creator.planBillingCycle) {
+          const durs = plan.durations as any;
+          const cycle = creator.planBillingCycle;
+          if (durs[cycle] && durs[cycle].enabled) {
+            const cfg = durs[cycle];
+            if (cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
+          }
+        }
+        if (limit !== null && limit !== undefined && limit !== -1) {
+          participantLimit = limit;
+        }
+      }
+    }
+
     // Find the student's vote
     const vote = await prisma.vote.findFirst({
       where: {
@@ -127,6 +165,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }, { status: 200 });
     }
 
+    // Fetch all votes chronologically to check if student's vote is inside the allowed slice
+    const sortedVotes = await prisma.vote.findMany({
+      where: { pollId },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const studentVoteIndex = sortedVotes.findIndex((v) => v.id === vote.id);
+
+    if (studentVoteIndex === -1 || studentVoteIndex >= participantLimit) {
+      return NextResponse.json({
+        success: false,
+        resultsReleased: true,
+        voted: true,
+        isLocked: true,
+        message: '🔒 Result Locked: The examiner\'s plan participant limit has been exceeded. Please ask your instructor to upgrade their plan to unlock your graded report.'
+      }, { status: 200 });
+    }
+
     // Parse the answers details
     let answersObj: any = {};
     try {
@@ -138,14 +194,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const examBreakdown = answersObj?.__examBreakdown || {};
     const examScore = answersObj?.__examScore || { earned: 0.0, total: 0.0 };
 
-    // Fetch all votes for this exam to calculate peer rank and class average
-    const allVotes = await prisma.vote.findMany({
-      where: { pollId },
-      select: { answers: true }
-    });
-
+    // Limit peer rankings and average calculations to the allowed slice
+    const allowedVotesSlice = sortedVotes.slice(0, participantLimit);
     const scoresList: number[] = [];
-    allVotes.forEach((v) => {
+    allowedVotesSlice.forEach((v) => {
       try {
         const parsedV = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
         const score = parsedV?.__examScore;

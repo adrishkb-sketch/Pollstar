@@ -4,17 +4,59 @@ export interface PlanFeatures {
   [key: string]: boolean;
 }
 
+// Map of feature keys to their corresponding categories
+const pollKeys = new Set([
+  'openPublicPolls', 'realTimeLiveResults', 'liveGeolocationMap', 'liveVoteTicker', 
+  'viralVoteIndicators', 'rankedChoiceBordaCount', 'quadraticVoting', 'singleChoiceMultiSelect', 
+  'enableDragAndDropPodium', 'opinionChatbox', 'sentimentReactions', 'voterLeaderboard', 
+  'multipleChartTypes', 'voteTimelineGraph', 'multiRoundPolls', 'revoteChangeVote', 
+  'knockoutBracket', 'enableScenarioSimulator', 'enableAiProjection', 'singleChoice'
+]);
+
+const surveyKeys = new Set([
+  'multipleQuestionTypes', 'longFormTextResponses', 'starEmojiRatings', 'matrixGridQuestions', 
+  'yesnoToggleQuestions', 'fileUploadQuestions', 'conditionalLogicBranching', 'multiPageSurveys', 
+  'questionRandomizationSurvey', 'responseTimeLimits', 'requiredVsOptionalQuestions', 'inputValidationRules', 
+  'realTimeResponseDashboard', 'aiSentimentAnalysis', 'wordCloudGenerator', 'aiSummaryReport', 
+  'automatedReminders', 'completionRateTracking', 'anonymousResponses', 'targetedDistribution', 
+  'responseFilteringSegmentation', 'saveResumeLater', 'enableDropOffTracking', 'enableCrossTabulation'
+]);
+
+const examKeys = new Set([
+  'timedExams', 'fullScreenLockdown', 'tabSwitchDetection', 'copyPastePrevention', 
+  'cheatProbabilityScore', 'perQuestionMarks', 'autoGradingEngine', 'manualGradingInterface', 
+  'pageBreaksSections', 'dragAndDropQuestionOrderingExam', 'detailedScoreReports', 'classPerformanceAnalytics', 
+  'weaknessAnalysis', 'aiConceptExplanations', 'printableResultsPdf', 'bulkResultsExport', 
+  'emailResultsToStudents', 'teacherGradebook', 'scheduledStartEnd', 'questionHints', 
+  'negativeMarking', 'studentRosterManagement', 'timePerQuestionAnalytics', 'inbuiltScientificCalculator', 
+  'saveResumeLaterExam', 'liveWebcamProctoring',
+  // Exam question types
+  'mcqSingleCorrect', 'mcqMultipleCorrect', 'shortAnswerQuestionsSaq', 'longAnswerQuestionsLaq', 
+  'trueOrFalse', 'fillInTheBlanks', 'matchTheFollowing', 'numericalInput', 'fileUploadAnswers', 
+  'studentWhiteboardQuestion'
+]);
+
+function getFeatureCategory(featureKey: string): 'POLL' | 'SURVEY' | 'EXAM' | 'PLATFORM' {
+  if (pollKeys.has(featureKey) || featureKey.toLowerCase().includes('poll')) {
+    return 'POLL';
+  }
+  if (surveyKeys.has(featureKey) || featureKey.toLowerCase().includes('survey')) {
+    return 'SURVEY';
+  }
+  if (examKeys.has(featureKey) || featureKey.toLowerCase().includes('exam') || featureKey.toLowerCase().includes('gradebook')) {
+    return 'EXAM';
+  }
+  return 'PLATFORM';
+}
+
 /**
- * Checks if a user has access to a specific feature key based on their plan, trials, and packaging.
- * If the user is an ADMIN, they have bypass access to everything.
- * If the user's plan is not set, we default to the "Free" plan features or basic fallbacks.
+ * Checks if a user has access to a specific feature key based on their plan and active pack invoices.
  */
 export async function checkFeatureAccess(userId: string, featureKey: string): Promise<{
   allowed: boolean;
   reason?: string;
 }> {
   try {
-    // 1. Fetch user with plan
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { plan: true },
@@ -24,22 +66,18 @@ export async function checkFeatureAccess(userId: string, featureKey: string): Pr
       return { allowed: false, reason: 'User not found.' };
     }
 
-    // Admins have absolute power
     if (user.role === 'ADMIN') {
       return { allowed: true };
     }
 
-    // 2. Resolve Plan
     let plan = user.plan;
     if (!plan) {
-      // Find default Free plan
       plan = await prisma.plan.findFirst({
         where: { name: 'Free' }
       });
     }
 
     if (!plan) {
-      // Basic fallback if no plan is set and default Free plan is missing
       const basicAllowedKeys = ['singleChoice', 'openPublicPolls', 'mcqSingleCorrect'];
       if (basicAllowedKeys.includes(featureKey)) {
         return { allowed: true };
@@ -47,104 +85,77 @@ export async function checkFeatureAccess(userId: string, featureKey: string): Pr
       return { allowed: false, reason: 'No active subscription plan or default features found.' };
     }
 
-    // Check if plan is active
     if (!plan.isActive) {
       return { allowed: false, reason: 'Your subscription tier is currently inactive. Please contact support.' };
     }
 
-    // 3. Check Free Trial Status
-    if (plan.hasFreeTrial) {
-      const trialDays = plan.freeTrialDays || 7;
-      const trialExpiry = new Date(user.createdAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
-      const isTrialActive = new Date() < trialExpiry;
+    const enabledCategories = new Set<string>();
+    const now = new Date();
 
-      if (isTrialActive) {
-        // Check trial allowed features
-        const trialFeats = plan.freeTrialFeatures as any;
-        if (trialFeats && typeof trialFeats === 'object' && trialFeats[featureKey]) {
-          return { allowed: true };
-        }
-      }
-    }
-
-    // 4. Check Pack Quantity Limitations
-    if (plan.planType !== 'SUBSCRIPTION') {
-      const allowedCount = (plan.packQuantity || 0) + (plan.freePerks || 0);
-      
-      // Determine what type of pack we are checking
-      if (plan.planType === 'POLL_PACK' && (featureKey.toLowerCase().includes('poll') || featureKey === 'singleChoice')) {
-        const createdCount = await prisma.poll.count({
-          where: { creatorId: user.id }
-        });
-        if (createdCount >= allowedCount) {
-          return {
-            allowed: false,
-            reason: `You have exhausted your Poll Pack allowance of ${allowedCount} polls.`
-          };
-        }
-      } else if (plan.planType === 'SURVEY_PACK' && featureKey.toLowerCase().includes('survey')) {
-        // Count surveys
-        const createdCount = await prisma.poll.count({
-          where: { creatorId: user.id, pollType: 'SURVEY' }
-        });
-        if (createdCount >= allowedCount) {
-          return {
-            allowed: false,
-            reason: `You have exhausted your Survey Pack allowance of ${allowedCount} surveys.`
-          };
-        }
-      } else if (plan.planType === 'EXAM_PACK' && featureKey.toLowerCase().includes('exam')) {
-        // Count exams
-        const createdCount = await prisma.poll.count({
-          where: { creatorId: user.id, pollType: 'EXAM' }
-        });
-        if (createdCount >= allowedCount) {
-          return {
-            allowed: false,
-            reason: `You have exhausted your Exam Pack allowance of ${allowedCount} exams.`
-          };
-        }
-      } else if (plan.planType === 'COMBO_PACK') {
-        const comboTypesRaw = plan.comboTypes;
+    const addCategoriesForPlan = (p: any) => {
+      if (p.planType === 'SUBSCRIPTION') {
+        enabledCategories.add('POLL');
+        enabledCategories.add('SURVEY');
+        enabledCategories.add('EXAM');
+      } else if (p.planType === 'POLL_PACK') {
+        enabledCategories.add('POLL');
+      } else if (p.planType === 'SURVEY_PACK') {
+        enabledCategories.add('SURVEY');
+      } else if (p.planType === 'EXAM_PACK') {
+        enabledCategories.add('EXAM');
+      } else if (p.planType === 'COMBO_PACK') {
+        const comboTypesRaw = p.comboTypes;
         const comboTypes: string[] = comboTypesRaw 
           ? (typeof comboTypesRaw === 'string' 
              ? comboTypesRaw.split(',') 
              : (Array.isArray(comboTypesRaw) ? comboTypesRaw.map(String) : [])) 
           : [];
-        
-        // If checking a poll feature, ensure POLL is in combo
-        if (featureKey.toLowerCase().includes('poll') && !comboTypes.includes('POLL')) {
-          return { allowed: false, reason: 'Your combo pack does not include Poll features.' };
-        }
-        if (featureKey.toLowerCase().includes('survey') && !comboTypes.includes('SURVEY')) {
-          return { allowed: false, reason: 'Your combo pack does not include Survey features.' };
-        }
-        if (featureKey.toLowerCase().includes('exam') && !comboTypes.includes('EXAM')) {
-          return { allowed: false, reason: 'Your combo pack does not include Exam features.' };
-        }
+        if (comboTypes.includes('POLL')) enabledCategories.add('POLL');
+        if (comboTypes.includes('SURVEY')) enabledCategories.add('SURVEY');
+        if (comboTypes.includes('EXAM')) enabledCategories.add('EXAM');
+      } else if (p.planType === 'ADDON') {
+        if (p.maxPolls && p.maxPolls > 0) enabledCategories.add('POLL');
+        if (p.maxSurveys && p.maxSurveys > 0) enabledCategories.add('SURVEY');
+        if (p.maxExams && p.maxExams > 0) enabledCategories.add('EXAM');
+      }
+    };
 
-        // Check aggregate counts
-        const createdCount = await prisma.poll.count({
-          where: { creatorId: user.id }
-        });
-        if (createdCount >= allowedCount) {
-          return {
-            allowed: false,
-            reason: `You have exhausted your Combo Pack allowance of ${allowedCount} total items.`
-          };
-        }
+    // Check base plan (if active and not expired)
+    const isBasePlanActive = plan.isActive && (!user.planExpiresAt || new Date(user.planExpiresAt) > now || user.isLifetimePlan);
+    if (isBasePlanActive) {
+      addCategoriesForPlan(plan);
+    }
+
+    // Check active addon/pack invoices
+    const addonInvoices = await prisma.invoice.findMany({
+      where: { userId: user.id, isAddon: true },
+      include: { plan: true },
+    });
+
+    for (const inv of addonInvoices) {
+      if (inv.plan && (!inv.planExpiresAt || new Date(inv.planExpiresAt) > now)) {
+        addCategoriesForPlan(inv.plan);
       }
     }
 
-    // 5. Standard Feature Check
-    const planFeats = plan.features as any;
-    if (planFeats && typeof planFeats === 'object' && planFeats[featureKey]) {
+    // If user has subscription, they have access to everything
+    if (enabledCategories.has('POLL') && enabledCategories.has('SURVEY') && enabledCategories.has('EXAM')) {
+      return { allowed: true };
+    }
+
+    const category = getFeatureCategory(featureKey);
+
+    if (category === 'PLATFORM') {
+      return { allowed: true }; // Platform features are always accessible
+    }
+
+    if (enabledCategories.has(category)) {
       return { allowed: true };
     }
 
     return {
       allowed: false,
-      reason: `The feature "${featureKey}" is not included in your current "${plan.name}" plan.`
+      reason: `The category "${category}" is not active or accessible under your current plans.`
     };
   } catch (error) {
     console.error('Error in checkFeatureAccess:', error);
@@ -153,7 +164,7 @@ export async function checkFeatureAccess(userId: string, featureKey: string): Pr
 }
 
 /**
- * Checks if a creator can use a specific poll subtype (e.g. MCQ, ranked, multi, knockout)
+ * Checks if a creator can use a specific poll subtype.
  */
 export async function checkPollSubtypeAccess(userId: string, subtype: 'mcq' | 'ranked' | 'multi' | 'knockout'): Promise<boolean> {
   const user = await prisma.user.findUnique({
@@ -170,14 +181,44 @@ export async function checkPollSubtypeAccess(userId: string, subtype: 'mcq' | 'r
 
   if (!plan || !plan.isActive) return false;
 
-  // If pollSubtypes is not specified, default to allow all for compatibility
-  if (!plan.pollSubtypes) return true;
+  const now = new Date();
+  const enabledCategories = new Set<string>();
 
-  const rawSubtypes = plan.pollSubtypes;
-  const allowedTypes: string[] = rawSubtypes
-    ? (typeof rawSubtypes === 'string'
-       ? rawSubtypes.split(',')
-       : (Array.isArray(rawSubtypes) ? rawSubtypes.map(String) : []))
-    : [];
-  return allowedTypes.includes(subtype);
+  const addCategoriesForPlan = (p: any) => {
+    if (p.planType === 'SUBSCRIPTION') {
+      enabledCategories.add('POLL');
+    } else if (p.planType === 'POLL_PACK') {
+      enabledCategories.add('POLL');
+    } else if (p.planType === 'COMBO_PACK') {
+      const comboTypesRaw = p.comboTypes;
+      const comboTypes: string[] = comboTypesRaw 
+        ? (typeof comboTypesRaw === 'string' 
+           ? comboTypesRaw.split(',') 
+           : (Array.isArray(comboTypesRaw) ? comboTypesRaw.map(String) : [])) 
+        : [];
+      if (comboTypes.includes('POLL')) enabledCategories.add('POLL');
+    } else if (p.planType === 'ADDON') {
+      if (p.maxPolls && p.maxPolls > 0) enabledCategories.add('POLL');
+    }
+  };
+
+  const isBasePlanActive = plan.isActive && (!user.planExpiresAt || new Date(user.planExpiresAt) > now || user.isLifetimePlan);
+  if (isBasePlanActive) {
+    addCategoriesForPlan(plan);
+  }
+
+  const addonInvoices = await prisma.invoice.findMany({
+    where: { userId: user.id, isAddon: true },
+    include: { plan: true },
+  });
+
+  for (const inv of addonInvoices) {
+    if (inv.plan && (!inv.planExpiresAt || new Date(inv.planExpiresAt) > now)) {
+      addCategoriesForPlan(inv.plan);
+    }
+  }
+
+  // If POLL is enabled, allow all subtypes
+  return enabledCategories.has('POLL');
 }
+
