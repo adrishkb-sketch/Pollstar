@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, use } from 'react';
+import { useEffect, useState, useRef, useCallback, use, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
@@ -60,7 +60,7 @@ const parseConfirmer2 = (val: string | null) => {
   return { session, department, classYear };
 };
 
-export default function PollInsights({ params }: PageProps) {
+function PollInsightsContent({ params }: PageProps) {
   const { id: pollId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -4615,11 +4615,30 @@ export default function PollInsights({ params }: PageProps) {
           .print\\:hidden, .print-hidden {
             display: none !important;
           }
-          .print\\:block {
+          .print\:block {
             display: block !important;
           }
         }
       `}</style>
     </div>
+  );
+}
+
+export default function PollInsights(props: PageProps) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center space-y-4">
+        <div className="relative w-16 h-16 flex items-center justify-center">
+          <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <Loader2 className="w-6 h-6 text-indigo-400 animate-pulse" />
+        </div>
+        <p className="text-xs text-gray-500 font-medium uppercase tracking-widest font-mono">
+          Loading dashboard...
+        </p>
+      </div>
+    }>
+      <PollInsightsContent {...props} />
+    </Suspense>
   );
 }
