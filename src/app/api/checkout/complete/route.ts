@@ -158,9 +158,22 @@ export async function POST(req: Request) {
       planExpiresAt = user.planExpiresAt;
       isLifetime = user.isLifetimePlan;
     } else if (['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(plan.planType)) {
-      // Credit packs are one-time payment packs with lifetime validity
-      isLifetime = true;
-      planExpiresAt = null;
+      // Credit packs are one-time payment packs with validity if configured
+      if (plan.validityValue && plan.validityValue > 0 && plan.validityUnit) {
+        isLifetime = false;
+        const now = new Date();
+        if (plan.validityUnit.toUpperCase() === 'WEEKS') {
+          planExpiresAt = new Date(now.getTime() + plan.validityValue * 7 * 24 * 60 * 60 * 1000);
+        } else if (plan.validityUnit.toUpperCase() === 'MONTHS') {
+          planExpiresAt = new Date(now.setMonth(now.getMonth() + plan.validityValue));
+        } else {
+          isLifetime = true;
+          planExpiresAt = null;
+        }
+      } else {
+        isLifetime = true;
+        planExpiresAt = null;
+      }
     }
 
     const isAddonPlan = !!(isAddon || plan.planType === 'ADDON' || plan.planType === 'POLL_PACK' || plan.planType === 'SURVEY_PACK' || plan.planType === 'EXAM_PACK' || plan.planType === 'COMBO_PACK');

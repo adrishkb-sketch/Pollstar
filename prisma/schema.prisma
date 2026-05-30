@@ -362,6 +362,10 @@ model Plan {
   offerEndDate    DateTime?
   durations       Json?    // Optional JSON pricing configuration per duration
 
+  // Plan validity limits for credit/combo packs
+  validityValue   Int?
+  validityUnit    String?  // WEEKS, MONTHS
+
   users           User[]
   emailDomainMappings EmailDomainMapping[]
   invoices        Invoice[]

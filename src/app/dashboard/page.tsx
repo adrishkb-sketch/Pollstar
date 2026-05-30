@@ -834,14 +834,32 @@ export default function Dashboard() {
             <p className="text-gray-400 text-sm mt-0.5">Manage and view real-time analytical reports for your sessions.</p>
           </div>
 
-          <Link
-            id="create-poll-btn"
-            href="/dashboard/create"
-            className="px-5 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2 transition-all self-start sm:self-auto gradient-btn text-white"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Poll</span>
-          </Link>
+          <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+            <Link
+              id="create-poll-btn"
+              href="/dashboard/create?type=POLL"
+              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs shadow-md shadow-blue-900/20 active:scale-95 flex-1 sm:flex-initial"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Poll</span>
+            </Link>
+            <Link
+              id="create-survey-btn"
+              href="/dashboard/create?type=SURVEY"
+              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-xs shadow-md shadow-violet-900/20 active:scale-95 flex-1 sm:flex-initial"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Survey</span>
+            </Link>
+            <Link
+              id="create-exam-btn"
+              href="/dashboard/create?type=EXAM"
+              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs shadow-md shadow-rose-900/20 active:scale-95 flex-1 sm:flex-initial"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Exam</span>
+            </Link>
+          </div>
 
         </div>
 

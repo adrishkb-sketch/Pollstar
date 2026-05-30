@@ -51,6 +51,7 @@ export default function Footer() {
 
   const productLinks = [
     { label: 'Features', href: '/features' },
+    { label: 'Pricing Plans', href: '/pricing' },
     { label: 'Create a Poll', href: '/dashboard/create' },
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Embed Widget', href: '/features#embed' },
@@ -68,6 +69,7 @@ export default function Footer() {
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Cookie Policy', href: '/privacy#cookies' },
     { label: 'Acceptable Use', href: '/terms#acceptable-use' },
+    { label: 'Refund Policy', href: '/pricing#refund-policy' },
   ];
 
   return (

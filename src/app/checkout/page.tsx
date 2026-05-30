@@ -335,7 +335,7 @@ function CheckoutContent() {
                     <div className="font-bold text-gray-800">Pollstar Inc.</div>
                     <div className="text-gray-500">Ramrajatala</div>
                     <div className="text-gray-500">Howrah-711112, West Bengal, India</div>
-                    <div className="text-gray-500">billing@pollstar.com</div>
+                    <div className="text-gray-500">pollstaremail@gmail.com</div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Bill To</span>

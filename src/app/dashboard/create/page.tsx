@@ -236,6 +236,17 @@ export default function CreatePoll() {
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [isEraser, setIsEraser] = useState(false);
   
+  // Read and parse URL query parameters for pre-selected creation type
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const typeParam = params.get('type')?.toUpperCase();
+      if (typeParam === 'POLL' || typeParam === 'SURVEY' || typeParam === 'EXAM') {
+        setPollType(typeParam as 'POLL' | 'SURVEY' | 'EXAM');
+      }
+    }
+  }, []);
+
   // Auto-load and persistence for Creator Brain Board
   useEffect(() => {
     if (typeof window !== 'undefined') {

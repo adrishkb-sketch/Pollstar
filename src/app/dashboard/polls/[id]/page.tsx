@@ -956,6 +956,33 @@ export default function PollInsights({ params }: PageProps) {
     }
   };
 
+  const handleUpdateCollaboratorRole = async (targetUserId: string, role: string) => {
+    if (role === 'OWNER') {
+      if (!confirm('Are you absolutely sure you want to transfer ownership of this poll? This action cannot be undone, and you will be demoted to an Editor.')) {
+        return;
+      }
+    }
+    try {
+      const res = await fetch(`/api/polls/${pollId}/collaborators`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUserId, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update role');
+      }
+      alert(role === 'OWNER' ? 'Ownership successfully transferred! Redirecting...' : 'Collaborator role updated successfully!');
+      if (role === 'OWNER') {
+        window.location.reload();
+      } else {
+        fetchCollaborators();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'collaborators') {
       fetchCollaborators();
@@ -1051,7 +1078,22 @@ export default function PollInsights({ params }: PageProps) {
                               {c.user.verified ? 'Registered' : 'Pending Sign Up'}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-right">
+                          <td className="px-5 py-3.5 text-right flex items-center justify-end gap-2">
+                            <select
+                              value={c.role || 'EDITOR'}
+                              onChange={(e) => handleUpdateCollaboratorRole(c.userId, e.target.value)}
+                              className="bg-[#030712] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:outline-none focus:border-purple-500 font-semibold"
+                            >
+                              <option value="EDITOR">Editor</option>
+                              <option value="VIEWER">Viewer</option>
+                            </select>
+                            <button
+                              onClick={() => handleUpdateCollaboratorRole(c.userId, 'OWNER')}
+                              className="px-2 py-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 text-[9px] font-bold uppercase transition-all"
+                              title="Transfer Ownership"
+                            >
+                              🔑 Transfer
+                            </button>
                             <button
                               onClick={() => handleRemoveCollaborator(c.userId)}
                               className="p-1.5 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-all"

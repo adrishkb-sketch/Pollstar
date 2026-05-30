@@ -120,7 +120,7 @@ export default function TermsOfService() {
       content: [
         'Pollstar offers both free and premium subscription tiers. Free accounts have access to core features including unlimited polls, basic surveys, and standard exam capabilities.',
         'Premium subscriptions are billed on a monthly or annual basis. All payments are processed securely through our third-party payment processor. Prices are subject to change with 30 days advance notice.',
-        'Refunds may be issued at our sole discretion for unused subscription periods. No refunds will be provided for partial months of usage or for accounts terminated due to Terms violations.',
+        'Strict No-Refunds Policy: All sales are final. Pollstar operates a strict, non-negotiable 100% no-refunds policy. Absolutely no refunds, pro-rata adjustments, or credits will be issued under any circumstances, including for unused subscription periods, credit packs, combo upgrades, or accounts terminated due to policy or Terms violations.',
       ],
     },
     {

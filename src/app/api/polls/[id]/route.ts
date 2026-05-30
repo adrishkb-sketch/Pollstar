@@ -244,9 +244,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
-    const isCollaborator = poll.collaborators.some((c: any) => c.userId === user.id);
+    const collaborator = poll.collaborators.find((c: any) => c.userId === user.id);
+    const isCollaborator = !!collaborator;
     if (poll.creatorId !== user.id && user.role !== 'ADMIN' && !isCollaborator) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (collaborator && collaborator.role === 'VIEWER') {
+      return NextResponse.json({ error: 'Forbidden: Viewer access is read-only' }, { status: 403 });
     }
 
     // Before deleting, persist a deletion-history entry so quota tracking
@@ -305,9 +310,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     // Only creator, admin, or collaborator can update status
-    const isCollaborator = poll.collaborators.some((c: any) => c.userId === user.id);
+    const collaborator = poll.collaborators.find((c: any) => c.userId === user.id);
+    const isCollaborator = !!collaborator;
     if (poll.creatorId !== user.id && user.role !== 'ADMIN' && !isCollaborator) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (collaborator && collaborator.role === 'VIEWER') {
+      return NextResponse.json({ error: 'Forbidden: Viewer access is read-only' }, { status: 403 });
     }
 
     // Check Activity Restriction

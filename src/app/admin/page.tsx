@@ -244,6 +244,8 @@ export default function AdminPortal() {
   const [planMaxPolls, setPlanMaxPolls] = useState('-1');
   const [planMaxSurveys, setPlanMaxSurveys] = useState('-1');
   const [planMaxExams, setPlanMaxExams] = useState('-1');
+  const [planValidityValue, setPlanValidityValue] = useState('');
+  const [planValidityUnit, setPlanValidityUnit] = useState('WEEKS');
   
   // Price slashes & durations pricing states
   const [planOriginalPrice, setPlanOriginalPrice] = useState('0.0');
@@ -255,6 +257,20 @@ export default function AdminPortal() {
     TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
     LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
   });
+
+  // Manual Administrative Plan switch states
+  const [manualPlanId, setManualPlanId] = useState('');
+  const [manualDuration, setManualDuration] = useState('MONTHLY');
+
+  useEffect(() => {
+    if (selectedUser) {
+      setManualPlanId(selectedUser.planId || '');
+      setManualDuration(selectedUser.planBillingCycle || 'MONTHLY');
+    } else {
+      setManualPlanId('');
+      setManualDuration('MONTHLY');
+    }
+  }, [selectedUser]);
 
   // Careers CRUD Panel states
   const [careersJobs, setCareersJobs] = useState<any[]>([]);
@@ -955,21 +971,21 @@ export default function AdminPortal() {
     }
   };
 
-  const handlePlanChange = async (userId: string, newPlanId: string) => {
+  const handlePlanChange = async (userId: string, newPlanId: string, duration: string) => {
     setActionLoadingId(userId);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, action: 'CHANGE_PLAN', planId: newPlanId })
+        body: JSON.stringify({ userId, action: 'CHANGE_PLAN', planId: newPlanId, billingCycle: duration })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to change subscription plan');
 
       const planObj = plans.find(p => p.id === newPlanId);
-      setCreators(prev => prev.map(u => u.id === userId ? { ...u, planId: newPlanId, plan: planObj } : u));
+      setCreators(prev => prev.map(u => u.id === userId ? { ...u, planId: newPlanId, plan: planObj, planBillingCycle: duration } : u));
       if (selectedUser && selectedUser.id === userId) {
-        setSelectedUser((prev: any) => ({ ...prev, planId: newPlanId, plan: planObj }));
+        setSelectedUser((prev: any) => ({ ...prev, planId: newPlanId, plan: planObj, planBillingCycle: duration }));
       }
       fetchAdminData();
     } catch (err: any) {
@@ -1120,6 +1136,8 @@ export default function AdminPortal() {
     setPlanMaxPolls('-1');
     setPlanMaxSurveys('-1');
     setPlanMaxExams('-1');
+    setPlanValidityValue('');
+    setPlanValidityUnit('WEEKS');
     setPlanOriginalPrice('0.0');
     setPlanOfferEndDate('');
     setPlanDurations({
@@ -1163,6 +1181,8 @@ export default function AdminPortal() {
     setPlanMaxPolls(plan.maxPolls !== null && plan.maxPolls !== undefined ? plan.maxPolls.toString() : '-1');
     setPlanMaxSurveys(plan.maxSurveys !== null && plan.maxSurveys !== undefined ? plan.maxSurveys.toString() : '-1');
     setPlanMaxExams(plan.maxExams !== null && plan.maxExams !== undefined ? plan.maxExams.toString() : '-1');
+    setPlanValidityValue(plan.validityValue !== null && plan.validityValue !== undefined ? plan.validityValue.toString() : '');
+    setPlanValidityUnit(plan.validityUnit || 'WEEKS');
     setPlanOriginalPrice((plan.originalPrice || 0.0).toString());
     setPlanOfferEndDate(plan.offerEndDate ? new Date(plan.offerEndDate).toISOString().substring(0, 16) : '');
     setPlanDurations(plan.durations || {
@@ -1253,6 +1273,8 @@ export default function AdminPortal() {
       originalPrice: resolvedOriginalPrice,
       offerEndDate: planOfferEndDate || null,
       durations: planDurations,
+      validityValue: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON' && planValidityValue) ? parseInt(planValidityValue) : null,
+      validityUnit: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON') ? planValidityUnit : null,
     };
 
     try {
@@ -4098,25 +4120,66 @@ export default function AdminPortal() {
                   </div>
                 </div>
 
-                {/* Subscription Switcher Dropdown */}
-                <div className="space-y-2 pt-4 border-t border-white/5">
+                 {/* Subscription Switcher Dropdown */}
+                <div className="space-y-3 pt-4 border-t border-white/5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block flex items-center gap-1">
                     👑 Manual Administrative Plan Switcher
                   </label>
                   <p className="text-[9px] text-gray-500 leading-normal">
                     Directly grant plan access and upgrade the creator tier without payment or billing checks. Only admins have this bypass privilege.
                   </p>
-                  <select
-                    value={selectedUser.planId || ''}
-                    onChange={(e) => handlePlanChange(selectedUser.id, e.target.value)}
-                    disabled={actionLoadingId === selectedUser.id}
-                    className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
-                  >
-                    <option value="" disabled>-- Select Subscription --</option>
-                    {plans.map((pl) => (
-                      <option key={pl.id} value={pl.id}>{pl.name} (${pl.price.toFixed(2)}) - Admin Bypass</option>
-                    ))}
-                  </select>
+                  <div className="space-y-3">
+                    <select
+                      value={manualPlanId}
+                      onChange={(e) => setManualPlanId(e.target.value)}
+                      disabled={actionLoadingId === selectedUser.id}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                      <option value="" disabled>-- Select Subscription --</option>
+                      {plans.map((pl) => (
+                        <option key={pl.id} value={pl.id}>{pl.name} ({pl.isFree ? 'Free' : `$${pl.price.toFixed(2)}`}) - {pl.planType.replace('_', ' ')}</option>
+                      ))}
+                    </select>
+
+                    {(() => {
+                      const selectedPlanObj = plans.find(p => p.id === manualPlanId);
+                      const isSub = selectedPlanObj && selectedPlanObj.planType === 'SUBSCRIPTION';
+                      if (!isSub) return null;
+
+                      return (
+                        <div className="space-y-1.5 p-3 rounded-xl bg-purple-500/5 border border-purple-500/10 animate-fade-in">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-purple-300 block">Subscription Duration / Period</label>
+                          <select
+                            value={manualDuration}
+                            onChange={(e) => setManualDuration(e.target.value)}
+                            disabled={actionLoadingId === selectedUser.id}
+                            className="w-full bg-[#030712] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors font-semibold"
+                          >
+                            <option value="MONTHLY">Monthly (30 Days)</option>
+                            <option value="QUARTERLY">Quarterly (3 Months)</option>
+                            <option value="YEARLY">Yearly (1 Year)</option>
+                            <option value="TWO_YEAR">2 Years (730 Days)</option>
+                            <option value="LIFETIME">Lifetime Access</option>
+                          </select>
+                        </div>
+                      );
+                    })()}
+
+                    {manualPlanId && manualPlanId !== (selectedUser.planId || '') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const selectedPlanObj = plans.find(p => p.id === manualPlanId);
+                          const dur = selectedPlanObj?.planType === 'SUBSCRIPTION' ? manualDuration : 'MONTHLY';
+                          handlePlanChange(selectedUser.id, manualPlanId, dur);
+                        }}
+                        disabled={actionLoadingId === selectedUser.id}
+                        className="w-full py-2 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        Apply Plan Switch Bypass
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -4407,6 +4470,35 @@ export default function AdminPortal() {
                   </select>
                 </div>
               </div>
+
+              {/* Validity Section for non-subscription and non-addon packs */}
+              {planType !== 'SUBSCRIPTION' && planType !== 'ADDON' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 animate-slide-in">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Plan Validity Duration</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 3"
+                      value={planValidityValue}
+                      onChange={e => setPlanValidityValue(e.target.value)}
+                      className="w-full bg-white/3 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                    />
+                    <span className="text-[9px] text-gray-500 mt-1 block font-outfit">Leave empty for lifetime validity</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Validity Unit</label>
+                    <select
+                      value={planValidityUnit}
+                      onChange={e => setPlanValidityUnit(e.target.value)}
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500 font-semibold"
+                    >
+                      <option value="WEEKS">Weeks</option>
+                      <option value="MONTHS">Months</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Row 2: Price details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/1 border border-white/5">
@@ -5022,9 +5114,9 @@ export default function AdminPortal() {
 
               {/* Row: Plan Quota Limits */}
               {(() => {
-                const showMaxPolls = planType === 'SUBSCRIPTION' || planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL'));
-                const showMaxSurveys = planType === 'SUBSCRIPTION' || planType === 'SURVEY_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('SURVEY'));
-                const showMaxExams = planType === 'SUBSCRIPTION' || planType === 'EXAM_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('EXAM'));
+                const showMaxPolls = planType !== 'SUBSCRIPTION' && (planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL')));
+                const showMaxSurveys = planType !== 'SUBSCRIPTION' && (planType === 'SURVEY_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('SURVEY')));
+                const showMaxExams = planType !== 'SUBSCRIPTION' && (planType === 'EXAM_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('EXAM')));
                 const numColumns = (showMaxPolls ? 1 : 0) + (showMaxSurveys ? 1 : 0) + (showMaxExams ? 1 : 0);
 
                 if (numColumns === 0) return null;

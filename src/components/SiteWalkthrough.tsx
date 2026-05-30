@@ -49,6 +49,8 @@ export default function SiteWalkthrough() {
     return () => clearInterval(interval);
   }, [pathname]);
 
+  if (pathname === "/") return null;
+
   // Predefined context-specific walkthrough steps with warm, friendly human-written copy
   const getStepsForPage = (): TourStep[] => {
     // 1. Creation Wizard steps

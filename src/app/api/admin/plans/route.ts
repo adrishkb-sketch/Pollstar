@@ -60,7 +60,8 @@ export async function POST(req: Request) {
       packQuantity, freePerks, comboTypes, badgeColor, badgeLabel,
       hasFreeTrial, freeTrialDays, freeTrialFeatures, pollSubtypes,
       isActive, features, maxPolls, maxSurveys, maxExams,
-      originalPrice, offerEndDate, durations
+      originalPrice, offerEndDate, durations,
+      validityValue, validityUnit
     } = body;
 
     if (!name || !features) {
@@ -98,6 +99,8 @@ export async function POST(req: Request) {
         originalPrice: originalPrice ? parseFloat(originalPrice) : 0.0,
         offerEndDate: offerEndDate ? new Date(offerEndDate) : null,
         durations: durations || null,
+        validityValue: validityValue ? parseInt(validityValue) : null,
+        validityUnit: validityUnit || null,
       }
     });
 
@@ -218,6 +221,12 @@ export async function PATCH(req: Request) {
     }
     if (updateFields.durations !== undefined) {
       data.durations = updateFields.durations || null;
+    }
+    if (updateFields.validityValue !== undefined) {
+      data.validityValue = updateFields.validityValue !== null && updateFields.validityValue !== '' ? parseInt(updateFields.validityValue) : null;
+    }
+    if (updateFields.validityUnit !== undefined) {
+      data.validityUnit = updateFields.validityUnit || null;
     }
 
     const updatedPlan = await prisma.plan.update({

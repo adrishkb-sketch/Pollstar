@@ -224,14 +224,13 @@ export default function PlansPage() {
         const rawAddons = plansData.addonPlans || [];
         const rawEntity = plansData.entityPlans || [];
         
-        // Sort so that the user's active plan is placed first (on the left)
-        const userPlanId = data.user?.plan?.id;
+        // Sort so that the Free basic plan is always far left, and other plans are sorted by price ascending
         const sortedPlans = [...rawPlans].sort((a, b) => {
-          const aActive = userPlanId === a.id || (a.name === 'Free' && !userPlanId);
-          const bActive = userPlanId === b.id || (b.name === 'Free' && !userPlanId);
-          if (aActive && !bActive) return -1;
-          if (!aActive && bActive) return 1;
-          return b.price - a.price;
+          const aFree = a.isFree || a.name === 'Free';
+          const bFree = b.isFree || b.name === 'Free';
+          if (aFree && !bFree) return -1;
+          if (!aFree && bFree) return 1;
+          return a.price - b.price;
         });
         
         setPlans(sortedPlans);
@@ -387,8 +386,8 @@ export default function PlansPage() {
                           {p.badgeLabel || p.name}
                         </span>
                         {isActivePlan && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0">
-                            Active
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0 animate-pulse">
+                            Current Plan ({formatBillingCycle(user?.planBillingCycle || 'LIFETIME')})
                           </span>
                         )}
                         {p.hasFreeTrial && !isActivePlan && (
@@ -541,6 +540,42 @@ export default function PlansPage() {
                     })()}
 
 
+                    {/* Subscription Cards Allowed Quota Details */}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
+
+                      let maxPollsVal = durConfig?.maxPolls !== undefined && durConfig.maxPolls !== '' ? parseInt(durConfig.maxPolls) : (p.maxPolls !== null && p.maxPolls !== undefined ? p.maxPolls : -1);
+                      let maxSurveysVal = durConfig?.maxSurveys !== undefined && durConfig.maxSurveys !== '' ? parseInt(durConfig.maxSurveys) : (p.maxSurveys !== null && p.maxSurveys !== undefined ? p.maxSurveys : -1);
+                      let maxExamsVal = durConfig?.maxExams !== undefined && durConfig.maxExams !== '' ? parseInt(durConfig.maxExams) : (p.maxExams !== null && p.maxExams !== undefined ? p.maxExams : -1);
+
+                      const limitPolls = maxPollsVal === null || maxPollsVal === -1 ? 'Unlimited' : maxPollsVal;
+                      const limitSurveys = maxSurveysVal === null || maxSurveysVal === -1 ? 'Unlimited' : maxSurveysVal;
+                      const limitExams = maxExamsVal === null || maxExamsVal === -1 ? 'Unlimited' : maxExamsVal;
+
+                      return (
+                        <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                          <div className="flex items-center justify-between">
+                            <span>Max Polls Allowed:</span>
+                            <strong className="text-white font-bold">{limitPolls}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Max Surveys Allowed:</span>
+                            <strong className="text-white font-bold">{limitSurveys}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Max Exams Allowed:</span>
+                            <strong className="text-white font-bold">{limitExams}</strong>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Checklists features details */}
                     <div className="space-y-3">
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
@@ -566,51 +601,69 @@ export default function PlansPage() {
 
                   {/* Actions CTA upgraded to Checkout */}
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    {isActivePlan ? (
-                      (p.isFree || p.name === 'Free') ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-400 text-xs border border-white/5 cursor-not-allowed text-center"
-                        >
-                          General Free Plan (Active)
-                        </button>
-                      ) : (
-                        <Link
-                          href={`/checkout?planId=${p.id}&duration=${user?.planBillingCycle || 'MONTHLY'}`}
-                          className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs border border-emerald-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                        >
-                          🔄 Renew / Extend Subscription
-                        </Link>
-                      )
-                    ) : (
-                      (() => {
-                        const dursConfig = p.durations ? (p.durations as any) : null;
-                        const enabledDurs = dursConfig 
-                          ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
-                          : [];
-                        const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
-                        const durConfig = dursConfig?.[activeDur] || null;
-                        
-                        let displayPrice = p.price;
-                        if (enabledDurs.length > 0 && durConfig) {
-                          displayPrice = parseFloat(durConfig.price || '0');
-                        }
+                    {(() => {
+                      const isInferior = user?.plan && !user.plan.isFree && (p.isFree || p.name === 'Free' || p.price < user.plan.price) && p.id !== user.plan.id;
 
+                      if (isActivePlan) {
+                        if (p.isFree || p.name === 'Free') {
+                          return (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-400 text-xs border border-white/5 cursor-not-allowed text-center"
+                            >
+                              Current Plan ({formatBillingCycle(user?.planBillingCycle || 'LIFETIME')})
+                            </button>
+                          );
+                        } else {
+                          return (
+                            <Link
+                              href={`/checkout?planId=${p.id}&duration=${user?.planBillingCycle || 'MONTHLY'}`}
+                              className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs border border-emerald-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                            >
+                              🔄 Renew / Extend {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
+                            </Link>
+                          );
+                        }
+                      }
+
+                      if (isInferior) {
                         return (
-                          <Link
-                            href={p.hasFreeTrial 
-                              ? `/checkout?planId=${p.id}&trial=true` 
-                              : `/checkout?planId=${p.id}&duration=${activeDur}`}
-                            className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
                           >
-                            {p.hasFreeTrial 
-                              ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
-                              : (displayPrice > 0 ? `Get Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
-                          </Link>
+                            Downgrade Unavailable
+                          </button>
                         );
-                      })()
-                    )}
+                      }
+
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
+                      
+                      let displayPrice = p.price;
+                      if (enabledDurs.length > 0 && durConfig) {
+                        displayPrice = parseFloat(durConfig.price || '0');
+                      }
+
+                      return (
+                        <Link
+                          href={p.hasFreeTrial 
+                            ? `/checkout?planId=${p.id}&trial=true` 
+                            : `/checkout?planId=${p.id}&duration=${activeDur}`}
+                          className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                        >
+                          {p.hasFreeTrial 
+                            ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
+                            : (displayPrice > 0 ? `Get Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
+                        </Link>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -642,6 +695,14 @@ export default function PlansPage() {
                         {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
                       </span>
                     </div>
+
+                    {/* Pack Validity indicator */}
+                    {p.validityValue && p.validityUnit && (
+                      <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-extrabold text-indigo-300 flex items-center gap-1.5 animate-pulse shrink-0 font-outfit">
+                        <span>⏳</span>
+                        <span>Validity: {p.validityValue} {p.validityUnit.toLowerCase()}</span>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
@@ -930,7 +991,7 @@ export default function PlansPage() {
                     <div className="font-bold text-gray-800">Pollstar Inc.</div>
                     <div className="text-gray-500">Ramrajatala</div>
                     <div className="text-gray-500">Howrah-711112, West Bengal, India</div>
-                    <div className="text-gray-500">billing@pollstar.com</div>
+                    <div className="text-gray-500">pollstaremail@gmail.com</div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Bill To</span>

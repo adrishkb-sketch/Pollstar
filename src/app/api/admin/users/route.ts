@@ -104,7 +104,28 @@ export async function PATCH(req: Request) {
       if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
       
       updateData.planId = planId;
-      logMessage = `Changed subscription plan for user: ${targetUser.email} to: "${plan.name}"`;
+      
+      const billingCycle = (body.billingCycle || 'MONTHLY').toUpperCase();
+      updateData.planBillingCycle = billingCycle;
+      
+      if (billingCycle === 'LIFETIME') {
+        updateData.isLifetimePlan = true;
+        updateData.planExpiresAt = null;
+      } else {
+        updateData.isLifetimePlan = false;
+        const now = new Date();
+        let expiresAt: Date | null = null;
+        if (billingCycle === 'MONTHLY') expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        else if (billingCycle === 'QUARTERLY') expiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+        else if (billingCycle === 'YEARLY') expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+        else if (billingCycle === 'TWO_YEAR' || billingCycle === 'TWO_YEARS') expiresAt = new Date(now.getTime() + 730 * 24 * 60 * 60 * 1000);
+        else if (billingCycle === 'ONE_TIME') expiresAt = null;
+        else expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        
+        updateData.planExpiresAt = expiresAt;
+      }
+      
+      logMessage = `Changed subscription plan for user: ${targetUser.email} to: "${plan.name}" (Duration: ${billingCycle})`;
     } else {
       return NextResponse.json({ error: 'Invalid moderation action request' }, { status: 400 });
     }

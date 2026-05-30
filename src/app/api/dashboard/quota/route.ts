@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+import { checkAndExpirePlan } from '@/lib/planExpiry';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -14,6 +15,9 @@ async function getAuthUser() {
     if (rp) payload = { userId: rp.userId, email: rp.email, role: rp.role };
   }
   if (!payload) return null;
+
+  // Run a robust check/expiry check on access
+  await checkAndExpirePlan(payload.userId);
 
   return prisma.user.findUnique({
     where: { id: payload.userId },

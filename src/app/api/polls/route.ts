@@ -5,6 +5,7 @@ import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { sendPollInvitationEmail } from '@/lib/nodemailer';
 import { moderateContent } from '@/lib/contentModerator';
 import { checkFeatureAccess, checkPollSubtypeAccess } from '@/lib/featureGate';
+import { checkAndExpirePlan } from '@/lib/planExpiry';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -26,6 +27,9 @@ async function getAuthUser() {
   }
 
   if (!payload) return null;
+
+  // Run a robust check/expiry check on access
+  await checkAndExpirePlan(payload.userId);
 
   return prisma.user.findUnique({
     where: { id: payload.userId },
