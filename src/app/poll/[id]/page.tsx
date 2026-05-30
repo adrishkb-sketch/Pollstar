@@ -1503,7 +1503,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       if (
         ans === undefined ||
         ans === null ||
-        (q.type === 'MULTIPLE_CHOICE' && ans.length === 0) ||
+        (['MULTIPLE_CHOICE', 'MULTI_SELECT'].includes(q.type) && ans.length === 0) ||
         (q.type === 'RANKED' && ans.length < rankedRequiredCount) ||
         (q.type === 'SHORT_TEXT' && ans.trim() === '') ||
         (q.type === 'LONG_TEXT' && ans.trim() === '') ||
@@ -1634,7 +1634,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         !ans || 
         (q.type === 'RANKED' && ans.length < rankedRequiredCount) ||
         (q.type === 'KNOCKOUT' && !ans.winner) ||
-        (q.type === 'MULTIPLE_CHOICE' && ans.length === 0) ||
+        (['MULTIPLE_CHOICE', 'MULTI_SELECT'].includes(q.type) && ans.length === 0) ||
         (q.type === 'SHORT_TEXT' && ans.trim() === '') ||
         (q.type === 'LONG_TEXT' && ans.trim() === '') ||
         (q.type === 'RATING' && ans === 0)
@@ -2850,7 +2850,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
 
                     {/* MULTIPLE CHOICE LAYOUT */}
-                    {q.type === 'MULTIPLE_CHOICE' && (
+                    {['MULTIPLE_CHOICE', 'MULTI_SELECT'].includes(q.type) && (
                       <div className="grid grid-cols-1 gap-3">
                         {q.options.map((opt: any) => {
                           const currentList = Array.isArray(ans) ? ans : [];
@@ -3177,7 +3177,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                         let ansText = '';
                         if (q.type === 'SINGLE') {
                           ansText = q.options?.find((o: any) => o.id === ans)?.text || ans;
-                        } else if (q.type === 'MULTIPLE_CHOICE') {
+                        } else if (['MULTIPLE_CHOICE', 'MULTI_SELECT'].includes(q.type)) {
                           ansText = (Array.isArray(ans) ? ans : []).map((id: string) => q.options?.find((o: any) => o.id === id)?.text || id).join(', ');
                         } else if (q.type === 'RANKED') {
                           ansText = (Array.isArray(ans) ? ans : []).map((id: string, i: number) => `${i + 1}. ${q.options?.find((o: any) => o.id === id)?.text || id}`).join(' → ');

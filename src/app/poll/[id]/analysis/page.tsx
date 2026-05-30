@@ -515,7 +515,17 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
                         <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-1">
                           <span className="block text-[9px] text-gray-500 uppercase tracking-widest font-extrabold">Your Response</span>
                           <p className="text-white font-medium break-words leading-relaxed">
-                            {typeof q.candidateAnswer === 'object' ? JSON.stringify(q.candidateAnswer) : String(q.candidateAnswer || 'No Answer')}
+                            {['MULTI_SELECT', 'MULTIPLE_CHOICE'].includes(q.type) ? (
+                              (() => {
+                                const userList = Array.isArray(q.candidateAnswer) ? q.candidateAnswer : [];
+                                if (userList.length === 0) return 'No Answer';
+                                return userList.map((id: string) => q.options?.find((o: any) => o.id === id)?.text || id).join(', ');
+                              })()
+                            ) : typeof q.candidateAnswer === 'object' ? (
+                              JSON.stringify(q.candidateAnswer)
+                            ) : (
+                              String(q.candidateAnswer || 'No Answer')
+                            )}
                           </p>
                         </div>
                         <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-1">
@@ -523,6 +533,15 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
                           <p className="text-gray-300 font-medium break-words leading-relaxed">
                             {q.type === 'SINGLE' ? (
                               q.options.find((o: any) => o.id === q.correctAnswer)?.text || q.correctAnswer
+                            ) : ['MULTI_SELECT', 'MULTIPLE_CHOICE'].includes(q.type) ? (
+                              (() => {
+                                try {
+                                  const arr = typeof q.correctAnswers === 'string' ? JSON.parse(q.correctAnswers) : q.correctAnswers;
+                                  return Array.isArray(arr) ? arr.join(', ') : 'N/A';
+                                } catch (_) {
+                                  return 'N/A';
+                                }
+                              })()
                             ) : String(q.correctAnswer || 'N/A')}
                           </p>
                         </div>

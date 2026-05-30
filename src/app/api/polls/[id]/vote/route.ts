@@ -400,18 +400,21 @@ export async function POST(
 
         if (userAns !== undefined && userAns !== null) {
           if (q.type === 'SINGLE') {
-            // Single MCQ
-            const isCorrect = String(userAns) === String(q.correctAnswer);
+            // Single MCQ: Match by looking up option ID by text or directly matching ID
+            const correctOpt = q.options.find(opt => opt.text === q.correctAnswer || opt.id === q.correctAnswer);
+            const isCorrect = correctOpt ? String(userAns) === String(correctOpt.id) : String(userAns) === String(q.correctAnswer);
+            const correctText = correctOpt ? correctOpt.text : q.correctAnswer;
+            
             if (isCorrect) {
               marksAwarded = maxMarks;
               feedback = "Correct answer selected! Full marks awarded.";
             } else {
               if (enableNegativeMark) {
                 marksAwarded = -negPenalty;
-                feedback = `Incorrect selection. Correct answer was option ID: ${q.correctAnswer}. Negative penalty of -${negPenalty} applied.`;
+                feedback = `Incorrect selection. Correct answer was: "${correctText}". Negative penalty of -${negPenalty} applied.`;
               } else {
                 marksAwarded = 0.0;
-                feedback = `Incorrect selection. Correct answer was option ID: ${q.correctAnswer}.`;
+                feedback = `Incorrect selection. Correct answer was: "${correctText}".`;
               }
             }
           } else if (q.type === 'MULTI_SELECT' || q.type === 'MULTIPLE_CHOICE') {
@@ -425,8 +428,14 @@ export async function POST(
               console.error("Failed to parse correctAnswers", e);
             }
 
+            // Map correct option texts/IDs to actual database Option IDs
+            const correctIds = correctList.map(cVal => {
+              const found = q.options.find(opt => opt.text === cVal || opt.id === cVal);
+              return found ? found.id : cVal;
+            });
+
             const userList = Array.isArray(userAns) ? userAns : [];
-            const correctSet = new Set(correctList);
+            const correctSet = new Set(correctIds);
             const userSet = new Set(userList);
 
             let correctSelected = 0;

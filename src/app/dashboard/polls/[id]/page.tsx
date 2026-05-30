@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Vote, ArrowLeft, Loader2, AlertCircle, Calendar, 
   Trash2, ShieldCheck, Download, Check, FileDown, 
@@ -63,6 +63,7 @@ const parseConfirmer2 = (val: string | null) => {
 export default function PollInsights({ params }: PageProps) {
   const { id: pollId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +86,14 @@ export default function PollInsights({ params }: PageProps) {
 
   // Analytics Inbox & Messaging states
   const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades' | 'collaborators' | 'proctor' | 'edit'>('analytics');
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['analytics', 'inbox', 'grades', 'collaborators', 'proctor', 'edit'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
+
   const [inboxMessages, setInboxMessages] = useState<any[]>([]);
   const [selectedVoter, setSelectedVoter] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
@@ -2991,7 +3000,7 @@ export default function PollInsights({ params }: PageProps) {
                     </div>
 
                     {/* MCQ Options Editor block (Only rendered for Choice based questions) */}
-                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT'].includes(q.type) && (
+                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT', 'MULTI_SELECT'].includes(q.type) && (
                       <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3">
                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
                           <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400">Options Editor</span>
@@ -3194,7 +3203,7 @@ export default function PollInsights({ params }: PageProps) {
               activeTab === 'grades' ? 'text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
-            <span>📝 Grades & Evaluations</span>
+            <span>📝 Marking Portal</span>
             {activeTab === 'grades' && (
               <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
             )}

@@ -1151,6 +1151,15 @@ export default function Dashboard() {
                       </Link>
                     </div>
 
+                    {poll.pollType === 'EXAM' && poll.status !== 'DRAFT' && (
+                      <Link
+                        href={`/dashboard/polls/${poll.id}?tab=grades`}
+                        className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center space-x-1.5"
+                      >
+                        <span>📝 Open Marking Portal</span>
+                      </Link>
+                    )}
+
                     {/* Poll Settings Button (Only for owner/admin) */}
                     {(poll.creatorId === user?.id || user?.role === 'ADMIN') && (
                       <button
@@ -1158,7 +1167,7 @@ export default function Dashboard() {
                         className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/8 hover:border-white/15 text-gray-300 hover:text-white transition-all flex items-center justify-center space-x-1.5"
                       >
                         <Settings className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Poll Settings & Collaborators</span>
+                        <span>{poll.pollType === 'EXAM' ? 'Exam Settings & Collaborators' : 'Poll Settings & Collaborators'}</span>
                       </button>
                     )}
                   </div>

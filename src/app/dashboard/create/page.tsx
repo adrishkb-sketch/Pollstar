@@ -863,15 +863,33 @@ export default function CreatePoll() {
               setStudentWhiteboardDriveUrl(s.studentWhiteboardDriveUrl || '');
 
               if (p.allowedVoters && p.allowedVoters.length > 0) {
-                setAllowedVoters(p.allowedVoters.map((av: any) => ({
-                  identifier: av.identifier || '',
-                  confirmer1: av.confirmer1 || '',
-                  confirmer2: av.confirmer2 || '',
-                  email: av.email || '',
-                  phone: av.phone || '',
-                  password: av.password || '',
-                  voterAuthType: av.voterAuthType || 'GLOBAL',
-                })));
+                setAllowedVoters(p.allowedVoters.map((av: any) => {
+                  let session = '';
+                  let classYear = '';
+                  let department = '';
+                  if (av.confirmer2) {
+                    try {
+                      const parsed = JSON.parse(av.confirmer2);
+                      if (parsed && typeof parsed === 'object') {
+                        session = parsed.session || '';
+                        classYear = parsed.class || parsed.classYear || '';
+                        department = parsed.department || '';
+                      }
+                    } catch (e) {}
+                  }
+                  return {
+                    identifier: av.identifier || '',
+                    confirmer1: av.confirmer1 || '',
+                    confirmer2: av.confirmer2 || '',
+                    email: av.email || '',
+                    phone: av.phone || '',
+                    password: av.password || '',
+                    voterAuthType: av.voterAuthType || 'GLOBAL',
+                    session,
+                    classYear,
+                    department,
+                  };
+                }));
                 setNumVoters(p.allowedVoters.length);
               }
 
@@ -944,12 +962,33 @@ export default function CreatePoll() {
     if (!selected) return;
 
     if (selected.allowedVoters && selected.allowedVoters.length > 0) {
-      const mappedVoters = selected.allowedVoters.map((v: any) => ({
-        identifier: v.identifier || '',
-        confirmer1: v.confirmer1 || '',
-        confirmer2: v.confirmer2 || '',
-        email: v.email || '',
-      }));
+      const mappedVoters = selected.allowedVoters.map((v: any) => {
+        let session = '';
+        let classYear = '';
+        let department = '';
+        if (v.confirmer2) {
+          try {
+            const parsed = JSON.parse(v.confirmer2);
+            if (parsed && typeof parsed === 'object') {
+              session = parsed.session || '';
+              classYear = parsed.class || parsed.classYear || '';
+              department = parsed.department || '';
+            }
+          } catch (e) {}
+        }
+        return {
+          identifier: v.identifier || '',
+          confirmer1: v.confirmer1 || '',
+          confirmer2: v.confirmer2 || '',
+          email: v.email || '',
+          phone: v.phone || '',
+          password: v.password || '',
+          voterAuthType: v.voterAuthType || 'GLOBAL',
+          session,
+          classYear,
+          department,
+        };
+      });
       setAllowedVoters(mappedVoters);
       setNumVoters(mappedVoters.length);
 
@@ -1120,10 +1159,40 @@ export default function CreatePoll() {
         h === 'mail' || 
         h.includes('email')
       );
+      const phoneIdx = headers.findIndex(h => 
+        h === 'phone' || 
+        h === 'phone number' || 
+        h === 'contact' || 
+        h.includes('phone') || 
+        h.includes('contact')
+      );
+      const passwordIdx = headers.findIndex(h => 
+        h === 'password' || 
+        h === 'pass' || 
+        h === 'passcode' || 
+        h.includes('password') || 
+        h.includes('passcode')
+      );
 
       if (emailIdx === -1) {
         throw new Error('Required column "Email" was not found in the spreadsheet header row.');
       }
+
+      const sessionIdx = headers.findIndex(h => 
+        h === 'session' || 
+        h.includes('sess')
+      );
+      const classIdx = headers.findIndex(h => 
+        h === 'class' || 
+        h === 'class year' || 
+        h.includes('class') ||
+        h.includes('year')
+      );
+      const departmentIdx = headers.findIndex(h => 
+        h === 'department' || 
+        h.includes('dept') || 
+        h.includes('department')
+      );
 
       const parsedVoters: any[] = [];
       for (let i = 1; i < rows.length; i++) {
@@ -1131,11 +1200,20 @@ export default function CreatePoll() {
         const email = emailIdx !== -1 ? (cols[emailIdx] || '').trim() : '';
         if (!email) continue; // Skip blank emails
 
+        const sessionVal = sessionIdx !== -1 ? (cols[sessionIdx] || '').trim() : '';
+        const classVal = classIdx !== -1 ? (cols[classIdx] || '').trim() : '';
+        const deptVal = departmentIdx !== -1 ? (cols[departmentIdx] || '').trim() : '';
+
         parsedVoters.push({
           identifier: identifierIdx !== -1 ? (cols[identifierIdx] || '').trim() : '',
           confirmer1: confirmer1Idx !== -1 ? (cols[confirmer1Idx] || '').trim() : '',
           confirmer2: confirmer2Idx !== -1 ? (cols[confirmer2Idx] || '').trim() : '',
-          email
+          email,
+          phone: phoneIdx !== -1 ? (cols[phoneIdx] || '').trim() : '',
+          password: passwordIdx !== -1 ? (cols[passwordIdx] || '').trim() : '',
+          session: sessionVal,
+          classYear: classVal,
+          department: deptVal,
         });
       }
 
@@ -1191,14 +1269,16 @@ export default function CreatePoll() {
     }
 
     const fieldOrder = ['identifier', 'confirmer1'];
-    if (useConfirmer2) {
+    if (pollType === 'EXAM') {
+      fieldOrder.push('session', 'classYear', 'department');
+    } else if (useConfirmer2) {
       fieldOrder.push('confirmer2');
     }
     fieldOrder.push('email');
-    if (verificationMethod === 'PHONE') {
+    if (showPhoneColumn) {
       fieldOrder.push('phone');
     }
-    if (verificationType === 'PASSWORD') {
+    if (showPasswordColumn) {
       fieldOrder.push('password');
     }
 
@@ -1410,10 +1490,17 @@ export default function CreatePoll() {
         : allowedVoters.map(v => {
             const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
             const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            const confirmer2Val = pollType === 'EXAM' 
+              ? JSON.stringify({
+                  session: v.session || 'General',
+                  class: v.classYear || v.class || 'General',
+                  department: v.department || 'General',
+                })
+              : (useConfirmer2 ? v.confirmer2 : '');
             return {
               identifier: v.identifier,
               confirmer1: v.confirmer1,
-              confirmer2: useConfirmer2 ? v.confirmer2 : '',
+              confirmer2: confirmer2Val,
               email: cleanEmail,
               phone: v.phone || null,
               password: v.password || null,
@@ -1548,10 +1635,17 @@ export default function CreatePoll() {
         : allowedVoters.map(v => {
             const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
             const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            const confirmer2Val = pollType === 'EXAM' 
+              ? JSON.stringify({
+                  session: v.session || 'General',
+                  class: v.classYear || v.class || 'General',
+                  department: v.department || 'General',
+                })
+              : (useConfirmer2 ? v.confirmer2 : '');
             return {
               identifier: v.identifier,
               confirmer1: v.confirmer1,
-              confirmer2: useConfirmer2 ? v.confirmer2 : '',
+              confirmer2: confirmer2Val,
               email: cleanEmail,
               phone: v.phone || null,
               password: v.password || null,
@@ -1607,7 +1701,7 @@ export default function CreatePoll() {
       ? ['Details', 'Question', 'Completion', 'Audience', 'Security', 'Privacy', 'Schedule', 'Visibility', 'Advanced']
       : ['Details', 'Question', 'Type', 'Audience', 'Security', 'Anonymity', 'Schedule', 'Visibility', 'Advanced'];
 
-  const showPhoneColumn = verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
+  const showPhoneColumn = pollType === 'EXAM' || verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
   const showPasswordColumn = verificationType === 'PASSWORD' || allowedVoters.some(v => v.voterAuthType === 'EMAIL_PASSWORD' || v.voterAuthType === 'PHONE_PASSWORD');
 
   // Helper: get which collaborator (if any) is focused on the given field
@@ -2066,6 +2160,41 @@ export default function CreatePoll() {
                                   </p>
                                 </div>
                               )}
+                            </div>
+                          );
+                        })()}
+
+                        {q.type === 'MULTI_SELECT' && (() => {
+                          // Safely parse rules
+                          let rules: any = {};
+                          if (typeof q.logicRules === 'string') {
+                            try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {}
+                          } else if (q.logicRules && typeof q.logicRules === 'object') {
+                            rules = q.logicRules;
+                          }
+                          const markingScheme = rules.markingScheme || 'ALL_OR_NOTHING';
+                          const updateRules = (updates: any) => {
+                            const updated = [...questions];
+                            const currentRules = { ...rules, ...updates };
+                            updated[qIndex].logicRules = currentRules;
+                            setQuestions(updated);
+                          };
+                          return (
+                            <div className="mt-3 p-3.5 rounded-xl border border-white/5 bg-white/2 space-y-2">
+                              <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                                MCQ Multiple Correct Marking Scheme
+                              </label>
+                              <select
+                                value={markingScheme}
+                                onChange={(e) => updateRules({ markingScheme: e.target.value })}
+                                className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                              >
+                                <option value="ALL_OR_NOTHING">ALL_OR_NOTHING (Strict: 0 marks if any option is incorrect or missing)</option>
+                                <option value="PARTIAL">PARTIAL (Partial credit for each correct option selected, minus incorrect penalties)</option>
+                              </select>
+                              <p className="text-[9px] text-gray-500 font-outfit block mt-1">
+                                Specify how partial and incorrect choices are scored for multiple correct choice questions.
+                              </p>
                             </div>
                           );
                         })()}
@@ -2612,7 +2741,7 @@ export default function CreatePoll() {
             <div className="space-y-6 animate-fade-in-up">
               <div>
                 <h2 className="font-outfit text-3xl font-extrabold text-white leading-tight">Audience Controls</h2>
-                <p className="text-gray-400 text-sm mt-1">Select who is authorized to participate in this {pollType === 'SURVEY' ? 'survey' : 'poll'}.</p>
+                <p className="text-gray-400 text-sm mt-1">Select who is authorized to participate in this {pollType === 'SURVEY' ? 'survey' : (pollType === 'EXAM' ? 'exam' : 'poll')}.</p>
               </div>
 
               <div className="flex justify-between items-center bg-white/3 border border-white/5 rounded-2xl p-4 gap-4">
@@ -2625,7 +2754,7 @@ export default function CreatePoll() {
                       isOpenVoting ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    {pollType === 'SURVEY' ? 'Open Survey' : 'Open Vote'}
+                    {pollType === 'EXAM' ? 'Open Exam' : (pollType === 'SURVEY' ? 'Open Survey' : 'Open Vote')}
                   </button>
                   <button
                     type="button"
@@ -2634,7 +2763,7 @@ export default function CreatePoll() {
                       !isOpenVoting ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    {pollType === 'SURVEY' ? 'Closed Survey' : 'Closed Vote'}
+                    {pollType === 'EXAM' ? 'Closed Exam' : (pollType === 'SURVEY' ? 'Closed Survey' : 'Closed Vote')}
                   </button>
                 </div>
               </div>
@@ -2644,18 +2773,18 @@ export default function CreatePoll() {
                   <div className="flex items-center space-x-2">
                     <Upload className="w-4 h-4 text-indigo-400" />
                     <span className="text-sm font-bold text-white">
-                      {pollType === 'SURVEY' ? 'Import Previous Respondent Roster' : 'Import Previous Voter Roster'}
+                      {pollType === 'SURVEY' ? 'Import Previous Respondent Roster' : (pollType === 'EXAM' ? 'Import Previous Student Roster' : 'Import Previous Voter Roster')}
                     </span>
                   </div>
                   <p className="text-gray-400 text-xs leading-relaxed">
-                    Instantly re-import respondent/voter profiles, custom confirmation labels, and secondary settings from your past closed surveys/polls.
+                    Instantly re-import {pollType === 'EXAM' ? 'student' : (pollType === 'SURVEY' ? 'respondent' : 'voter')} profiles, custom confirmation labels, and secondary settings from your past closed {pollType === 'EXAM' ? 'exams' : (pollType === 'SURVEY' ? 'surveys' : 'polls')}.
                   </p>
                   <div className="flex flex-col gap-3 pt-1">
                     <div className="relative">
                       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                       <input
                         type="text"
-                        placeholder={pollType === 'SURVEY' ? "Search past surveys by title..." : "Search past polls by title..."}
+                        placeholder={pollType === 'SURVEY' ? "Search past surveys by title..." : (pollType === 'EXAM' ? "Search past exams by title..." : "Search past polls by title...")}
                         value={templateSearchQuery}
                         onChange={(e) => setTemplateSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 bg-[#030712] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-gray-500"
@@ -2666,12 +2795,12 @@ export default function CreatePoll() {
                       defaultValue=""
                       className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                     >
-                      <option value="" disabled>-- Select a previous closed {pollType === 'SURVEY' ? 'survey' : 'poll'} --</option>
+                      <option value="" disabled>-- Select a previous closed {pollType === 'SURVEY' ? 'survey' : (pollType === 'EXAM' ? 'exam' : 'poll')} --</option>
                       {voterTemplates
                         .filter((t) => t.title.toLowerCase().includes(templateSearchQuery.toLowerCase()))
                         .map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.title} ({t.allowedVoters?.length || 0} {pollType === 'SURVEY' ? 'Respondents' : 'Voters'})
+                            {t.title} ({t.allowedVoters?.length || 0} {pollType === 'SURVEY' ? 'Respondents' : (pollType === 'EXAM' ? 'Students' : 'Voters')})
                           </option>
                         ))}
                     </select>
@@ -2870,7 +2999,15 @@ export default function CreatePoll() {
                             <th className="py-3.5 px-4 w-12 text-center">Row</th>
                             <th className="py-3.5 px-4 min-w-[120px]">{identifierLabel} <span className="text-red-400">*</span></th>
                             <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
-                            {useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>}
+                            {pollType === 'EXAM' ? (
+                              <>
+                                <th className="py-3.5 px-4 min-w-[110px]">Session</th>
+                                <th className="py-3.5 px-4 min-w-[110px]">Class/Year</th>
+                                <th className="py-3.5 px-4 min-w-[110px]">Department</th>
+                              </>
+                            ) : (
+                              useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>
+                            )}
                             <th className="py-3.5 px-4 min-w-[130px]">Auth Type</th>
                             <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
                             {showPhoneColumn && <th className="py-3.5 px-4 min-w-[150px]">Phone Number <span className="text-red-400">*</span></th>}
@@ -2902,22 +3039,60 @@ export default function CreatePoll() {
                                   onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer1')}
                                   data-row-idx={idx}
                                   data-field-key="confirmer1"
-                                  placeholder="e.g. Adrish Kumar Banerjee"
+                                  placeholder="e.g. Adrish banerjee"
                                   className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
                                 />
                               </td>
-                              {useConfirmer2 && (
-                                <td className="py-2.5 px-2">
-                                  <input
-                                    type="text"
-                                    value={voter.confirmer2}
-                                    onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer2')}
-                                    data-row-idx={idx}
-                                    data-field-key="confirmer2"
-                                    placeholder="Optional text"
-                                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
-                                  />
-                                </td>
+                              {pollType === 'EXAM' ? (
+                                <>
+                                  <td className="py-2.5 px-2">
+                                    <input
+                                      type="text"
+                                      value={voter.session || ''}
+                                      onChange={(e) => handleVoterCellChange(e.target.value, idx, 'session')}
+                                      data-row-idx={idx}
+                                      data-field-key="session"
+                                      placeholder="e.g. 2024-2028"
+                                      className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                    />
+                                  </td>
+                                  <td className="py-2.5 px-2">
+                                    <input
+                                      type="text"
+                                      value={voter.classYear || ''}
+                                      onChange={(e) => handleVoterCellChange(e.target.value, idx, 'classYear')}
+                                      data-row-idx={idx}
+                                      data-field-key="classYear"
+                                      placeholder="e.g. CSE-A"
+                                      className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                    />
+                                  </td>
+                                  <td className="py-2.5 px-2">
+                                    <input
+                                      type="text"
+                                      value={voter.department || ''}
+                                      onChange={(e) => handleVoterCellChange(e.target.value, idx, 'department')}
+                                      data-row-idx={idx}
+                                      data-field-key="department"
+                                      placeholder="e.g. Computer Science"
+                                      className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                    />
+                                  </td>
+                                </>
+                              ) : (
+                                useConfirmer2 && (
+                                  <td className="py-2.5 px-2">
+                                    <input
+                                      type="text"
+                                      value={voter.confirmer2}
+                                      onChange={(e) => handleVoterCellChange(e.target.value, idx, 'confirmer2')}
+                                      data-row-idx={idx}
+                                      data-field-key="confirmer2"
+                                      placeholder="Optional text"
+                                      className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-2 py-1 text-white placeholder-gray-700"
+                                    />
+                                  </td>
+                                )
                               )}
                               <td className="py-2.5 px-2">
                                 <select
@@ -2995,7 +3170,7 @@ export default function CreatePoll() {
                       <button
                         type="button"
                         onClick={() => {
-                          setAllowedVoters([...allowedVoters, { identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '' }]);
+                          setAllowedVoters([...allowedVoters, { identifier: '', confirmer1: '', confirmer2: '', email: '', phone: '', password: '', session: '', classYear: '', department: '' }]);
                           setNumVoters(allowedVoters.length + 1);
                         }}
                         className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-xs font-bold transition-all border border-indigo-500/10 shrink-0 flex items-center justify-center gap-1.5"
@@ -3809,7 +3984,7 @@ export default function CreatePoll() {
                           gateKey: 'studentRosterManagement',
                           customClick: () => {
                             if (isOpenVoting) {
-                              alert("Password Logins require Closed Audience Access. Please select 'Closed Vote/Survey' in Step 4 first!");
+                              alert("Password Logins require Closed Audience Access. Please select 'Closed Exam' in Step 4 first!");
                               return;
                             }
                             const hasEmptyPasswords = allowedVoters.some(v => !v.password || !v.password.trim());
