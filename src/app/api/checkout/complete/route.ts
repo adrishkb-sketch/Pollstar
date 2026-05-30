@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
     // Enforce: Add-ons require an active recurring (non-free) subscription
     if (isAddon || plan.planType === 'ADDON') {
-      const hasActiveSub = user.planId && !user.plan?.isFree && (user.isLifetimePlan || (user.planExpiresAt && user.planExpiresAt > new Date()));
+      const hasActiveSub = user.planId && user.plan?.name?.toLowerCase() !== 'free' && (user.isLifetimePlan || (user.planExpiresAt && user.planExpiresAt > new Date()));
       if (!hasActiveSub) {
         return NextResponse.json({ error: 'Add-on plans require an active paid subscription.' }, { status: 403 });
       }
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
       }
 
       // For free or one-time plans, use plan's billing cycle
-      if (plan.isFree) {
+      if (plan.name.toLowerCase() === 'free') {
         basePrice = 0;
         selectedBillingCycle = 'LIFETIME';
       }

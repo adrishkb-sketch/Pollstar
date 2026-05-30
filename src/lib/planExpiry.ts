@@ -81,7 +81,7 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
     // Check if domain plan has expired
     if (user.domainPlanExpiry && user.domainPlanExpiry < now) {
       // Revert domain-assigned plan to free
-      const freePlan = await prisma.plan.findFirst({ where: { isFree: true } });
+      const freePlan = await prisma.plan.findFirst({ where: { name: 'Free' } });
       await prisma.user.update({
         where: { id: userId },
         data: {
@@ -100,7 +100,7 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
 
     // Check if subscription has expired
     if (user.planExpiresAt < now) {
-      const freePlan = await prisma.plan.findFirst({ where: { isFree: true } });
+      const freePlan = await prisma.plan.findFirst({ where: { name: 'Free' } });
       await prisma.user.update({
         where: { id: userId },
         data: {

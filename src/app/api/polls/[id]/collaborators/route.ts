@@ -245,79 +245,155 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
       // Check target user's quota limits for poll.pollType
+      // Check target user's quota limits for poll.pollType
       if (targetUser.role !== 'ADMIN') {
-        const isFreePlan = !targetUser.plan || targetUser.plan.isFree;
-        const signupDate = targetUser.createdAt;
-        let start: Date;
-        let end: Date;
+        const plan = targetUser.plan;
+        const isFreePlan = !plan || plan.name.toLowerCase() === 'free';
+
+        // ── 1. Subscription Billing Cycle ────────────────────────────────────
+        let cycleStart: Date;
+        let cycleEnd: Date;
 
         if (isFreePlan || !targetUser.planExpiresAt) {
           const now = new Date();
-          const signupAnniversary = new Date(signupDate);
-          signupAnniversary.setFullYear(now.getFullYear());
-          signupAnniversary.setMonth(now.getMonth());
-          if (signupAnniversary > now) {
-            signupAnniversary.setMonth(signupAnniversary.getMonth() - 1);
-          }
-          start = signupAnniversary;
-          end = new Date(start);
-          end.setMonth(end.getMonth() + 1);
+          const ann = new Date(targetUser.createdAt);
+          ann.setFullYear(now.getFullYear());
+          ann.setMonth(now.getMonth());
+          if (ann > now) ann.setMonth(ann.getMonth() - 1);
+          cycleStart = ann;
+          cycleEnd = new Date(ann);
+          cycleEnd.setMonth(cycleEnd.getMonth() + 1);
         } else {
-          const endExp = new Date(targetUser.planExpiresAt);
-          const startExp = new Date(targetUser.planExpiresAt);
+          const expEnd = new Date(targetUser.planExpiresAt);
+          const expStart = new Date(targetUser.planExpiresAt);
           const cycle = (targetUser.planBillingCycle || 'MONTHLY').toUpperCase();
-
-          if (cycle === 'MONTHLY') {
-            startExp.setMonth(startExp.getMonth() - 1);
-          } else if (cycle === 'QUARTERLY') {
-            startExp.setMonth(startExp.getMonth() - 3);
-          } else if (cycle === 'YEARLY') {
-            startExp.setMonth(startExp.getMonth() - 12);
-          } else if (cycle === 'TWO_YEAR' || cycle === 'TWO_YEARS') {
-            startExp.setMonth(startExp.getMonth() - 24);
-          } else {
-            startExp.setMonth(startExp.getMonth() - 1);
-          }
-          
-          start = startExp;
-          end = endExp;
+          if (cycle === 'MONTHLY') expStart.setMonth(expStart.getMonth() - 1);
+          else if (cycle === 'QUARTERLY') expStart.setMonth(expStart.getMonth() - 3);
+          else if (cycle === 'YEARLY') expStart.setMonth(expStart.getMonth() - 12);
+          else if (cycle === 'TWO_YEAR' || cycle === 'TWO_YEARS') expStart.setMonth(expStart.getMonth() - 24);
+          else expStart.setMonth(expStart.getMonth() - 1);
+          cycleStart = expStart;
+          cycleEnd = expEnd;
         }
 
-        let limitPolls = isFreePlan ? 3 : (targetUser.plan?.maxPolls ?? -1);
-        let limitSurveys = isFreePlan ? 3 : (targetUser.plan?.maxSurveys ?? -1);
-        let limitExams = isFreePlan ? 3 : (targetUser.plan?.maxExams ?? -1);
+        // Base limits from plan
+        let subLimitPolls: number = isFreePlan ? 3 : (plan?.maxPolls ?? -1);
+        let subLimitSurveys: number = isFreePlan ? 3 : (plan?.maxSurveys ?? -1);
+        let subLimitExams: number = isFreePlan ? 3 : (plan?.maxExams ?? -1);
 
-        if (targetUser.plan && targetUser.plan.durations && !isFreePlan) {
-          const durs = targetUser.plan.durations as any;
+        // Override with duration-specific limits if available
+        if (plan && plan.durations && !isFreePlan) {
+          const durs = plan.durations as any;
           const cycle = targetUser.planBillingCycle || 'MONTHLY';
           if (durs[cycle] && durs[cycle].enabled) {
             const cfg = durs[cycle];
-            if (cfg.maxPolls !== undefined && cfg.maxPolls !== '') limitPolls = parseInt(cfg.maxPolls);
-            if (cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') limitSurveys = parseInt(cfg.maxSurveys);
-            if (cfg.maxExams !== undefined && cfg.maxExams !== '') limitExams = parseInt(cfg.maxExams);
+            if (cfg.maxPolls !== undefined && cfg.maxPolls !== '') subLimitPolls = parseInt(cfg.maxPolls);
+            if (cfg.maxSurveys !== undefined && cfg.maxSurveys !== '') subLimitSurveys = parseInt(cfg.maxSurveys);
+            if (cfg.maxExams !== undefined && cfg.maxExams !== '') subLimitExams = parseInt(cfg.maxExams);
           }
         }
 
-        const targetType = poll.pollType === 'SURVEY' ? 'SURVEY' : poll.pollType === 'EXAM' ? 'EXAM' : 'POLL';
-        const activeLimit = targetType === 'SURVEY' ? limitSurveys : targetType === 'EXAM' ? limitExams : limitPolls;
+        // Only apply subscription limits for SUBSCRIPTION plan type (not packs)
+        const planType = plan?.planType || 'SUBSCRIPTION';
+        const isSubBased = !['POLL_PACK', 'SURVEY_PACK', 'EXAM_PACK', 'COMBO_PACK'].includes(planType);
 
-        if (activeLimit !== null && activeLimit >= 0) {
-          const count = await prisma.poll.count({
-            where: {
-              creatorId: targetUser.id,
-              pollType: targetType,
-              createdAt: {
-                gte: start,
-                lt: end,
-              }
+        // Count usage in current billing cycle (for subscription-based plans)
+        const [subUsedPolls, subUsedSurveys, subUsedExams] = await Promise.all([
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'POLL', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'SURVEY', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'EXAM', createdAt: { gte: cycleStart, lt: cycleEnd } } }),
+        ]);
+
+        // ── 2. Pack / Addon quota (all-time, lifetime) ───────────────────────────
+        const addonInvoices = await prisma.invoice.findMany({
+          where: { userId: targetUser.id, isAddon: true },
+          include: { plan: true },
+        });
+
+        let packAllowedPolls = 0;
+        let packAllowedSurveys = 0;
+        let packAllowedExams = 0;
+
+        const nowTime = new Date();
+
+        for (const inv of addonInvoices) {
+          const p = inv.plan;
+          if (!p) continue;
+
+          // Check if this pack is still valid
+          const isValid = !inv.planExpiresAt || new Date(inv.planExpiresAt) > nowTime;
+          if (!isValid) continue;
+
+          const qty = (p.packQuantity ?? 0) + (p.freePerks ?? 0);
+
+          switch (p.planType) {
+            case 'POLL_PACK':
+              packAllowedPolls += qty;
+              break;
+            case 'SURVEY_PACK':
+              packAllowedSurveys += qty;
+              break;
+            case 'EXAM_PACK':
+              packAllowedExams += qty;
+              break;
+            case 'COMBO_PACK': {
+              const types: string[] = Array.isArray(p.comboTypes) ? (p.comboTypes as string[]) : [];
+              const perType = types.length > 0 ? Math.floor(qty / types.length) : 0;
+              if (types.includes('POLL')) packAllowedPolls += perType;
+              if (types.includes('SURVEY')) packAllowedSurveys += perType;
+              if (types.includes('EXAM')) packAllowedExams += perType;
+              break;
             }
-          });
-
-          if (count >= activeLimit) {
-            return NextResponse.json({
-              error: `Target user has reached their creation allowance of ${activeLimit} ${targetType.toLowerCase()}s. Ownership transfer failed.`
-            }, { status: 403 });
+            case 'ADDON': {
+              if (p.maxPolls && p.maxPolls > 0) packAllowedPolls += p.maxPolls;
+              if (p.maxSurveys && p.maxSurveys > 0) packAllowedSurveys += p.maxSurveys;
+              if (p.maxExams && p.maxExams > 0) packAllowedExams += p.maxExams;
+              break;
+            }
+            default:
+              break;
           }
+        }
+
+        // All-time usage counts (for pack/entity quota tracking)
+        const [activePolls, activeSurveys, activeExams, deletedPolls, deletedSurveys, deletedExams] = await Promise.all([
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'POLL' } }),
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'SURVEY' } }),
+          prisma.poll.count({ where: { creatorId: targetUser.id, pollType: 'EXAM' } }),
+          prisma.deletedPoll.count({ where: { creatorId: targetUser.id, pollType: 'POLL' } }),
+          prisma.deletedPoll.count({ where: { creatorId: targetUser.id, pollType: 'SURVEY' } }),
+          prisma.deletedPoll.count({ where: { creatorId: targetUser.id, pollType: 'EXAM' } }),
+        ]);
+
+        const allTimePolls   = Math.max(activePolls,   deletedPolls);
+        const allTimeSurveys = Math.max(activeSurveys, deletedSurveys);
+        const allTimeExams   = Math.max(activeExams,   deletedExams);
+
+        // ── 3. Build combined totals ─────────────────────────────────────────────
+        const totalAllowedPolls = isSubBased
+          ? (subLimitPolls === -1 ? -1 : subLimitPolls + packAllowedPolls)
+          : packAllowedPolls;
+        const totalAllowedSurveys = isSubBased
+          ? (subLimitSurveys === -1 ? -1 : subLimitSurveys + packAllowedSurveys)
+          : packAllowedSurveys;
+        const totalAllowedExams = isSubBased
+          ? (subLimitExams === -1 ? -1 : subLimitExams + packAllowedExams)
+          : packAllowedExams;
+
+        const totalUsedPolls = isSubBased ? subUsedPolls : allTimePolls;
+        const totalUsedSurveys = isSubBased ? subUsedSurveys : allTimeSurveys;
+        const totalUsedExams = isSubBased ? subUsedExams : allTimeExams;
+
+        // Perform validation check for the transferred poll's type
+        const targetType = poll.pollType === 'SURVEY' ? 'SURVEY' : poll.pollType === 'EXAM' ? 'EXAM' : 'POLL';
+        const allowed = targetType === 'SURVEY' ? totalAllowedSurveys : targetType === 'EXAM' ? totalAllowedExams : totalAllowedPolls;
+        const used = targetType === 'SURVEY' ? totalUsedSurveys : targetType === 'EXAM' ? totalUsedExams : totalUsedPolls;
+        const activeLabel = targetType === 'SURVEY' ? 'surveys' : targetType === 'EXAM' ? 'exams' : 'polls';
+
+        if (allowed !== -1 && used >= allowed) {
+          return NextResponse.json({
+            error: `Target user has reached their maximum quota of ${allowed} ${activeLabel}. Ownership transfer failed.`
+          }, { status: 403 });
         }
       }
 

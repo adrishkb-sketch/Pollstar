@@ -242,7 +242,21 @@ export default function CreatePoll() {
       const params = new URLSearchParams(window.location.search);
       const typeParam = params.get('type')?.toUpperCase();
       if (typeParam === 'POLL' || typeParam === 'SURVEY' || typeParam === 'EXAM') {
-        setPollType(typeParam as 'POLL' | 'SURVEY' | 'EXAM');
+        const selectedType = typeParam as 'POLL' | 'SURVEY' | 'EXAM';
+        setPollType(selectedType);
+        if (selectedType === 'POLL') {
+          setIdentifierLabel('Roll Number');
+          setConfirmer1Label('Student Name');
+          setConfirmer2Label('Parent Name');
+        } else if (selectedType === 'SURVEY') {
+          setIdentifierLabel('Respondent ID');
+          setConfirmer1Label('Full Name');
+          setConfirmer2Label('Department');
+        } else if (selectedType === 'EXAM') {
+          setIdentifierLabel('Examinee ID');
+          setConfirmer1Label('Student Name');
+          setConfirmer2Label('Class/Branch');
+        }
       }
     }
   }, []);
@@ -1285,40 +1299,25 @@ export default function CreatePoll() {
                 <p className="text-gray-400 text-sm mt-1">Provide a title and a description to engage your audience.</p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 border-b border-white/5 pb-6">
-                <button
-                  type="button"
-                  onClick={() => { setPollType('POLL'); setIdentifierLabel('Roll Number'); setConfirmer1Label('Student Name'); setConfirmer2Label('Parent Name'); }}
-                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
-                    pollType === 'POLL' ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
-                  }`}
-                >
-                  <span>Standard Poll</span>
-                  <span className="text-[10px] font-normal text-gray-500 mt-1">One question, advanced security</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setPollType('SURVEY'); setIdentifierLabel('Respondent ID'); setConfirmer1Label('Full Name'); setConfirmer2Label('Department'); }}
-                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
-                    pollType === 'SURVEY' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
-                  }`}
-                >
-                  <div>Survey Questionnaire</div>
-                  <span className="text-[10px] font-normal text-gray-500 mt-1">Multiple questions, open responses</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setPollType('EXAM'); setIdentifierLabel('Examinee ID'); setConfirmer1Label('Student Name'); setConfirmer2Label('Class/Branch'); }}
-                  className={`flex-1 py-4 rounded-2xl font-bold transition-all border flex flex-col items-center justify-center ${
-                    pollType === 'EXAM' ? 'border-violet-500 bg-violet-500/10 text-white' : 'border-white/5 text-gray-400 hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Online Proctored Exam</span>
-                    <span className="bg-violet-500 text-white text-[9px] px-1.5 py-0.5 rounded font-mono uppercase animate-pulse">PRO</span>
+              <div className="p-4.5 rounded-2xl border bg-white/2 border-white/5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                    {pollType === 'POLL' && <Vote className="w-5 h-5" />}
+                    {pollType === 'SURVEY' && <FileText className="w-5 h-5" />}
+                    {pollType === 'EXAM' && <Award className="w-5 h-5 text-violet-400" />}
                   </div>
-                  <span className="text-[10px] font-normal text-gray-500 mt-1">Anti-cheat proctoring & AI grading</span>
-                </button>
+                  <div>
+                    <span className="text-[9px] text-gray-500 font-extrabold uppercase tracking-widest block">Creation Mode</span>
+                    <h4 className="text-sm font-bold text-white">
+                      {pollType === 'POLL' && 'Standard Poll'}
+                      {pollType === 'SURVEY' && 'Survey Questionnaire'}
+                      {pollType === 'EXAM' && 'Online Proctored Exam'}
+                    </h4>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest font-mono">
+                  {pollType}
+                </span>
               </div>
 
               <div className="space-y-6">

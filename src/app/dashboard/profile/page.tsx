@@ -711,7 +711,7 @@ export default function ProfilePage() {
                 )}
 
                 {/* Upgrade Button */}
-                {(!user?.planId || user?.plan?.isFree) && (
+                {(!user?.planId || user?.plan?.name?.toLowerCase() === 'free') && (
                   <Link 
                     href="/dashboard/plans"
                     className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 text-center block"

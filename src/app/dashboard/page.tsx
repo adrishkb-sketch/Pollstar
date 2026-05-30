@@ -828,40 +828,91 @@ export default function Dashboard() {
         )}
 
         {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="font-outfit text-2xl font-bold text-white">Your Polls</h2>
-            <p className="text-gray-400 text-sm mt-0.5">Manage and view real-time analytical reports for your sessions.</p>
-          </div>
+        {(() => {
+          const pollsExhausted = quota && quota.total && quota.total.allowedPolls !== -1 && quota.total.usedPolls >= quota.total.allowedPolls;
+          const surveysExhausted = quota && quota.total && quota.total.allowedSurveys !== -1 && quota.total.usedSurveys >= quota.total.allowedSurveys;
+          const examsExhausted = quota && quota.total && quota.total.allowedExams !== -1 && quota.total.usedExams >= quota.total.allowedExams;
+          
+          return (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-outfit text-2xl font-bold text-white">Your Polls</h2>
+                <p className="text-gray-400 text-sm mt-0.5">Manage and view real-time analytical reports for your sessions.</p>
+              </div>
 
-          <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-            <Link
-              id="create-poll-btn"
-              href="/dashboard/create?type=POLL"
-              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs shadow-md shadow-blue-900/20 active:scale-95 flex-1 sm:flex-initial"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Poll</span>
-            </Link>
-            <Link
-              id="create-survey-btn"
-              href="/dashboard/create?type=SURVEY"
-              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-xs shadow-md shadow-violet-900/20 active:scale-95 flex-1 sm:flex-initial"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Survey</span>
-            </Link>
-            <Link
-              id="create-exam-btn"
-              href="/dashboard/create?type=EXAM"
-              className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs shadow-md shadow-rose-900/20 active:scale-95 flex-1 sm:flex-initial"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Exam</span>
-            </Link>
-          </div>
+              <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+                {pollsExhausted ? (
+                  <button
+                    disabled
+                    title="You have exhausted your poll quota. Please buy an add-on or upgrade your plan."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/80 text-gray-500 text-xs border border-white/5 cursor-not-allowed flex-1 sm:flex-initial"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Create Poll</span>
+                    </div>
+                    <span className="text-[8px] text-red-400 font-semibold mt-0.5 uppercase tracking-wide">Quota Exhausted - Buy Add-on</span>
+                  </button>
+                ) : (
+                  <Link
+                    id="create-poll-btn"
+                    href="/dashboard/create?type=POLL"
+                    className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs shadow-md shadow-blue-900/20 active:scale-95 flex-1 sm:flex-initial"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Poll</span>
+                  </Link>
+                )}
 
-        </div>
+                {surveysExhausted ? (
+                  <button
+                    disabled
+                    title="You have exhausted your survey quota. Please buy an add-on or upgrade your plan."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/80 text-gray-500 text-xs border border-white/5 cursor-not-allowed flex-1 sm:flex-initial"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Create Survey</span>
+                    </div>
+                    <span className="text-[8px] text-red-400 font-semibold mt-0.5 uppercase tracking-wide">Quota Exhausted - Buy Add-on</span>
+                  </button>
+                ) : (
+                  <Link
+                    id="create-survey-btn"
+                    href="/dashboard/create?type=SURVEY"
+                    className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-xs shadow-md shadow-violet-900/20 active:scale-95 flex-1 sm:flex-initial"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Survey</span>
+                  </Link>
+                )}
+
+                {examsExhausted ? (
+                  <button
+                    disabled
+                    title="You have exhausted your exam quota. Please buy an add-on or upgrade your plan."
+                    className="px-4 py-2.5 rounded-xl font-semibold flex flex-col items-center justify-center transition-all bg-gray-800/80 text-gray-500 text-xs border border-white/5 cursor-not-allowed flex-1 sm:flex-initial"
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Create Exam</span>
+                    </div>
+                    <span className="text-[8px] text-red-400 font-semibold mt-0.5 uppercase tracking-wide">Quota Exhausted - Buy Add-on</span>
+                  </button>
+                ) : (
+                  <Link
+                    id="create-exam-btn"
+                    href="/dashboard/create?type=EXAM"
+                    className="px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-1.5 transition-all bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs shadow-md shadow-rose-900/20 active:scale-95 flex-1 sm:flex-initial"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Exam</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Search & Filter Bar */}
         <div className="flex flex-col lg:flex-row gap-3">

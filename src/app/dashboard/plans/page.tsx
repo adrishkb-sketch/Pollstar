@@ -602,7 +602,20 @@ export default function PlansPage() {
                   {/* Actions CTA upgraded to Checkout */}
                   <div className="pt-6 mt-6 border-t border-white/5">
                     {(() => {
-                      const isInferior = user?.plan && !user.plan.isFree && (p.isFree || p.name === 'Free' || p.price < user.plan.price) && p.id !== user.plan.id;
+                      const getPlanTier = (name: string, price: number) => {
+                        const n = (name || '').toLowerCase();
+                        if (n === 'free') return 0;
+                        if (n.includes('elite') || n.includes('enterprise')) return 3;
+                        if (n.includes('pro') || n.includes('premium') || n.includes('professional')) return 2;
+                        if (n.includes('standard') || n.includes('starter') || n.includes('basic')) return 1;
+                        return price > 0 ? 1 : 0;
+                      };
+
+                      const userPlanIsFree = !user?.plan || user.plan.name.toLowerCase() === 'free';
+                      const isInferior = user?.plan && !userPlanIsFree && (
+                        p.name.toLowerCase() === 'free' ||
+                        getPlanTier(p.name, p.price) < getPlanTier(user.plan.name, user.plan.price)
+                      ) && p.id !== user.plan.id;
 
                       if (isActivePlan) {
                         if (p.isFree || p.name === 'Free') {
@@ -747,7 +760,7 @@ export default function PlansPage() {
             })}
 
             {activeCategory === 'ADDON' && addonPlans.map((p) => {
-              const hasActiveSub = user?.planId && !user?.plan?.isFree && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
+              const hasActiveSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
 
               return (
                 <div 

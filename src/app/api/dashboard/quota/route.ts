@@ -37,7 +37,7 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const plan = user.plan;
-    const isFreePlan = !plan || plan.isFree;
+    const isFreePlan = !plan || plan.name.toLowerCase() === 'free';
 
     // ── 1. Subscription quota ────────────────────────────────────────────────
     // Determine billing cycle window
