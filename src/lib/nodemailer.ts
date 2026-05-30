@@ -71,20 +71,32 @@ export async function sendPollInvitationEmail(
   email: string,
   pollTitle: string,
   inviteLink: string,
-  description: string
+  description: string,
+  pollType?: string
 ): Promise<boolean> {
-  const subject = `You are invited to vote in "${pollTitle}"`;
+  const isExam = pollType === 'EXAM';
+  const isSurvey = pollType === 'SURVEY';
+  const typeLabel = isExam ? 'Exam' : (isSurvey ? 'Survey' : 'Poll');
+  const actionLabel = isExam ? 'Start Exam' : (isSurvey ? 'Begin Survey' : 'Cast Vote');
+  const accessLabel = isExam ? 'Access Secure Exam' : (isSurvey ? 'Access Secure Survey' : 'Access Secure Poll');
+
+  const subject = isExam 
+    ? `You are invited to take the Exam "${pollTitle}"` 
+    : (isSurvey 
+        ? `You are invited to participate in the Survey "${pollTitle}"`
+        : `You are invited to vote in "${pollTitle}"`);
+
   const html = `
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
-      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px;">Poll Invitation</h2>
-      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 8px;">You have been invited to participate in a secure closed poll:</p>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px;">${typeLabel} Invitation</h2>
+      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 8px;">You have been invited to participate in a secure closed ${typeLabel.toLowerCase()}:</p>
       <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
         <strong style="color: #f3f4f6; font-size: 18px; display: block; margin-bottom: 6px;">${pollTitle}</strong>
         <span style="color: #9ca3af; font-size: 14px;">${description}</span>
       </div>
-      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 24px;">Click the button below to verify your details and cast your vote:</p>
+      <p style="font-size: 16px; line-height: 24px; color: #d1d5db; margin-bottom: 24px;">Click the button below to verify your details and ${actionLabel.toLowerCase()}:</p>
       <div style="text-align: center; margin-bottom: 32px;">
-        <a href="${inviteLink}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">Access Secure Poll</a>
+        <a href="${inviteLink}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">${accessLabel}</a>
       </div>
       <p style="font-size: 12px; color: #4b5563; line-height: 18px;">
         Or copy and paste this link in your browser: <br/>
@@ -108,7 +120,7 @@ export async function sendPollInvitationEmail(
   console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
   console.log(`├────────────────────────────────────────────────────────┤`);
   console.log(`│ To:      ${email.padEnd(46)} │`);
-  console.log(`│ Subject: Invitation to Vote in "${pollTitle.substring(0, 15)}..." │`);
+  console.log(`│ Subject: Invitation to ${actionLabel} in "${pollTitle.substring(0, 15)}..." │`);
   console.log(`│ Link:    ${inviteLink.padEnd(46)} │`);
   console.log(`└────────────────────────────────────────────────────────┘\n`);
 
@@ -191,29 +203,60 @@ export async function sendPollClosedEmail({
   email,
   pollTitle,
   reportUrl,
+  pollType,
 }: {
   email: string;
   pollTitle: string;
   reportUrl: string;
+  pollType?: string;
 }): Promise<boolean> {
-  const subject = `📢 The Poll "${pollTitle}" is now Closed`;
+  const isExam = pollType === 'EXAM';
+  const isSurvey = pollType === 'SURVEY';
+  const typeLabel = isExam ? 'Exam' : (isSurvey ? 'Survey' : 'Poll');
+  
+  const subject = isExam 
+    ? `📢 The Exam "${pollTitle}" has concluded` 
+    : (isSurvey 
+        ? `📢 The Survey "${pollTitle}" is now Closed`
+        : `📢 The Poll "${pollTitle}" is now Closed`);
+
+  const statusBadge = isExam 
+    ? '🔒 Exam Session Concluded' 
+    : (isSurvey ? '🔒 Survey Session Closed' : '🔒 Voting Session Closed');
+
+  const titleText = isExam ? 'Exam Grades Prepared' : 'Official Results Published';
+
+  const descText = isExam 
+    ? `The response window for the exam <strong style="color: #ffffff">"${pollTitle}"</strong> has concluded. The evaluation pipeline is now active.` 
+    : (isSurvey 
+        ? `The participation window for <strong style="color: #ffffff">"${pollTitle}"</strong> has ended.`
+        : `The voting window for <strong style="color: #ffffff">"${pollTitle}"</strong> has ended, and all ballots are officially locked.`);
+
+  const reportDesc = isExam 
+    ? 'Your diagnostic scorecard and performance feedback are ready:' 
+    : 'The official report has been compiled and is ready for analysis:';
+
+  const footerText = isExam 
+    ? 'Pollstar Assessment Platform. Secure, Verifiable, High-Fidelity.' 
+    : 'Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.';
+
   const html = `
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <span style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 0.1em;">🔒 Voting Session Closed</span>
+        <span style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 0.1em;">${statusBadge}</span>
       </div>
-      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Official Results Published</h2>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">${titleText}</h2>
       <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
-        The voting window for <strong style="color: #ffffff">"${pollTitle}"</strong> has ended, and all ballots are officially locked.
+        ${descText}
       </p>
 
       <div style="text-align: center; margin-bottom: 24px; padding: 20px; background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
-        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">The electoral report has been compiled and is ready for analysis:</p>
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">${reportDesc}</p>
         <a href="${reportUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">See & Download Report</a>
       </div>
 
       <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px;">
-        Pollstar Electoral Platform. Secure, Verifiable, High-Fidelity.
+        ${footerText}
       </p>
     </div>
   `;

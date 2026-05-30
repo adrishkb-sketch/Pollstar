@@ -2038,9 +2038,19 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
                 Step 2 of 2: Security & Protocols
               </span>
-              <h2 className="font-outfit text-2xl font-bold text-white">{poll.pollType === 'SURVEY' ? 'Participation & Privacy Details' : 'Electoral Integrity Features'}</h2>
+              <h2 className="font-outfit text-2xl font-bold text-white">
+                {poll.pollType === 'EXAM' 
+                  ? 'Exam Integrity & Security Guidelines' 
+                  : (poll.pollType === 'SURVEY' ? 'Participation & Privacy Details' : 'Electoral Integrity Features')
+                }
+              </h2>
               <p className="text-gray-400 text-xs">
-                {poll.pollType === 'SURVEY' ? 'To maintain data integrity and research quality, this survey session is governed by the following protocols:' : 'To guarantee clean, transparent and fair outcomes, the administrator has locked this session under the following protocols:'}
+                {poll.pollType === 'EXAM' 
+                  ? 'To guarantee clean, transparent, and fair assessment, this exam session is governed by the following strict proctoring and integrity protocols:' 
+                  : (poll.pollType === 'SURVEY' 
+                      ? 'To maintain data integrity and research quality, this survey session is governed by the following protocols:' 
+                      : 'To guarantee clean, transparent and fair outcomes, the administrator has locked this session under the following protocols:')
+                }
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2052,8 +2062,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Response Privacy</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
                       {poll.isAnonymous 
-                        ? (poll.pollType === 'SURVEY' ? 'Your responses will remain fully anonymous.' : 'Your vote won\'t be visible to anyone.') 
-                        : (poll.pollType === 'SURVEY' ? 'Responses will be logged as per creator settings.' : 'Your vote will be visible to everyone based on choices made by the creator.')
+                        ? (poll.pollType === 'EXAM' 
+                            ? 'Your answers will be graded anonymously without disclosing your identity.' 
+                            : (poll.pollType === 'SURVEY' ? 'Your responses will remain fully anonymous.' : 'Your vote won\'t be visible to anyone.')) 
+                        : (poll.pollType === 'EXAM' 
+                            ? 'Your answers will be securely logged and associated with your examinee profile for grading.' 
+                            : (poll.pollType === 'SURVEY' ? 'Responses will be logged as per creator settings.' : 'Your vote will be visible to everyone based on choices made by the creator.'))
                       }
                     </p>
                   </div>
@@ -2067,8 +2081,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Access Scope</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
                       {poll.isOpenVoting 
-                        ? 'Open Ballot. Open for all eligible internet participants.' 
-                        : 'Restricted Roster. Only designated, registered voters can participate.'
+                        ? (poll.pollType === 'EXAM' ? 'Open Exam. Open for all eligible participants to take.' : 'Open Ballot. Open for all eligible internet participants.') 
+                        : (poll.pollType === 'EXAM' ? 'Restricted Roster. Only designated, registered candidates can take this exam.' : 'Restricted Roster. Only designated, registered voters can participate.')
                       }
                     </p>
                   </div>
@@ -2096,7 +2110,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                   <div>
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Session Limit</h4>
                     <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
-                      Time-limited session active: <span className="text-red-400 font-extrabold">{formatTime(getSessionDuration())}</span>. {poll.pollType === 'SURVEY' ? 'Unfinished survey responses automatically expire.' : 'Unfinished ballots automatically expire.'}
+                      Time-limited session active: <span className="text-red-400 font-extrabold">{formatTime(getSessionDuration())}</span>. {
+                        poll.pollType === 'EXAM' 
+                          ? 'Unfinished exam attempts automatically submit and expire.' 
+                          : (poll.pollType === 'SURVEY' ? 'Unfinished survey responses automatically expire.' : 'Unfinished ballots automatically expire.')
+                      }
                     </p>
                   </div>
                 </div>
@@ -2117,7 +2135,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                 onClick={() => setShowIntro(false)}
                 className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-xs flex items-center space-x-2 active:scale-95 animate-pulse-slow"
               >
-                <span>{poll.pollType === 'SURVEY' ? 'Begin Survey' : 'Start Poll'}</span>
+                <span>
+                  {poll.pollType === 'EXAM' 
+                    ? 'Start Exam' 
+                    : (poll.pollType === 'SURVEY' ? 'Begin Survey' : 'Start Poll')
+                  }
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -2281,10 +2304,16 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           </div>
           <div>
             <h4 className="font-outfit font-extrabold uppercase text-xs tracking-widest text-indigo-300">
-              {poll.pollType === 'SURVEY' ? 'Strictly Anonymous Survey' : 'Strictly Anonymous Election'}
+              {poll.pollType === 'EXAM' 
+                ? 'Strictly Anonymous Exam Assessment' 
+                : (poll.pollType === 'SURVEY' ? 'Strictly Anonymous Survey' : 'Strictly Anonymous Election')
+              }
             </h4>
             <p className="text-white text-sm font-extrabold mt-1 leading-relaxed">
-              {poll.pollType === 'SURVEY' ? 'Your responses will remain strictly anonymous.' : "Your vote won't be visible to anyone."}
+              {poll.pollType === 'EXAM' 
+                ? 'Your answers will be graded strictly anonymously without disclosing your identity.' 
+                : (poll.pollType === 'SURVEY' ? 'Your responses will remain strictly anonymous.' : "Your vote won't be visible to anyone.")
+              }
             </p>
           </div>
         </div>

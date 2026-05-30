@@ -590,7 +590,8 @@ export async function POST(req: Request) {
           voter.email,
           title,
           inviteLink,
-          description
+          description,
+          pollType
         ).catch((e) => console.error('Failed to send invite email to:', voter.email, e));
       });
     }

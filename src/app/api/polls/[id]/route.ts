@@ -752,7 +752,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           voter.email,
           poll.title,
           inviteLink,
-          poll.description
+          poll.description,
+          poll.pollType
         ).catch((e) => console.error('Failed to send invite email to:', voter.email, e));
       });
     }
@@ -769,6 +770,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             email: voter.email,
             pollTitle: poll.title,
             reportUrl,
+            pollType: poll.pollType,
           }).catch((e) => console.error('Failed to send poll closed email:', e));
         });
       } else if (poll.votes && poll.votes.length) {
@@ -778,6 +780,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             email: email as string,
             pollTitle: poll.title,
             reportUrl,
+            pollType: poll.pollType,
           }).catch((e) => console.error('Failed to send poll closed email:', e));
         });
       }
