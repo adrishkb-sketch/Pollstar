@@ -602,19 +602,10 @@ export default function PlansPage() {
                   {/* Actions CTA upgraded to Checkout */}
                   <div className="pt-6 mt-6 border-t border-white/5">
                     {(() => {
-                      const getPlanTier = (name: string, price: number) => {
-                        const n = (name || '').toLowerCase();
-                        if (n === 'free') return 0;
-                        if (n.includes('elite') || n.includes('enterprise')) return 3;
-                        if (n.includes('pro') || n.includes('premium') || n.includes('professional')) return 2;
-                        if (n.includes('standard') || n.includes('starter') || n.includes('basic')) return 1;
-                        return price > 0 ? 1 : 0;
-                      };
-
                       const userPlanIsFree = !user?.plan || user.plan.name.toLowerCase() === 'free';
                       const isInferior = user?.plan && !userPlanIsFree && (
                         p.name.toLowerCase() === 'free' ||
-                        getPlanTier(p.name, p.price) < getPlanTier(user.plan.name, user.plan.price)
+                        (p.rank ?? 0) < (user.plan.rank ?? 0)
                       ) && p.id !== user.plan.id;
 
                       if (isActivePlan) {

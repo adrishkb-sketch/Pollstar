@@ -365,6 +365,7 @@ model Plan {
   // Plan validity limits for credit/combo packs
   validityValue   Int?
   validityUnit    String?  // WEEKS, MONTHS
+  rank            Int      @default(0)
 
   users           User[]
   emailDomainMappings EmailDomainMapping[]

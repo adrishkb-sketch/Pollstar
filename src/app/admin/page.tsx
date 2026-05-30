@@ -246,6 +246,7 @@ export default function AdminPortal() {
   const [planMaxExams, setPlanMaxExams] = useState('-1');
   const [planValidityValue, setPlanValidityValue] = useState('');
   const [planValidityUnit, setPlanValidityUnit] = useState('WEEKS');
+  const [planRank, setPlanRank] = useState('0');
   
   // Price slashes & durations pricing states
   const [planOriginalPrice, setPlanOriginalPrice] = useState('0.0');
@@ -1138,6 +1139,7 @@ export default function AdminPortal() {
     setPlanMaxExams('-1');
     setPlanValidityValue('');
     setPlanValidityUnit('WEEKS');
+    setPlanRank('0');
     setPlanOriginalPrice('0.0');
     setPlanOfferEndDate('');
     setPlanDurations({
@@ -1183,6 +1185,7 @@ export default function AdminPortal() {
     setPlanMaxExams(plan.maxExams !== null && plan.maxExams !== undefined ? plan.maxExams.toString() : '-1');
     setPlanValidityValue(plan.validityValue !== null && plan.validityValue !== undefined ? plan.validityValue.toString() : '');
     setPlanValidityUnit(plan.validityUnit || 'WEEKS');
+    setPlanRank((plan.rank !== null && plan.rank !== undefined) ? plan.rank.toString() : '0');
     setPlanOriginalPrice((plan.originalPrice || 0.0).toString());
     setPlanOfferEndDate(plan.offerEndDate ? new Date(plan.offerEndDate).toISOString().substring(0, 16) : '');
     setPlanDurations(plan.durations || {
@@ -1275,6 +1278,7 @@ export default function AdminPortal() {
       durations: planDurations,
       validityValue: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON' && planValidityValue) ? parseInt(planValidityValue) : null,
       validityUnit: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON') ? planValidityUnit : null,
+      rank: parseInt(planRank) || 0,
     };
 
     try {
@@ -2127,6 +2131,10 @@ export default function AdminPortal() {
 
                       {/* Display trial, pack & limits information */}
                       <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span>Superiority Rank:</span>
+                          <strong className="text-yellow-400 font-bold">Rank {p.rank ?? 0}</strong>
+                        </div>
                         <div className="flex items-center justify-between">
                           <span>Subscribed Users:</span>
                           <strong className="text-purple-300 font-bold">{p._count?.users ?? 0} Members</strong>
@@ -4440,8 +4448,8 @@ export default function AdminPortal() {
             )}
 
             <form onSubmit={handleSavePlan} className="space-y-6">
-              {/* Row 1: Name, Plan Type */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 1: Name, Plan Type, Superiority Rank */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Plan Name Label</label>
                   <input
@@ -4468,6 +4476,18 @@ export default function AdminPortal() {
                     <option value="EXAM_PACK">Individual Exams Pack</option>
                     <option value="COMBO_PACK">Combo Feature Pack</option>
                   </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Superiority Rank (1-N)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 1"
+                    value={planRank}
+                    onChange={e => setPlanRank(e.target.value)}
+                    className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
+                  />
                 </div>
               </div>
 

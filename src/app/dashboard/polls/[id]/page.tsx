@@ -9,7 +9,7 @@ import {
   Users, AlertTriangle, Eye, ShieldAlert, BarChart3,
   Brain, TrendingUp, Gauge, Zap, Award, MonitorPlay,
   Unlock, Timer, MessageSquare, Send, Mail,
-  Layers, Filter, PieChart, Hash
+  Layers, Filter, PieChart, Hash, History
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
@@ -68,7 +68,7 @@ export default function PollInsights({ params }: PageProps) {
   const [tickerFlashState, setTickerFlashState] = useState<Record<string, 'UP' | 'DOWN' | null>>({});
 
   // Analytics Inbox & Messaging states
-  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades' | 'collaborators' | 'proctor'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'inbox' | 'grades' | 'collaborators' | 'proctor' | 'edit'>('analytics');
   const [inboxMessages, setInboxMessages] = useState<any[]>([]);
   const [selectedVoter, setSelectedVoter] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
@@ -88,6 +88,20 @@ export default function PollInsights({ params }: PageProps) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [collabError, setCollabError] = useState('');
+
+  // Co-editing, Live presence, logs, and layout states
+  const [collaboratorRole, setCollaboratorRole] = useState<string>('VIEWER');
+  const [activeCollaborators, setActiveCollaborators] = useState<any[]>([]);
+  const [focusedField, setFocusedField] = useState<string>('');
+
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editQuestions, setEditQuestions] = useState<any[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  const [logs, setLogs] = useState<any[]>([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // Exam Grades Panel & Inspector states
   const [gradeInspectorVote, setGradeInspectorVote] = useState<any | null>(null);
@@ -172,7 +186,7 @@ export default function PollInsights({ params }: PageProps) {
   useEffect(() => {
     const fetchPoll = async () => {
       try {
-        const res = await fetch(`/api/polls/${pollId}`);
+        const res = await fetch(`/api/polls/${pollId}?focus=${encodeURIComponent(focusedField)}`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -181,10 +195,17 @@ export default function PollInsights({ params }: PageProps) {
 
         setPoll(data.poll);
         setIsOwner(data.isOwner);
+        setCollaboratorRole(data.collaboratorRole || 'VIEWER');
+        setActiveCollaborators(data.activeCollaborators || []);
         setLiveStats(data.poll.stats || {});
         setLiveTotalVotes(data.poll.totalVotes || 0);
         setLiveVotesList(data.poll.votes || []);
         setVelocityNow(Date.now());
+
+        // Initialize draft form states
+        setEditTitle(data.poll.title || '');
+        setEditDescription(data.poll.description || '');
+        setEditQuestions(data.poll.questions || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -201,20 +222,40 @@ export default function PollInsights({ params }: PageProps) {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/polls/${pollId}`);
+        const res = await fetch(`/api/polls/${pollId}?focus=${encodeURIComponent(focusedField)}`);
         const data = await res.json();
         if (res.ok && data.poll) {
           setPoll((prev: any) => prev ? {
             ...prev,
+            title: data.poll.title,
+            description: data.poll.description,
+            questions: data.poll.questions,
             allowedVoters: data.poll.allowedVoters || prev.allowedVoters,
             settings: data.poll.settings || prev.settings,
             status: data.poll.status,
             totalVotes: data.poll.totalVotes,
           } : data.poll);
+          setCollaboratorRole(data.collaboratorRole || 'VIEWER');
+          setActiveCollaborators(data.activeCollaborators || []);
           setLiveStats(data.poll.stats || {});
           setLiveTotalVotes(data.poll.totalVotes || 0);
           setLiveVotesList(data.poll.votes || []);
           setVelocityNow(Date.now());
+
+          // Live layout sync: update the values if we are a viewer
+          if (data.collaboratorRole === 'VIEWER') {
+            setEditTitle(data.poll.title || '');
+            setEditDescription(data.poll.description || '');
+            setEditQuestions(data.poll.questions || []);
+          } else {
+            // Owner/Editor: only sync fields that we are not actively focused on to prevent cursor jumping
+            if (focusedField !== 'title') setEditTitle(data.poll.title || '');
+            if (focusedField !== 'description') setEditDescription(data.poll.description || '');
+            // Only overwrite questions if we aren't editing them (no focus on questions elements)
+            if (!focusedField.startsWith('questions')) {
+              setEditQuestions(data.poll.questions || []);
+            }
+          }
         }
       } catch (err) {
         console.error('Creator Insights sync error:', err);
@@ -222,7 +263,7 @@ export default function PollInsights({ params }: PageProps) {
     }, 4000); // Refresh every 4 seconds
 
     return () => clearInterval(interval);
-  }, [poll, pollId]);
+  }, [poll, pollId, focusedField]);
 
   // Live Ticker percentage calculation & change detection hook
   useEffect(() => {
@@ -321,6 +362,117 @@ export default function PollInsights({ params }: PageProps) {
     } catch (e: any) {
       alert(e.message);
     }
+  };
+
+  const fetchActivityLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/polls/${pollId}/logs`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch (e) {
+      console.error('Failed to load logs:', e);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    try {
+      const res = await fetch(`/api/polls/${pollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDescription,
+          questions: editQuestions,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save draft layout');
+      }
+      alert('Draft layout saved successfully!');
+      setPoll((prev: any) => ({
+        ...prev,
+        title: data.poll.title,
+        description: data.poll.description,
+        questions: data.poll.questions,
+      }));
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleAddQuestion = () => {
+    const newQ = {
+      id: 'temp_' + Math.random().toString(36).substring(2, 9),
+      questionText: 'New Question',
+      type: 'SINGLE',
+      pageNumber: 1,
+      order: editQuestions.length + 1,
+      options: ['Option 1', 'Option 2'],
+      correctAnswer: '',
+      correctAnswers: [],
+      marks: 1.0,
+      inputConstraint: 'NONE',
+      enableWhiteboard: false,
+    };
+    setEditQuestions([...editQuestions, newQ]);
+  };
+
+  const handleUpdateQuestion = (index: number, fields: any) => {
+    const updated = [...editQuestions];
+    updated[index] = { ...updated[index], ...fields };
+    setEditQuestions(updated);
+  };
+
+  const handleDeleteQuestionLocal = (index: number) => {
+    const updated = editQuestions.filter((_, idx) => idx !== index);
+    const reordered = updated.map((q, idx) => ({ ...q, order: idx + 1 }));
+    setEditQuestions(reordered);
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'UP' | 'DOWN') => {
+    if (direction === 'UP' && index === 0) return;
+    if (direction === 'DOWN' && index === editQuestions.length - 1) return;
+
+    const newIndex = direction === 'UP' ? index - 1 : index + 1;
+    const updated = [...editQuestions];
+    const temp = updated[index];
+    updated[index] = updated[newIndex];
+    updated[newIndex] = temp;
+
+    const reordered = updated.map((q, idx) => ({ ...q, order: idx + 1 }));
+    setEditQuestions(reordered);
+  };
+
+  const handleAddOptionLocal = (qIndex: number) => {
+    const updated = [...editQuestions];
+    const opts = [...(updated[qIndex].options || [])];
+    opts.push(`Option ${opts.length + 1}`);
+    updated[qIndex].options = opts;
+    setEditQuestions(updated);
+  };
+
+  const handleUpdateOptionLocal = (qIndex: number, oIndex: number, text: string) => {
+    const updated = [...editQuestions];
+    const opts = [...(updated[qIndex].options || [])];
+    opts[oIndex] = text;
+    updated[qIndex].options = opts;
+    setEditQuestions(updated);
+  };
+
+  const handleDeleteOptionLocal = (qIndex: number, oIndex: number) => {
+    const updated = [...editQuestions];
+    const opts = (updated[qIndex].options || []).filter((_: any, idx: number) => idx !== oIndex);
+    updated[qIndex].options = opts;
+    setEditQuestions(updated);
   };
 
   const handleDeletePoll = async () => {
@@ -2275,6 +2427,386 @@ export default function PollInsights({ params }: PageProps) {
     );
   };
 
+  const getColorForCollaborator = (email: string) => {
+    const colors = [
+      { border: 'border-purple-500', bg: 'bg-purple-600', text: 'text-purple-100', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.4)]' },
+      { border: 'border-emerald-500', bg: 'bg-emerald-600', text: 'text-emerald-100', glow: 'shadow-[0_0_10px_rgba(16,185,129,0.4)]' },
+      { border: 'border-amber-500', bg: 'bg-amber-600', text: 'text-amber-100', glow: 'shadow-[0_0_10px_rgba(245,158,11,0.4)]' },
+      { border: 'border-pink-500', bg: 'bg-pink-600', text: 'text-pink-100', glow: 'shadow-[0_0_10px_rgba(236,72,153,0.4)]' },
+      { border: 'border-cyan-500', bg: 'bg-cyan-600', text: 'text-cyan-100', glow: 'shadow-[0_0_10px_rgba(6,182,212,0.4)]' },
+    ];
+    let hash = 0;
+    const str = email || 'user@example.com';
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const idx = Math.abs(hash) % colors.length;
+    return colors[idx];
+  };
+
+  const renderEditPanel = () => {
+    const isViewer = collaboratorRole === 'VIEWER';
+
+    return (
+      <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-8 space-y-8 animate-fade-in print:hidden">
+        {/* Header Indicator */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-5 gap-4">
+          <div className="space-y-1">
+            <h3 className="font-outfit text-xl font-extrabold text-white flex items-center gap-2">
+              <span>{isViewer ? '👁️ Session Layout Viewer' : '📝 Interactive Co-Editing Drafting Workspace'}</span>
+            </h3>
+            <p className="text-xs text-gray-400">
+              {isViewer 
+                ? "You have view-only access. The layout will update in real time as other editors commit changes."
+                : "Real-time presence is active. Coordinate edits cleanly with other collaborators."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isViewer ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                Viewer Mode — Live Tracking Active
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={savingDraft}
+                  className="px-5 py-2.5 rounded-xl gradient-btn text-white text-xs font-bold transition-all shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {savingDraft ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Draft Layout...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Save Draft Layout</span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Active Collaborators Presence List */}
+        {activeCollaborators.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-white/2 border border-white/5 rounded-2xl">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Active Collaborators:</span>
+            <div className="flex flex-wrap gap-2">
+              {activeCollaborators.map((collab) => {
+                const colors = getColorForCollaborator(collab.email);
+                return (
+                  <span 
+                    key={collab.userId} 
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold border ${colors.bg} ${colors.text}`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                    {collab.fullName} {collab.focus ? `(editing ${collab.focus})` : ''}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Document Fields */}
+        <div className="space-y-6">
+          {/* Title input container */}
+          {(() => {
+            const path = 'title';
+            const otherCollab = activeCollaborators.find((c) => c.focus === path);
+            const collabStyle = otherCollab ? getColorForCollaborator(otherCollab.email) : null;
+            return (
+              <div className="space-y-1.5 relative">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Session Title</label>
+                <div className={`rounded-xl transition-all duration-300 ${collabStyle ? `border-2 ${collabStyle.border} ${collabStyle.glow} p-0.5` : 'border border-white/10'}`}>
+                  <input
+                    type="text"
+                    disabled={isViewer}
+                    placeholder="Enter session title..."
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onFocus={() => !isViewer && setFocusedField(path)}
+                    onBlur={() => !isViewer && setFocusedField('')}
+                    className="w-full bg-[#030712]/50 rounded-lg px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500 disabled:opacity-75 disabled:cursor-not-allowed"
+                  />
+                  {collabStyle && (
+                    <span className={`absolute -top-3.5 right-3 text-[9px] px-1.5 py-0.5 rounded font-extrabold shadow ${collabStyle.bg} ${collabStyle.text} animate-pulse z-20`}>
+                      ✏️ {otherCollab.fullName} is editing title...
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Description input container */}
+          {(() => {
+            const path = 'description';
+            const otherCollab = activeCollaborators.find((c) => c.focus === path);
+            const collabStyle = otherCollab ? getColorForCollaborator(otherCollab.email) : null;
+            return (
+              <div className="space-y-1.5 relative">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Session Description</label>
+                <div className={`rounded-xl transition-all duration-300 ${collabStyle ? `border-2 ${collabStyle.border} ${collabStyle.glow} p-0.5` : 'border border-white/10'}`}>
+                  <textarea
+                    rows={3}
+                    disabled={isViewer}
+                    placeholder="Enter description/guidelines..."
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    onFocus={() => !isViewer && setFocusedField(path)}
+                    onBlur={() => !isViewer && setFocusedField('')}
+                    className="w-full bg-[#030712]/50 rounded-lg px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500 disabled:opacity-75 disabled:cursor-not-allowed resize-none"
+                  />
+                  {collabStyle && (
+                    <span className={`absolute -top-3.5 right-3 text-[9px] px-1.5 py-0.5 rounded font-extrabold shadow ${collabStyle.bg} ${collabStyle.text} animate-pulse z-20`}>
+                      ✏️ {otherCollab.fullName} is editing description...
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Questions Manager */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-t border-white/5 pt-6">
+            <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Questions & Pages Layout</h4>
+            {!isViewer && (
+              <button
+                type="button"
+                onClick={handleAddQuestion}
+                className="px-3.5 py-1.5 rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <span>➕ Add Question</span>
+              </button>
+            )}
+          </div>
+
+          {editQuestions.length === 0 ? (
+            <div className="p-8 text-center bg-white/2 border border-white/5 rounded-2xl space-y-2">
+              <p className="text-gray-400 text-xs font-bold">No questions created yet</p>
+              <p className="text-[10px] text-gray-500">Create a question using the button above to design this session layout.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {editQuestions.map((q, qIdx) => {
+                const qTextPath = `questions.${qIdx}.questionText`;
+                const otherQCollab = activeCollaborators.find((c) => c.focus === qTextPath);
+                const qCollabStyle = otherQCollab ? getColorForCollaborator(otherQCollab.email) : null;
+
+                return (
+                  <div 
+                    key={q.id || qIdx}
+                    className="p-5 rounded-2xl bg-white/2 border border-white/5 hover:border-white/10 transition-all space-y-4 relative animate-slide-in"
+                  >
+                    {/* Question Card Header */}
+                    <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-500/25 border border-indigo-500/35 text-indigo-300 text-[10px] font-extrabold flex items-center justify-center">
+                          Q{qIdx + 1}
+                        </span>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-white/5 border border-white/5 text-gray-400 uppercase">
+                          {q.type}
+                        </span>
+                      </div>
+
+                      {!isViewer && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveQuestion(qIdx, 'UP')}
+                            disabled={qIdx === 0}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move Question Up"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveQuestion(qIdx, 'DOWN')}
+                            disabled={qIdx === editQuestions.length - 1}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move Question Down"
+                          >
+                            ▼
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuestionLocal(qIdx)}
+                            className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 transition-all"
+                            title="Delete Question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Question Editing Fields Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      {/* Question Text */}
+                      <div className="md:col-span-8 space-y-1.5 relative">
+                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500">Question Text</label>
+                        <div className={`rounded-xl transition-all duration-300 ${qCollabStyle ? `border-2 ${qCollabStyle.border} ${qCollabStyle.glow} p-0.5` : 'border border-white/10'}`}>
+                          <input
+                            type="text"
+                            disabled={isViewer}
+                            placeholder="Enter the question text..."
+                            value={q.questionText || ''}
+                            onChange={(e) => handleUpdateQuestion(qIdx, { questionText: e.target.value })}
+                            onFocus={() => !isViewer && setFocusedField(qTextPath)}
+                            onBlur={() => !isViewer && setFocusedField('')}
+                            className="w-full bg-[#030712]/50 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 outline-none focus:border-indigo-500 disabled:opacity-75 disabled:cursor-not-allowed"
+                          />
+                          {qCollabStyle && (
+                            <span className={`absolute -top-3.5 right-3 text-[8px] px-1 py-0.5 rounded font-extrabold shadow ${qCollabStyle.bg} ${qCollabStyle.text} animate-pulse z-20`}>
+                              ✏️ {otherQCollab.fullName} is editing...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Question Type */}
+                      <div className="md:col-span-4 space-y-1.5">
+                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500">Question Type</label>
+                        <select
+                          disabled={isViewer}
+                          value={q.type || 'SINGLE'}
+                          onChange={(e) => handleUpdateQuestion(qIdx, { type: e.target.value })}
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-semibold disabled:opacity-75"
+                        >
+                          <option value="SINGLE">Single Choice MCQ</option>
+                          <option value="MULTIPLE_CHOICE">Multiple Choice (Select Multiple)</option>
+                          <option value="RANKED">Ranked Choice / Borda Count</option>
+                          <option value="KNOCKOUT">Knockout Tournament Bracket</option>
+                          <option value="SHORT_TEXT">Short Text Answer</option>
+                          <option value="LONG_TEXT">Long Text Essay</option>
+                          <option value="RATING">Rating Slider/Stars</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Page Number */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500">Page Number</label>
+                        <input
+                          type="number"
+                          min="1"
+                          disabled={isViewer}
+                          value={q.pageNumber || 1}
+                          onChange={(e) => handleUpdateQuestion(qIdx, { pageNumber: parseInt(e.target.value) || 1 })}
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 disabled:opacity-75"
+                        />
+                      </div>
+
+                      {/* Marks */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500">Marks / Weight</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          disabled={isViewer}
+                          value={q.marks || 0}
+                          onChange={(e) => handleUpdateQuestion(qIdx, { marks: parseFloat(e.target.value) || 0.0 })}
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 disabled:opacity-75"
+                        />
+                      </div>
+
+                      {/* Input Constraint */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500">Input Constraint</label>
+                        <select
+                          disabled={isViewer}
+                          value={q.inputConstraint || 'NONE'}
+                          onChange={(e) => handleUpdateQuestion(qIdx, { inputConstraint: e.target.value })}
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-semibold disabled:opacity-75"
+                        >
+                          <option value="NONE">None</option>
+                          <option value="NUMBERS">Numbers Only</option>
+                          <option value="CHARACTERS">Characters Only</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* MCQ Options Editor block (Only rendered for Choice based questions) */}
+                    {['SINGLE', 'MULTIPLE_CHOICE', 'RANKED', 'KNOCKOUT'].includes(q.type) && (
+                      <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400">Options Editor</span>
+                          {!isViewer && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddOptionLocal(qIdx)}
+                              className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
+                            >
+                              ➕ Add Option
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          {(q.options || []).map((opt: any, oIdx: number) => {
+                            const optText = typeof opt === 'string' ? opt : (opt.text || '');
+                            const optPath = `questions.${qIdx}.options.${oIdx}`;
+                            const otherOptCollab = activeCollaborators.find((c) => c.focus === optPath);
+                            const optCollabStyle = otherOptCollab ? getColorForCollaborator(otherOptCollab.email) : null;
+
+                            return (
+                              <div key={oIdx} className="flex items-center gap-2 relative">
+                                <span className="text-[9px] font-mono text-gray-500 font-extrabold shrink-0">#{oIdx + 1}</span>
+                                <div className={`flex-1 rounded-xl transition-all duration-300 ${optCollabStyle ? `border-2 ${optCollabStyle.border} ${optCollabStyle.glow} p-0.5` : 'border border-white/5'}`}>
+                                  <input
+                                    type="text"
+                                    disabled={isViewer}
+                                    value={optText}
+                                    onChange={(e) => handleUpdateOptionLocal(qIdx, oIdx, e.target.value)}
+                                    onFocus={() => !isViewer && setFocusedField(optPath)}
+                                    onBlur={() => !isViewer && setFocusedField('')}
+                                    className="w-full bg-[#030712]/40 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-700 outline-none focus:border-indigo-500 disabled:opacity-75 disabled:cursor-not-allowed"
+                                  />
+                                  {optCollabStyle && (
+                                    <span className={`absolute -top-3.5 right-12 text-[7px] px-1 py-0.5 rounded font-extrabold shadow ${optCollabStyle.bg} ${optCollabStyle.text} animate-pulse z-20`}>
+                                      ✏️ {otherOptCollab.fullName} is editing...
+                                    </span>
+                                  )}
+                                </div>
+
+                                {!isViewer && (q.options || []).length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteOptionLocal(qIdx, oIdx)}
+                                    className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 transition-all shrink-0"
+                                    title="Delete Option"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 space-y-8 print:p-0 print:m-0">
       
@@ -2295,6 +2827,16 @@ export default function PollInsights({ params }: PageProps) {
         </Link>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              fetchActivityLogs();
+              setShowLogsModal(true);
+            }}
+            className="px-4 py-2.5 rounded-xl border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 hover:text-purple-300 text-xs font-semibold transition-all flex items-center space-x-2"
+          >
+            <History className="w-4 h-4" />
+            <span>📜 Activity Logs</span>
+          </button>
           <Link
             href={`/dashboard/polls/${poll.id}/present`}
             target="_blank"
@@ -2427,6 +2969,17 @@ export default function PollInsights({ params }: PageProps) {
         >
           <span>👥 Team Collaboration</span>
           {activeTab === 'collaborators' && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('edit')}
+          className={`pb-4 text-sm font-bold transition-all relative flex items-center space-x-1.5 ${
+            activeTab === 'edit' ? 'text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <span>{collaboratorRole === 'VIEWER' ? '👁️ View Pages & Layout' : '📝 Edit Pages & Layout'}</span>
+          {activeTab === 'edit' && (
             <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
           )}
         </button>
@@ -2593,6 +3146,8 @@ export default function PollInsights({ params }: PageProps) {
         renderCollaboratorsPanel()
       ) : activeTab === 'proctor' ? (
         renderProctorPanel()
+      ) : activeTab === 'edit' ? (
+        renderEditPanel()
       ) : (
         <>
           {/* Wall Street Live Ticker */}
@@ -3695,6 +4250,85 @@ export default function PollInsights({ params }: PageProps) {
         )}
       </div>
         </>
+      )}
+
+      {/* Activity Logs Modal */}
+      {showLogsModal && (
+        <div className="fixed inset-0 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="glass-card w-full max-w-2xl rounded-3xl border border-white/10 bg-[#080d1a] p-6 space-y-6 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center space-x-2.5">
+                <History className="w-5 h-5 text-purple-400" />
+                <h3 className="font-outfit text-lg font-bold text-white">Collaborator Activity Log</h3>
+              </div>
+              <button
+                onClick={() => setShowLogsModal(false)}
+                className="text-gray-400 hover:text-white text-lg font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {logsLoading ? (
+              <div className="flex-1 flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center space-y-2">
+                <p className="text-gray-400 text-sm font-bold">No changes logged yet</p>
+                <p className="text-xs text-gray-500">Every change to draft layouts and settings is tracked and will appear here.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-3.5 pr-2 no-scrollbar">
+                {logs.map((log) => {
+                  const colors = getColorForCollaborator(log.admin?.email || 'admin@pollstar.com');
+                  return (
+                    <div 
+                      key={log.id} 
+                      className="p-4 rounded-2xl bg-white/2 border border-white/5 flex gap-3.5 items-start animate-slide-in hover:border-white/10 transition-all"
+                    >
+                      <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold ${colors.bg} ${colors.text} shadow`}>
+                        {(log.admin?.fullName || log.admin?.email || 'A')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-white truncate">
+                            {log.admin?.fullName || log.admin?.email || 'Administrator'}
+                          </span>
+                          <span className="text-[9px] text-gray-500 font-medium shrink-0">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-300 font-medium leading-relaxed">
+                          {log.details}
+                        </p>
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-gray-400 uppercase tracking-widest">
+                            {log.action}
+                          </span>
+                          {log.admin?.role && (
+                            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
+                              {log.admin.role}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="border-t border-white/5 pt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLogsModal(false)}
+                className="px-4.5 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* customized printing overrides style */}

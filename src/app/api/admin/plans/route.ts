@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       hasFreeTrial, freeTrialDays, freeTrialFeatures, pollSubtypes,
       isActive, features, maxPolls, maxSurveys, maxExams,
       originalPrice, offerEndDate, durations,
-      validityValue, validityUnit
+      validityValue, validityUnit, rank
     } = body;
 
     if (!name || !features) {
@@ -101,6 +101,7 @@ export async function POST(req: Request) {
         durations: durations || null,
         validityValue: validityValue ? parseInt(validityValue) : null,
         validityUnit: validityUnit || null,
+        rank: rank ? parseInt(rank) : 0,
       }
     });
 
@@ -227,6 +228,9 @@ export async function PATCH(req: Request) {
     }
     if (updateFields.validityUnit !== undefined) {
       data.validityUnit = updateFields.validityUnit || null;
+    }
+    if (updateFields.rank !== undefined) {
+      data.rank = parseInt(updateFields.rank) || 0;
     }
 
     const updatedPlan = await prisma.plan.update({

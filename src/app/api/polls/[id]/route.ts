@@ -214,8 +214,66 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
               }))
             : undefined),
     };
+    // Parse focus from query parameters for presence tracking
+    const { searchParams } = new URL(req.url);
+    const focusField = searchParams.get('focus') || '';
 
-    return NextResponse.json({ success: true, poll: cleanedPoll, isOwner: isCreatorOrAdmin });
+    if (!(global as any).pollPresence) {
+      (global as any).pollPresence = {};
+    }
+
+    if (user) {
+      const pollPres = (global as any).pollPresence;
+      if (!pollPres[pollId]) {
+        pollPres[pollId] = {};
+      }
+      pollPres[pollId][user.id] = {
+        fullName: user.fullName || user.email.split('@')[0],
+        email: user.email,
+        focus: focusField,
+        timestamp: Date.now(),
+      };
+    }
+
+    const activeCollaborators: any[] = [];
+    const pollPres = (global as any).pollPresence;
+    if (pollPres && pollPres[pollId]) {
+      const now = Date.now();
+      Object.keys(pollPres[pollId]).forEach((uid) => {
+        const entry = pollPres[pollId][uid];
+        if (now - entry.timestamp > 10000) {
+          delete pollPres[pollId][uid];
+        } else if (!user || uid !== user.id) {
+          activeCollaborators.push({
+            userId: uid,
+            fullName: entry.fullName,
+            email: entry.email,
+            focus: entry.focus,
+          });
+        }
+      });
+    }
+
+    let collaboratorRole = 'VIEWER';
+    if (user) {
+      if (poll.creatorId === user.id || user.role === 'ADMIN') {
+        collaboratorRole = 'OWNER';
+      } else {
+        const collab = poll.collaborators.find((c: any) => c.userId === user.id);
+        if (collab) {
+          collaboratorRole = collab.role === 'CO_EDITOR' || collab.role === 'EDITOR' ? 'EDITOR' : 'VIEWER';
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      poll: cleanedPoll,
+      isOwner: isCreatorOrAdmin,
+      isCollaborator: !!isCollaborator,
+      collaboratorRole,
+      activeCollaborators
+    });
   } catch (error: any) {
     console.error('Fetch Poll API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -356,7 +414,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       // White label custom branding settings
       enableCustomBranding, customLogoUrl, customBrandingText,
       // Custom theme and save/resume fields
-      customTheme, enableSaveAndResumeLater, studentWhiteboardDriveUrl
+      customTheme, enableSaveAndResumeLater, studentWhiteboardDriveUrl,
+      questions
     } = await req.json();
 
     const updateData: any = {};
@@ -521,8 +580,47 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
       }
 
-      // 2. Update Question Text
-      if (questionText) {
+      // 2. Rewrite entire questions and options if sent
+      if (questions && Array.isArray(questions)) {
+        // Delete all existing questions for this poll (cascade deletes options too!)
+        await tx.question.deleteMany({
+          where: { pollId: pollId }
+        });
+
+        // Recreate them from the array
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          const createdQ = await tx.question.create({
+            data: {
+              pollId: pollId,
+              questionText: q.questionText || '',
+              type: q.type || 'SINGLE',
+              pageNumber: q.pageNumber || 1,
+              order: q.order || (i + 1),
+              marks: q.marks !== undefined ? parseFloat(String(q.marks)) : 0.0,
+              inputConstraint: q.inputConstraint || 'NONE',
+              enableWhiteboard: !!q.enableWhiteboard,
+              correctAnswer: q.correctAnswer || null,
+              correctAnswers: q.correctAnswers || null,
+              logicRules: q.logicRules || null,
+            }
+          });
+
+          // Create options for this question if options are specified
+          if (q.options && Array.isArray(q.options)) {
+            for (const opt of q.options) {
+              const optText = typeof opt === 'string' ? opt : (opt.text || '');
+              await tx.option.create({
+                data: {
+                  questionId: createdQ.id,
+                  text: optText,
+                }
+              });
+            }
+          }
+        }
+      } else if (questionText) {
+        // Legacy fallback
         const question = await tx.question.findFirst({
           where: { pollId },
         });
@@ -532,7 +630,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: { questionText },
           });
 
-          // 3. Update existing option labels
           if (options && Array.isArray(options)) {
             for (const opt of options) {
               if (opt.id && opt.text) {
@@ -544,6 +641,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
           }
         }
+      }
+
+      // Generate audit activity log entry inside the transaction
+      const changesList: string[] = [];
+      if (title && title !== poll.title) {
+        changesList.push(`Title changed from "${poll.title}" to "${title}"`);
+      }
+      if (description && description !== poll.description) {
+        changesList.push(`Description updated`);
+      }
+      if (questions && Array.isArray(questions)) {
+        changesList.push(`Updated questions layout (total ${questions.length} questions)`);
+      }
+      if (status && status !== poll.status) {
+        changesList.push(`Status updated from ${poll.status} to ${status}`);
+      }
+
+      if (changesList.length > 0) {
+        await tx.auditLog.create({
+          data: {
+            action: 'COEDIT_UPDATE',
+            adminId: user.id,
+            pollId: pollId,
+            details: changesList.join('; '),
+          }
+        });
       }
 
       return pollObj;
