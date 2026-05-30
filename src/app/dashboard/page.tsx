@@ -89,7 +89,15 @@ export default function Dashboard() {
 
     const loadDashboard = async () => {
       try {
-        const userRes = await fetch('/api/auth/me');
+        // Fire all independent requests in parallel — massive load time reduction
+        const [userRes, pollsRes, noticesRes, quotaRes] = await Promise.all([
+          fetch('/api/auth/me'),
+          fetch('/api/polls'),
+          fetch('/api/notices'),
+          fetch('/api/dashboard/quota'),
+        ]);
+
+        // Handle auth failure first
         if (userRes.status === 503) {
           const errData = await userRes.json();
           if (errData.maintenance) {
@@ -102,40 +110,31 @@ export default function Dashboard() {
           router.push('/login');
           return;
         }
-        const userData = await userRes.json();
+
+        // Parse all responses in parallel
+        const [userData, pollsData, noticesData, quotaData] = await Promise.all([
+          userRes.json(),
+          pollsRes.ok ? pollsRes.json() : Promise.resolve({ polls: [] }),
+          noticesRes.ok ? noticesRes.json() : Promise.resolve({ notices: [] }),
+          quotaRes.ok ? quotaRes.json() : Promise.resolve(null),
+        ]);
+
         setUser(userData.user);
-
-        const pollsRes = await fetch('/api/polls');
-        if (pollsRes.ok) {
-          const pollsData = await pollsRes.json();
-          setPolls(pollsData.polls || []);
+        setPolls(pollsData.polls || []);
+        setNotices(noticesData.notices || []);
+        if (quotaData) {
+          setQuota(quotaData);
+          setDeletedItems(quotaData.deletedItems || []);
         }
-
-        const noticesRes = await fetch('/api/notices');
-        if (noticesRes.ok) {
-          const noticesData = await noticesRes.json();
-          setNotices(noticesData.notices || []);
-        }
-
-        // Load quota data
-        try {
-          const quotaRes = await fetch('/api/dashboard/quota');
-          if (quotaRes.ok) {
-            const qd = await quotaRes.json();
-            setQuota(qd);
-            setDeletedItems(qd.deletedItems || []);
-          }
-        } catch (e) {
-          console.error('Quota fetch error:', e);
-        } finally {
-          setQuotaLoading(false);
-        }
+        setQuotaLoading(false);
       } catch (err) {
         setError('Failed to load dashboard data');
+        setQuotaLoading(false);
       } finally {
         setLoading(false);
       }
     };
+
 
     loadDashboard();
   }, []);

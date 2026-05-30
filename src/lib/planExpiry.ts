@@ -4,6 +4,8 @@
  * and auto-revert them to the default free plan if so.
  */
 import prisma from '@/lib/prisma';
+import { getCache, setCache } from '@/lib/serverCache';
+
 
 /**
  * Computes the expiry date for a newly purchased plan based on billing cycle.
@@ -58,10 +60,9 @@ export function getBillingCycleSavingsLabel(cycle: string, monthlyPrice: number,
 
 /**
  * Checks if a user's plan has expired and reverts to free if needed.
- * Should be called on authenticated API endpoints.
- * Returns the updated user object (or unchanged if no expiry happened).
+ * Returns true if a plan revert happened (caller should re-fetch user), false otherwise.
  */
-export async function checkAndExpirePlan(userId: string): Promise<void> {
+export async function checkAndExpirePlan(userId: string): Promise<boolean> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -74,13 +75,12 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
       }
     });
 
-    if (!user) return;
+    if (!user) return false;
 
     const now = new Date();
 
     // Check if domain plan has expired
     if (user.domainPlanExpiry && user.domainPlanExpiry < now) {
-      // Revert domain-assigned plan to free
       const freePlan = await prisma.plan.findFirst({ where: { name: 'Free' } });
       await prisma.user.update({
         where: { id: userId },
@@ -92,11 +92,11 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
           isLifetimePlan: false,
         }
       });
-      return;
+      return true;
     }
 
     // Skip expiry check for lifetime plans or free users (no planExpiresAt)
-    if (!user.planId || user.isLifetimePlan || !user.planExpiresAt) return;
+    if (!user.planId || user.isLifetimePlan || !user.planExpiresAt) return false;
 
     // Check if subscription has expired
     if (user.planExpiresAt < now) {
@@ -110,12 +110,18 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
           isLifetimePlan: false,
         }
       });
+      return true;
     }
+
+    return false;
   } catch (err) {
-    // Non-fatal — log and continue
     console.error('[planExpiry] checkAndExpirePlan error:', err);
+    return false;
   }
 }
+
+
+
 
 /**
  * Scans all plans in the database to see if any active base-level or duration-specific
@@ -123,9 +129,16 @@ export async function checkAndExpirePlan(userId: string): Promise<void> {
  * reverts its price to originalPrice and clears the originalPrice and offerEndDate.
  */
 export async function checkAndCleanExpiredPlanOffers(): Promise<void> {
+  // Throttle: run at most once every 5 minutes server-wide
+  const CACHE_KEY = 'plan_offer_cleanup_ran';
+  const TTL_MS = 5 * 60 * 1000; // 5 minutes
+  if (getCache(CACHE_KEY)) return;
+  setCache(CACHE_KEY, true, TTL_MS);
+
   try {
     const plans = await prisma.plan.findMany();
     const now = new Date();
+
 
     for (const plan of plans) {
       let changed = false;

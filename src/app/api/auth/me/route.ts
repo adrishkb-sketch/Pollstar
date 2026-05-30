@@ -3,6 +3,83 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken, generateAccessToken } from '@/lib/jwt';
 import { checkAndExpirePlan, checkAndCleanExpiredPlanOffers } from '@/lib/planExpiry';
+import { getCache, setCache } from '@/lib/serverCache';
+
+const FREE_PLAN_FEATURES = {
+  openPublicPolls: true,
+  realTimeLiveResults: true,
+  singleChoiceMultiSelect: true,
+  multipleQuestionTypes: true,
+  anonymousResponses: true,
+  mcqSingleCorrect: true,
+  trueOrFalse: true,
+  premiumDarkMode: true,
+};
+
+/**
+ * Returns (or creates) the Free plan, cached for 10 minutes.
+ * Never runs an UPDATE on every request — features only sync once per cache TTL.
+ */
+async function getOrCreateFreePlan() {
+  const CACHE_KEY = 'free_plan';
+  const cached = getCache<{ id: string; name: string }>(CACHE_KEY);
+  if (cached) return cached;
+
+  let freePlan = await prisma.plan.findUnique({ where: { name: 'Free' } });
+  if (!freePlan) {
+    freePlan = await prisma.plan.create({
+      data: {
+        name: 'Free',
+        description: 'Our standard free tier with access to all basic features.',
+        price: 0.0,
+        isFree: true,
+        billingCycle: 'MONTHLY',
+        features: FREE_PLAN_FEATURES,
+      },
+    });
+  }
+  setCache(CACHE_KEY, { id: freePlan.id, name: freePlan.name }, 10 * 60 * 1000); // 10 min
+  return freePlan;
+}
+
+/**
+ * Returns email domain mappings, cached for 10 minutes.
+ * These almost never change.
+ */
+async function getEmailDomainMappings() {
+  const CACHE_KEY = 'email_domain_mappings';
+  const cached = getCache<any[]>(CACHE_KEY);
+  if (cached) return cached;
+  const mappings = await prisma.emailDomainMapping.findMany({ include: { plan: true } });
+  setCache(CACHE_KEY, mappings, 10 * 60 * 1000);
+  return mappings;
+}
+
+/**
+ * Returns maintenance mode status, cached for 30 seconds.
+ */
+async function getMaintenanceMode(): Promise<boolean> {
+  const CACHE_KEY = 'maintenance_mode';
+  const cached = getCache<boolean>(CACHE_KEY);
+  if (cached !== null) return cached;
+  const config = await prisma.siteConfig.findUnique({ where: { key: 'maintenance_mode_enabled' } });
+  const isOn = config?.value === 'true';
+  setCache(CACHE_KEY, isOn, 30 * 1000); // 30 seconds
+  return isOn;
+}
+
+/**
+ * Returns global display currency, cached for 10 minutes.
+ */
+async function getGlobalDisplayCurrency(): Promise<string> {
+  const CACHE_KEY = 'global_display_currency';
+  const cached = getCache<string>(CACHE_KEY);
+  if (cached) return cached;
+  const config = await prisma.siteConfig.findUnique({ where: { key: 'global_display_currency' } });
+  const currency = config?.value || 'USD';
+  setCache(CACHE_KEY, currency, 10 * 60 * 1000);
+  return currency;
+}
 
 export async function GET() {
   try {
@@ -13,224 +90,161 @@ export async function GET() {
     let payload = accessToken ? verifyAccessToken(accessToken) : null;
     let newAccessToken: string | null = null;
 
-    // Check refresh token fallback if access token is invalid
     if (!payload && refreshToken) {
       const refreshPayload = verifyRefreshToken(refreshToken);
       if (refreshPayload) {
-        payload = {
-          userId: refreshPayload.userId,
-          email: refreshPayload.email,
-          role: refreshPayload.role,
-        };
+        payload = { userId: refreshPayload.userId, email: refreshPayload.email, role: refreshPayload.role };
         newAccessToken = generateAccessToken(payload);
       }
     }
 
     if (!payload) {
-      return NextResponse.json(
-        { error: 'Unauthorized session' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
     }
 
-    // Clean up any expired offers first (non-fatal)
-    await checkAndCleanExpiredPlanOffers();
+    // ── Parallelize all independent startup work ─────────────────────────────
+    const [user, freePlan, maintenanceOn, globalDisplayCurrency, mappings] = await Promise.all([
+      prisma.user.findUnique({ where: { id: payload.userId }, include: { plan: true } }),
+      getOrCreateFreePlan(),
+      getMaintenanceMode(),
+      getGlobalDisplayCurrency(),
+      getEmailDomainMappings(),
+      checkAndCleanExpiredPlanOffers(), // throttled to run at most once/5 min
+    ]).then(results => results); // .then() just for clarity; returns the same array
 
-    // Ensure default plan exists
-    let freePlan = await prisma.plan.findUnique({
-      where: { name: 'Free' }
-    });
+    let currentUser = user;
 
-    const basicFreeFeatures = {
-      openPublicPolls: true,
-      realTimeLiveResults: true,
-      singleChoiceMultiSelect: true,
-      multipleQuestionTypes: true,
-      anonymousResponses: true,
-      mcqSingleCorrect: true,
-      trueOrFalse: true,
-      premiumDarkMode: true
-    };
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
 
-    if (!freePlan) {
-      freePlan = await prisma.plan.create({
-        data: {
-          name: 'Free',
-          description: 'Our standard free tier with access to all basic features.',
-          price: 0.0,
-          billingCycle: 'MONTHLY',
-          features: basicFreeFeatures
-        }
+    // ── Plan expiry check (only runs actual DB write if plan is expired) ──────
+    const planExpired = await checkAndExpirePlan(currentUser.id);
+
+    // Re-fetch user only if something changed (plan expiry or missing data)
+    const needsRefetch = planExpired || !currentUser.referralCode || !currentUser.planId ||
+      (!currentUser.planId && !currentUser.plan);
+
+    if (needsRefetch) {
+      const refreshedUser = await prisma.user.findUnique({
+        where: { id: currentUser.id },
+        include: { plan: true },
       });
-    } else {
-      // Force update Free plan features to the new basic set to align everything
-      freePlan = await prisma.plan.update({
-        where: { id: freePlan.id },
-        data: {
-          features: basicFreeFeatures,
-          description: 'Our standard free tier with access to all basic features.'
-        }
-      });
+      if (refreshedUser) currentUser = refreshedUser;
     }
 
-    // Retrieve fresh user info from the database
-    let user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      include: {
-        plan: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check and auto-revert expired plans (non-fatal)
-    await checkAndExpirePlan(user.id);
-
-    // Re-fetch user after potential plan expiry revert
-    user = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { plan: true },
-    }) || user;
-
-    // Auto-heal missing referral code
-    if (!user.referralCode) {
+    // ── Auto-heal missing referral code ──────────────────────────────────────
+    if (!currentUser.referralCode) {
       const uniqueReferralCode = 'ref_' + Math.random().toString(36).substring(2, 9);
-      user = await prisma.user.update({
-        where: { id: user.id },
+      currentUser = await prisma.user.update({
+        where: { id: currentUser.id },
         data: { referralCode: uniqueReferralCode },
-        include: { plan: true }
-      });
+        include: { plan: true },
+      }) || currentUser;
     }
 
-    // Auto-upgrade if email matches whitelisted domain mapping
-    const mappings = await prisma.emailDomainMapping.findMany({
-      include: { plan: true }
-    });
+    // ── Auto-upgrade if email matches whitelisted domain ─────────────────────
+    if (!currentUser.planId || currentUser.plan?.name === 'Free') {
+      let autoUpgradePlan = null;
+      let matchingMapping: any = null;
+      for (const mapping of mappings) {
+        const domainSuffix = mapping.domain.startsWith('@') ? mapping.domain : `@${mapping.domain}`;
+        if (currentUser.email.toLowerCase().endsWith(domainSuffix.toLowerCase())) {
+          autoUpgradePlan = mapping.plan;
+          matchingMapping = mapping;
+          break;
+        }
+      }
 
-    let autoUpgradePlan = null;
-    for (const mapping of mappings) {
-      const domainSuffix = mapping.domain.startsWith('@') ? mapping.domain : `@${mapping.domain}`;
-      if (user.email.toLowerCase().endsWith(domainSuffix.toLowerCase())) {
-        autoUpgradePlan = mapping.plan;
-        break;
+      if (autoUpgradePlan && currentUser.planId !== autoUpgradePlan.id) {
+        const domainExpiry = matchingMapping?.durationMonths
+          ? new Date(Date.now() + matchingMapping.durationMonths * 30 * 24 * 60 * 60 * 1000)
+          : null;
+        currentUser = await prisma.user.update({
+          where: { id: currentUser.id },
+          data: {
+            planId: autoUpgradePlan.id,
+            domainPlanExpiry: domainExpiry,
+            planBillingCycle: domainExpiry ? 'MONTHLY' : 'LIFETIME',
+            isLifetimePlan: !domainExpiry,
+          },
+          include: { plan: true },
+        });
       }
     }
 
-    if (autoUpgradePlan && (!user.planId || user.plan?.name === 'Free') && user.planId !== autoUpgradePlan.id) {
-      // Compute domain plan expiry if durationMonths is set on the mapping
-      const matchingMapping = mappings.find(m => {
-        const ds = m.domain.startsWith('@') ? m.domain : `@${m.domain}`;
-        return user!.email.toLowerCase().endsWith(ds.toLowerCase());
-      });
-      const domainExpiry = matchingMapping?.durationMonths
-        ? new Date(Date.now() + matchingMapping.durationMonths * 30 * 24 * 60 * 60 * 1000)
-        : null;
-
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          planId: autoUpgradePlan.id,
-          domainPlanExpiry: domainExpiry,
-          planBillingCycle: domainExpiry ? 'MONTHLY' : 'LIFETIME',
-          isLifetimePlan: !domainExpiry,
-        },
-        include: { plan: true }
-      });
-    }
-
-    // Auto-assign Free plan if still missing planId
-    if (!user.planId) {
-      user = await prisma.user.update({
-        where: { id: user.id },
+    // ── Auto-assign Free plan if still missing planId ────────────────────────
+    if (!currentUser.planId) {
+      currentUser = await prisma.user.update({
+        where: { id: currentUser.id },
         data: { planId: freePlan.id },
-        include: { plan: true }
+        include: { plan: true },
       });
     }
 
-    // Check if maintenance mode is active
-    const maintenanceConfig = await prisma.siteConfig.findUnique({
-      where: { key: 'maintenance_mode_enabled' }
-    });
-    if (maintenanceConfig && maintenanceConfig.value === 'true' && user.role !== 'ADMIN') {
+    // ── Maintenance mode check ───────────────────────────────────────────────
+    if (maintenanceOn && currentUser.role !== 'ADMIN') {
       return NextResponse.json(
         { maintenance: true, error: 'Platform is currently undergoing scheduled maintenance.' },
         { status: 503 }
       );
     }
 
-    // Retrieve global display currency config
-    const currencyConfig = await prisma.siteConfig.findUnique({
-      where: { key: 'global_display_currency' }
-    });
-    const globalDisplayCurrency = currencyConfig?.value || 'USD';
-
     const response = NextResponse.json({
       success: true,
       globalDisplayCurrency,
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        approved: user.approvedByAdmin,
-        createdAt: user.createdAt,
-        profileCompleted: user.profileCompleted,
-        fullName: user.fullName,
-        avatar: user.avatar,
-        phoneNumber: user.phoneNumber,
-        occupation: user.occupation,
-        institution: user.institution,
-        studyField: user.studyField,
-        gradYear: user.gradYear,
-        jobTitle: user.jobTitle,
-        industry: user.industry,
-        educatorSubject: user.educatorSubject,
-        educatorDept: user.educatorDept,
-        researchDomain: user.researchDomain,
-        researchPos: user.researchPos,
-        otherDetail: user.otherDetail,
-        bio: user.bio,
-        gender: user.gender,
-        primaryPurpose: user.primaryPurpose,
-        verificationStatus: user.verificationStatus,
-        verificationReason: user.verificationReason,
-        verificationDocUrl: user.verificationDocUrl,
-        isVerifiedUser: user.isVerifiedUser,
-        isBanned: user.isBanned,
-        isSuspended: user.isSuspended,
-        suspensionUntil: user.suspensionUntil,
-        suspensionReason: user.suspensionReason,
-        isActivityRestricted: user.isActivityRestricted,
-        plan: user.plan,
-        referralCode: user.referralCode,
-        twoFactorEnabled: user.twoFactorEnabled,
-        planExpiresAt: user.planExpiresAt,
-        planBillingCycle: user.planBillingCycle,
-        isLifetimePlan: user.isLifetimePlan,
-        domainPlanExpiry: user.domainPlanExpiry,
+        id: currentUser.id,
+        email: currentUser.email,
+        role: currentUser.role,
+        approved: currentUser.approvedByAdmin,
+        createdAt: currentUser.createdAt,
+        profileCompleted: currentUser.profileCompleted,
+        fullName: currentUser.fullName,
+        avatar: currentUser.avatar,
+        phoneNumber: currentUser.phoneNumber,
+        occupation: currentUser.occupation,
+        institution: currentUser.institution,
+        studyField: currentUser.studyField,
+        gradYear: currentUser.gradYear,
+        jobTitle: currentUser.jobTitle,
+        industry: currentUser.industry,
+        educatorSubject: currentUser.educatorSubject,
+        educatorDept: currentUser.educatorDept,
+        researchDomain: currentUser.researchDomain,
+        researchPos: currentUser.researchPos,
+        otherDetail: currentUser.otherDetail,
+        bio: currentUser.bio,
+        gender: currentUser.gender,
+        primaryPurpose: currentUser.primaryPurpose,
+        verificationStatus: currentUser.verificationStatus,
+        verificationReason: currentUser.verificationReason,
+        verificationDocUrl: currentUser.verificationDocUrl,
+        isVerifiedUser: currentUser.isVerifiedUser,
+        isBanned: currentUser.isBanned,
+        isSuspended: currentUser.isSuspended,
+        suspensionUntil: currentUser.suspensionUntil,
+        suspensionReason: currentUser.suspensionReason,
+        isActivityRestricted: currentUser.isActivityRestricted,
+        plan: currentUser.plan,
+        referralCode: currentUser.referralCode,
+        twoFactorEnabled: currentUser.twoFactorEnabled,
+        planExpiresAt: currentUser.planExpiresAt,
+        planBillingCycle: currentUser.planBillingCycle,
+        isLifetimePlan: currentUser.isLifetimePlan,
+        domainPlanExpiry: currentUser.domainPlanExpiry,
       },
     });
 
-    // Write rotated access token back to client if generated
     if (newAccessToken) {
       const isProduction = process.env.NODE_ENV === 'production';
       const cookieOptions = `HttpOnly; ${isProduction ? 'Secure; ' : ''}SameSite=Lax; Path=/;`;
-      response.headers.append(
-        'Set-Cookie',
-        `accessToken=${newAccessToken}; ${cookieOptions} Max-Age=3600`
-      );
+      response.headers.append('Set-Cookie', `accessToken=${newAccessToken}; ${cookieOptions} Max-Age=3600`);
     }
 
     return response;
   } catch (error) {
     console.error('Me Auth Route Error:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

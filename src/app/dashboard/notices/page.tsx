@@ -38,7 +38,11 @@ export default function NoticesPage() {
 
   const fetchNoticesAndUser = async () => {
     try {
-      const userRes = await fetch('/api/auth/me');
+      const [userRes, noticesRes] = await Promise.all([
+        fetch('/api/auth/me'),
+        fetch('/api/notices'),
+      ]);
+
       if (!userRes.ok) {
         router.push('/login');
         return;
@@ -46,7 +50,6 @@ export default function NoticesPage() {
       const userData = await userRes.json();
       setUser(userData.user);
 
-      const noticesRes = await fetch('/api/notices');
       if (noticesRes.ok) {
         const noticesData = await noticesRes.json();
         setNotices(noticesData.notices || []);
@@ -60,6 +63,7 @@ export default function NoticesPage() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchNoticesAndUser();

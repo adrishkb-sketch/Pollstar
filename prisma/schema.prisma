@@ -133,6 +133,11 @@ model Poll {
   auditLogs       AuditLog[]
   moderations     ContentModeration[]
   createdAt       DateTime       @default(now())
+
+  @@index([creatorId])
+  @@index([pollType])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Question {
@@ -151,6 +156,8 @@ model Question {
   inputConstraint    String?      @default("NONE") // NONE, NUMBERS, CHARACTERS
   fileUploadDriveUrl String?      // Drive folder to upload student files
   enableWhiteboard   Boolean      @default(false)
+
+  @@index([pollId])
 }
 
 model Option {
@@ -158,6 +165,8 @@ model Option {
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   text       String
+
+  @@index([questionId])
 }
 
 model Vote {
@@ -175,6 +184,9 @@ model Vote {
   flaggedSuspicious Boolean  @default(false)
   timeSpent         Int?     // Time spent on survey in seconds
   createdAt         DateTime @default(now())
+
+  @@index([pollId])
+  @@index([ipAddress])
 }
 
 model AllowedVoter {
@@ -191,6 +203,9 @@ model AllowedVoter {
   bypassOtpUntil  DateTime?
   bypassRequested Boolean   @default(false)
   voterAuthType   String    @default("GLOBAL") // GLOBAL | EMAIL_OTP | EMAIL_PASSWORD | PHONE_PASSWORD
+
+  @@index([pollId])
+  @@index([email])
 }
 
 model DirectMessage {
@@ -201,6 +216,8 @@ model DirectMessage {
   text             String
   isFromCreator    Boolean  @default(false)
   createdAt        DateTime @default(now())
+
+  @@index([pollId])
 }
 
 model PollCollaborator {
@@ -331,6 +348,9 @@ model AuditLog {
   poll      Poll?    @relation(fields: [pollId], references: [id], onDelete: SetNull)
   details   String
   timestamp DateTime @default(now())
+
+  @@index([adminId])
+  @@index([pollId])
 }
 
 model Plan {
@@ -396,6 +416,8 @@ model ContentModeration {
   reviewedBy  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([pollId])
 }
 
 model SiteConfig {
@@ -426,6 +448,8 @@ model Wallet {
   transactions  Transaction[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Transaction {
@@ -436,6 +460,8 @@ model Transaction {
   type        String   // EARNING, PAYOUT
   description String
   createdAt   DateTime @default(now())
+
+  @@index([walletId])
 }
 
 model PayoutRequest {
@@ -448,6 +474,8 @@ model PayoutRequest {
   details     String   @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Coupon {
@@ -489,6 +517,9 @@ model Invoice {
   planExpiresAt  DateTime?                  // when the plan purchased here expires
   notes          String?                    // extra notes e.g. "Lifetime upgrade"
   createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([planId])
 }
 
 model NewsletterSubscriber {
@@ -523,6 +554,8 @@ model Notice {
   referencedNoticeId String?
   referencedNotice   Notice?  @relation("NoticeMentions", fields: [referencedNoticeId], references: [id], onDelete: SetNull)
   mentions           Notice[] @relation("NoticeMentions")
+
+  @@index([referencedNoticeId])
 }
 
 model DeletedPoll {
@@ -531,6 +564,8 @@ model DeletedPoll {
   pollType  String   // POLL, SURVEY, EXAM
   creatorId String
   deletedAt DateTime @default(now())
+
+  @@index([creatorId])
 }
 
 

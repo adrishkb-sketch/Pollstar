@@ -54,15 +54,30 @@ export default function GradebookPage() {
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        const res = await fetch('/api/auth/me');
-        if (!res.ok) {
+        const [meRes, gbRes] = await Promise.all([
+          fetch('/api/auth/me'),
+          fetch('/api/dashboard/gradebook'),
+        ]);
+
+        if (!meRes.ok) {
           router.push('/login');
           return;
         }
-        const data = await res.json();
+        const data = await meRes.json();
         setUser(data.user);
-        
-        await fetchGradebook();
+
+        if (gbRes.status === 403) {
+          const gbData = await gbRes.json();
+          setHasAccess(false);
+          setAccessReason(gbData.error || 'The Teacher Gradebook is an Elite Plan premium feature.');
+          return;
+        }
+        if (!gbRes.ok) {
+          throw new Error('Failed to fetch gradebook matrix');
+        }
+        const gbData = await gbRes.json();
+        setHeaders(gbData.headers || []);
+        setRows(gbData.rows || []);
       } catch (err) {
         setError('Failed to load session details.');
       } finally {
@@ -71,6 +86,7 @@ export default function GradebookPage() {
     };
     fetchSession();
   }, []);
+
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });

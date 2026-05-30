@@ -74,7 +74,11 @@ export default function EarningsPage() {
 
   const fetchEarningsData = async () => {
     try {
-      const meRes = await fetch('/api/auth/me');
+      const [meRes, earningsRes] = await Promise.all([
+        fetch('/api/auth/me'),
+        fetch('/api/dashboard/earnings'),
+      ]);
+
       if (meRes.ok) {
         const meData = await meRes.json();
         if (meData.success && meData.user) {
@@ -85,7 +89,6 @@ export default function EarningsPage() {
         }
       }
 
-      const earningsRes = await fetch('/api/dashboard/earnings');
       if (earningsRes.ok) {
         const data = await earningsRes.json();
         if (data.success) {

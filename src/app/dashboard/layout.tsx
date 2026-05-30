@@ -47,7 +47,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     };
     checkProfileCompleted();
-  }, [pathname]);
+  }, []);
+
 
   if (checking) {
     return (

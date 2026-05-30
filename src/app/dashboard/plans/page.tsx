@@ -208,23 +208,25 @@ export default function PlansPage() {
 
   const fetchSessionAndPlans = async () => {
     try {
-      const res = await fetch('/api/auth/me');
-      if (!res.ok) {
+      // Fire all independent requests at the same time
+      const [meRes, plansRes, invoicesRes] = await Promise.all([
+        fetch('/api/auth/me'),
+        fetch('/api/plans'),
+        fetch('/api/checkout/invoices'),
+      ]);
+
+      if (!meRes.ok) {
         router.push('/login');
         return;
       }
-      const data = await res.json();
+      const data = await meRes.json();
       setUser(data.user);
 
-      // Fetch plans list
-      const plansRes = await fetch('/api/plans');
       if (plansRes.ok) {
         const plansData = await plansRes.json();
         const rawPlans = plansData.plans || [];
         const rawAddons = plansData.addonPlans || [];
         const rawEntity = plansData.entityPlans || [];
-        
-        // Sort so that the Free basic plan is always far left, and other plans are sorted by price ascending
         const sortedPlans = [...rawPlans].sort((a, b) => {
           const aFree = a.isFree || a.name === 'Free';
           const bFree = b.isFree || b.name === 'Free';
@@ -232,14 +234,11 @@ export default function PlansPage() {
           if (!aFree && bFree) return 1;
           return a.price - b.price;
         });
-        
         setPlans(sortedPlans);
         setEntityPlans(rawEntity);
         setAddonPlans(rawAddons);
       }
 
-      // Fetch user invoices
-      const invoicesRes = await fetch('/api/checkout/invoices');
       if (invoicesRes.ok) {
         const invoicesData = await invoicesRes.json();
         setInvoices(invoicesData.invoices || []);
@@ -250,6 +249,7 @@ export default function PlansPage() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchSessionAndPlans();
