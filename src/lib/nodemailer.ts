@@ -562,6 +562,161 @@ export async function sendExamResultsReleasedEmail({
 }
 
 /**
+ * Sends a secure exam submission confirmation receipt email.
+ */
+export async function sendExamSubmissionConfirmationEmail({
+  email,
+  examTitle,
+  submissionId,
+  resultsUrl,
+  resultsReleased,
+}: {
+  email: string;
+  examTitle: string;
+  submissionId: string;
+  resultsUrl: string;
+  resultsReleased: boolean;
+}): Promise<boolean> {
+  const subject = `📝 Exam Submitted: "${examTitle}"`;
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.1em;">✓ Exam Submitted Successfully</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Submission Securely Received</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 20px; text-align: center;">
+        Your answer papers for the examination <strong style="color: #ffffff">"${examTitle}"</strong> have been securely received and recorded.
+      </p>
+      
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+        <strong style="color: #f3f4f6; font-size: 15px; display: block; margin-bottom: 4px;">Receipt Details:</strong>
+        <span style="color: #9ca3af; font-size: 13px; display: block; margin-bottom: 10px;">Exam Name: <strong style="color: #ffffff">${examTitle}</strong></span>
+        <span style="color: #9ca3af; font-size: 13px; display: block;">Submission Cryptographic ID:</span>
+        <code style="font-family: monospace; font-size: 11px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 4px 8px; color: #818cf8; display: block; margin-top: 4px; word-break: break-all;">${submissionId}</code>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        ${resultsReleased ? `
+          <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">Immediate Results Release is enabled! Click below to view your graded scorecard and AI Concept Tutor diagnostics:</p>
+          <a href="${resultsUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; display: inline-block;">View Graded Results & Diagnostics</a>
+        ` : `
+          <p style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">Results are currently withheld by the examiner. You will receive an automated email notice containing your score breakdown as soon as grades are officially released.</p>
+        `}
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px; margin-top: 32px;">
+        Pollstar Online Testing Engine. Personal Tutoring, Precise Diagnostics.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Exam Submission Secured                      │`);
+  console.log(`│ Hash:    ${submissionId.padEnd(46)} │`);
+  console.log(`│ Status:  ${(resultsReleased ? 'Immediate Score Available' : 'Withheld').padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+
+/**
+ * Sends a highly polished, printable digital report card email to the candidate upon final report publication.
+ */
+export async function sendFinalGradedReportCardEmail({
+  email,
+  examTitle,
+  scoreEarned,
+  scoreTotal,
+  analysisUrl,
+  feedbackSummary,
+}: {
+  email: string;
+  examTitle: string;
+  scoreEarned: number;
+  scoreTotal: number;
+  analysisUrl: string;
+  feedbackSummary?: string;
+}): Promise<boolean> {
+  const subject = `🎓 Official Final Report Card: "${examTitle}"`;
+  const percentage = scoreTotal > 0 ? Math.round((scoreEarned / scoreTotal) * 100) : 0;
+  const passed = percentage >= 40;
+
+  const html = `
+    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #0b0f19; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); color: #f3f4f6;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 6px 16px; font-size: 11px; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.1em;">🎓 Official Final Grade Released</span>
+      </div>
+      <h2 style="color: #6366f1; font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Official Examination Report Card</h2>
+      <p style="font-size: 15px; line-height: 24px; color: #d1d5db; margin-bottom: 24px; text-align: center;">
+        Your instructor has finalized all manual grading and published the official grades for the exam <strong style="color: #ffffff">"${examTitle}"</strong>.
+      </p>
+
+      <div style="text-align: center; margin-bottom: 24px; padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02);">
+        <span style="font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">Your Official Grade</span>
+        <span style="font-size: 48px; font-weight: 900; color: ${passed ? '#10b981' : '#ef4444'}; display: block; margin-bottom: 4px; font-family: monospace;">${scoreEarned} / ${scoreTotal}</span>
+        <span style="font-size: 14px; color: #9ca3af; display: block; font-weight: 600;">Final Percentage: ${percentage}%</span>
+      </div>
+
+      ${feedbackSummary ? `
+        <div style="background: rgba(255, 255, 255, 0.03); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); padding: 16px; margin-bottom: 24px;">
+          <strong style="color: #ffffff; font-size: 13px; display: block; margin-bottom: 6px;">Examiner's Remarks & Feedback:</strong>
+          <p style="color: #d1d5db; font-size: 13px; margin: 0; line-height: 20px;">${feedbackSummary}</p>
+        </div>
+      ` : ''}
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <p style="font-size: 13px; color: #9ca3af; margin-bottom: 16px;">
+          Click the link below to view your interactive diagnostic report, check question comparisons with peer performance, review detailed explanations, and download your printable PDF report card:
+        </p>
+        <a href="${analysisUrl}" style="background: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+          View Final Report & Download PDF
+        </a>
+      </div>
+
+      <p style="font-size: 11px; text-align: center; color: #4b5563; line-height: 16px; margin-top: 32px;">
+        Pollstar Online Testing Engine. Personal Tutoring, Precise Diagnostics.
+      </p>
+    </div>
+  `;
+
+  if (transporter) {
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      html,
+    });
+    return true;
+  }
+
+  // Fallback sandbox
+  console.log('\n┌────────────────────────────────────────────────────────┐');
+  console.log(`│               📬 POLLSTAR EMAIL SANDBOX               │`);
+  console.log(`├────────────────────────────────────────────────────────┤`);
+  console.log(`│ To:      ${email.padEnd(46)} │`);
+  console.log(`│ Subject: Final Graded Report Card Released             │`);
+  console.log(`│ Score:   ${(scoreEarned + ' / ' + scoreTotal).padEnd(46)} │`);
+  console.log(`│ Link:    ${analysisUrl.padEnd(46)} │`);
+  console.log(`└────────────────────────────────────────────────────────┘\n`);
+
+  return true;
+}
+
+/**
  * Sends a newsletter broadcast to subscribers.
  */
 export async function sendNewsletterBroadcastEmail(email: string, title: string, content: string): Promise<boolean> {

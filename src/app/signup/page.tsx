@@ -297,7 +297,8 @@ export default function Signup() {
                     key={idx}
                     ref={(el) => { otpRefs.current[idx] = el; }}
                     type="text"
-                    pattern="\d*"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={1}
                     value={val}
                     onChange={(e) => handleOtpChange(e.target.value, idx)}

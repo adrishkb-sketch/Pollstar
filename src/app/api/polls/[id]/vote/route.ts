@@ -2,7 +2,7 @@ import { NextResponse, userAgent } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getClientIP, lookupIP } from '@/lib/geo';
 import jwt from 'jsonwebtoken';
-import { sendVoteConfirmationEmail } from '@/lib/nodemailer';
+import { sendVoteConfirmationEmail, sendExamSubmissionConfirmationEmail } from '@/lib/nodemailer';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
 
@@ -10,58 +10,83 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-aut
 const activeCastingRegistry = new Map<string, { timestamp: number; voterEmail?: string }>();
 
 function computeSemanticSimilarity(userAns: string, correctAns: string): { score: number; feedback: string } {
-  const s1 = userAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
-  const s2 = correctAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
+  const cleanUser = userAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
+  const cleanCorrect = correctAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
 
-  if (!s1 || !s2) return { score: 0.0, feedback: "Empty answer provided. No marks awarded." };
-  if (s1 === s2) return { score: 1.0, feedback: "Perfect semantic match with sample answer!" };
+  if (!cleanUser || !cleanCorrect) {
+    return { score: 0.0, feedback: "No answer provided or reference answer is blank." };
+  }
 
-  // 1. Keyword overlap
-  const tokens1 = s1.split(/\s+/);
-  const tokens2 = s2.split(/\s+/);
-  const set1 = new Set(tokens1);
-  const set2 = new Set(tokens2);
+  if (cleanUser === cleanCorrect) {
+    return { score: 1.0, feedback: "Perfect match! Your answer matches the model answer exactly." };
+  }
 
-  let intersectCount = 0;
-  set1.forEach(tok => {
-    if (set2.has(tok)) intersectCount++;
+  // Define standard English stop words
+  const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", "ourselves", "yourselves", "themselves"]);
+
+  // Extract content-bearing words (tokens)
+  const tokensUser = cleanUser.split(/\s+/).filter(w => w.length > 0);
+  const tokensCorrect = cleanCorrect.split(/\s+/).filter(w => w.length > 0);
+
+  const contentUser = tokensUser.filter(w => !stopWords.has(w) && w.length > 1);
+  const contentCorrect = tokensCorrect.filter(w => !stopWords.has(w) && w.length > 1);
+
+  // If the correct answer contains very few content words, do a direct inclusion match
+  if (contentCorrect.length === 0) {
+    const isMatched = cleanUser.includes(cleanCorrect) || cleanCorrect.includes(cleanUser);
+    return {
+      score: isMatched ? 1.0 : 0.0,
+      feedback: isMatched 
+        ? "Correct conceptual answer identified in submission." 
+        : `Answer does not match reference model response: "${correctAns}".`
+    };
+  }
+
+  // 1. Direct inclusion test
+  if (cleanUser.includes(cleanCorrect)) {
+    return { score: 1.0, feedback: "Correct! Your answer perfectly incorporates the model response." };
+  }
+
+  // 2. Keyword overlap score
+  const setUser = new Set(contentUser);
+  let matchedKeywordsCount = 0;
+
+  contentCorrect.forEach(word => {
+    if (setUser.has(word)) {
+      matchedKeywordsCount++;
+    } else {
+      // Support soft spelling/suffix matches (e.g. "poll" matches "polls" or "voting" matches "vote")
+      const softMatch = contentUser.some(uWord => 
+        uWord.startsWith(word) || word.startsWith(uWord) || 
+        (uWord.length > 4 && word.length > 4 && (uWord.includes(word.substring(0, 4)) || word.includes(uWord.substring(0, 4))))
+      );
+      if (softMatch) {
+        matchedKeywordsCount += 0.8;
+      }
+    }
   });
 
-  const unionCount = new Set([...tokens1, ...tokens2]).size;
-  const keywordScore = unionCount > 0 ? (intersectCount / unionCount) : 0.0;
+  const keywordCoverage = matchedKeywordsCount / contentCorrect.length;
+  const finalScore = Math.min(1.0, Math.max(0.0, keywordCoverage));
 
-  // 2. Levenshtein distance
-  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
-  for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
-  for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
-  for (let j = 1; j <= s2.length; j += 1) {
-    for (let i = 1; i <= s1.length; i += 1) {
-      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
-      track[j][i] = Math.min(
-        track[j - 1][i] + 1, // deletion
-        track[j][i - 1] + 1, // insertion
-        track[j - 1][i - 1] + indicator // substitution
-      );
-    }
-  }
-  const levDist = track[s2.length][s1.length];
-  const maxLen = Math.max(s1.length, s2.length);
-  const levScore = maxLen > 0 ? 1 - levDist / maxLen : 0.0;
+  // Determine key missing terms for constructive feedback
+  const missingKeywords = contentCorrect.filter(word => !setUser.has(word)).slice(0, 3);
 
-  // Weighted score
-  const finalScore = 0.6 * keywordScore + 0.4 * levScore;
-
-  // Feedback commenting
   let feedback = "";
-  if (finalScore >= 0.8) {
-    feedback = "Excellent answer. Matches the key conceptual keywords and sample response very closely.";
-  } else if (finalScore >= 0.5) {
-    feedback = "Good response, but could be improved. Some key technical terms were present, but missing detailed context.";
+  if (finalScore >= 0.85) {
+    feedback = "Excellent response! You demonstrated complete understanding and matched almost all model keywords.";
+  } else if (finalScore >= 0.6) {
+    feedback = `Good answer. You captured the key concepts, but missed some depth. ${
+      missingKeywords.length > 0 ? `Consider incorporating terms like: "${missingKeywords.join('", "')}".` : ""
+    }`;
+  } else if (finalScore >= 0.3) {
+    feedback = `Partial credit. You mentioned some related terms but missed the core concept. ${
+      missingKeywords.length > 0 ? `To improve, you should explain details involving: "${missingKeywords.join('", "')}".` : ""
+    }`;
   } else {
-    const missingKeywords = tokens2.filter(t => !set1.has(t) && t.length > 3).slice(0, 3);
-    feedback = missingKeywords.length > 0
-      ? `Weak answer. Missing important related concepts. Consider using terms like: ${missingKeywords.join(', ')}.`
-      : "Weak answer. Response does not match the sample answer sufficiently.";
+    feedback = `Incorrect or insufficient answer. It does not match the key elements of the model answer. ${
+      missingKeywords.length > 0 ? `Make sure to explain concepts relating to: "${missingKeywords.join('", "')}".` : ""
+    }`;
   }
 
   return { score: finalScore, feedback };
@@ -360,8 +385,9 @@ export async function POST(
         let marksAwarded = 0.0;
         let feedback = "No answer provided.";
         let isAIGraded = true;
+        let isGraded = true;
 
-        // Safely parse question's logicRules for negative marking
+        // Safely parse question's logicRules for negative marking & marking schemes
         let rules: any = {};
         if (typeof q.logicRules === 'string') {
           try { rules = JSON.parse(q.logicRules) || {}; } catch(e) {}
@@ -370,6 +396,7 @@ export async function POST(
         }
         const enableNegativeMark = !!rules.enableNegativeMarking;
         const negPenalty = typeof rules.negativeMarkingPenalty === 'number' ? rules.negativeMarkingPenalty : 0.25;
+        const markingScheme = rules.markingScheme || 'PARTIAL'; // 'PARTIAL' | 'ALL_OR_NOTHING'
 
         if (userAns !== undefined && userAns !== null) {
           if (q.type === 'SINGLE') {
@@ -402,62 +429,109 @@ export async function POST(
             const correctSet = new Set(correctList);
             const userSet = new Set(userList);
 
-            const allMatched = correctList.length === userList.length && correctList.every(id => userSet.has(id));
+            let correctSelected = 0;
+            let incorrectSelectedCount = 0;
 
-            if (allMatched) {
-              marksAwarded = maxMarks;
-              feedback = "All correct options selected! Full marks awarded.";
-            } else {
-              let correctSelected = 0;
-              let incorrectSelectedCount = 0;
-              userList.forEach(id => {
-                if (correctSet.has(id)) {
-                  correctSelected++;
-                } else {
-                  correctSelected--; // penalty for wrong options selected
-                  incorrectSelectedCount++;
-                }
-              });
-
-              let baseMarks = 0.0;
-              if (correctSelected > 0 && correctList.length > 0) {
-                const rawMarks = (correctSelected / correctList.length) * maxMarks;
-                baseMarks = Math.round(rawMarks * 2) / 2;
-                feedback = `Partial selection correct (${correctSelected}/${correctList.length} options). Partial credit awarded.`;
+            userList.forEach(id => {
+              if (correctSet.has(id)) {
+                correctSelected++;
               } else {
-                baseMarks = 0.0;
-                feedback = "Incorrect options selected. No marks awarded.";
+                incorrectSelectedCount++;
               }
+            });
 
-              if (enableNegativeMark && incorrectSelectedCount > 0) {
-                const penaltyAmount = incorrectSelectedCount * negPenalty;
-                marksAwarded = baseMarks - penaltyAmount;
-                feedback += ` Negative penalty of -${penaltyAmount} applied for ${incorrectSelectedCount} wrong options.`;
+            if (markingScheme === 'ALL_OR_NOTHING') {
+              const allCorrectSelected = correctSelected === correctSet.size && incorrectSelectedCount === 0;
+              if (allCorrectSelected && userList.length === correctSet.size) {
+                marksAwarded = maxMarks;
+                feedback = "All correct options selected! Full marks awarded.";
               } else {
-                marksAwarded = baseMarks;
+                if (enableNegativeMark) {
+                  marksAwarded = -negPenalty;
+                  feedback = `Incorrect selection. All-or-nothing scheme applied. Negative penalty of -${negPenalty} applied.`;
+                } else {
+                  marksAwarded = 0.0;
+                  feedback = "Incorrect selection. All-or-nothing scheme applied (0 marks).";
+                }
+              }
+            } else {
+              // PARTIAL marking scheme
+              if (correctSelected > 0 && correctSet.size > 0) {
+                const baseMarks = (correctSelected / correctSet.size) * maxMarks;
+                const penaltyAmount = incorrectSelectedCount * negPenalty;
+                if (enableNegativeMark) {
+                  marksAwarded = Math.max(-maxMarks, baseMarks - penaltyAmount);
+                  feedback = `Partial selection correct (${correctSelected}/${correctSet.size} options, ${incorrectSelectedCount} wrong). Penalty of -${penaltyAmount} applied.`;
+                } else {
+                  marksAwarded = baseMarks;
+                  feedback = `Partial selection correct (${correctSelected}/${correctSet.size} options). Partial credit awarded.`;
+                }
+                marksAwarded = Math.round(marksAwarded * 2) / 2; // multi of 0.5
+              } else {
+                if (enableNegativeMark && incorrectSelectedCount > 0) {
+                  marksAwarded = -negPenalty;
+                  feedback = `Incorrect selection. Negative penalty of -${negPenalty} applied.`;
+                } else {
+                  marksAwarded = 0.0;
+                  feedback = "No correct options selected. No marks awarded.";
+                }
               }
             }
           } else if (q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') {
             // SAQ & LAQ Semantic similarity
-            const correctAnsStr = q.correctAnswer || '';
-            const userAnsStr = String(userAns);
-            const sim = computeSemanticSimilarity(userAnsStr, correctAnsStr);
-            const rawMarks = sim.score * maxMarks;
-            marksAwarded = Math.round(rawMarks * 2) / 2;
-            feedback = sim.feedback;
-          } else if (q.type === 'FILE_UPLOAD') {
-            // Image scan confirmation simulation
-            const fileUrl = String(userAns);
-            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(fileUrl);
-            if (isImage) {
-              marksAwarded = maxMarks;
-              feedback = "AI scan of uploaded image confirmed candidate matching details at 85% confidence.";
-              isAIGraded = true;
-            } else {
+            if (!q.correctAnswer || q.correctAnswer.trim() === '') {
+              isGraded = false;
               marksAwarded = 0.0;
-              feedback = "Uploaded document requires manual visual verification. Status: PENDING_MANUAL_GRADING.";
-              isAIGraded = false;
+              feedback = "Sample/model answer not provided by examiner. Pending manual marking.";
+            } else {
+              const correctAnsStr = q.correctAnswer;
+              const userAnsStr = String(userAns);
+              const sim = computeSemanticSimilarity(userAnsStr, correctAnsStr);
+              const rawMarks = sim.score * maxMarks;
+              marksAwarded = Math.round(rawMarks * 2) / 2;
+              feedback = sim.feedback;
+              if (marksAwarded < 0) marksAwarded = 0.0; // No negative marking on text answers
             }
+          } else if (q.type === 'FILE_UPLOAD') {
+            // Validate file link
+            const fileUrl = String(userAns).trim();
+            let isValidUrl = false;
+            try {
+              const parsedUrl = new URL(fileUrl);
+              isValidUrl = parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+            } catch (_) {}
+
+            let isPubliclyAccessible = false;
+            if (isValidUrl) {
+              try {
+                const checkRes = await fetch(fileUrl, { method: 'HEAD', signal: AbortSignal.timeout(1200) });
+                if (checkRes.ok) {
+                  isPubliclyAccessible = true;
+                }
+              } catch (_) {
+                if (fileUrl.includes('drive.google.com') || fileUrl.includes('dropbox.com') || fileUrl.includes('onedrive') || fileUrl.includes('github.com')) {
+                  isPubliclyAccessible = true;
+                }
+              }
+            }
+
+            isGraded = false;
+            isAIGraded = false;
+            marksAwarded = 0.0;
+
+            if (!isValidUrl) {
+              feedback = "Invalid file upload URL submitted. Pending manual verification by examiner.";
+            } else if (!isPubliclyAccessible) {
+              feedback = "File upload URL received but public access check failed. Pending manual verification.";
+            } else {
+              feedback = "File upload URL successfully verified as public link. Pending manual grading.";
+            }
+          }
+        } else {
+          // No user answer provided
+          if (q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT' || q.type === 'FILE_UPLOAD') {
+            isGraded = false;
+            if (q.type === 'FILE_UPLOAD') isAIGraded = false;
           }
         }
 
@@ -468,7 +542,28 @@ export async function POST(
           maxMarks,
           feedback,
           isAIGraded,
+          isGraded,
         };
+      }
+    }
+
+    // Determine overall marking status for exam
+    let markingStatus = 'FULLY_MARKED';
+    if (poll.pollType === 'EXAM') {
+      let gradedCount = 0;
+      let totalQuestions = 0;
+      poll.questions.forEach((q) => {
+        totalQuestions++;
+        const qb = examBreakdown[q.id];
+        if (qb && qb.isGraded) {
+          gradedCount++;
+        }
+      });
+
+      if (gradedCount === 0) {
+        markingStatus = 'UNMARKED';
+      } else if (gradedCount < totalQuestions) {
+        markingStatus = 'PARTIALLY_MARKED';
       }
     }
 
@@ -488,6 +583,7 @@ export async function POST(
             __confidence: confidenceValues || null,
             __examBreakdown: poll.pollType === 'EXAM' ? examBreakdown : null,
             __examScore: poll.pollType === 'EXAM' ? { earned: earnedExamMarks, total: totalExamMarks } : null,
+            __markingStatus: poll.pollType === 'EXAM' ? markingStatus : null,
           }),
           flaggedSuspicious: false,
           timeSpent: typeof timeSpent === 'number' ? timeSpent : null,
@@ -513,14 +609,25 @@ export async function POST(
         const protocol = req.headers.get('x-forwarded-proto') || 'http';
         const host = req.headers.get('host') || 'localhost:3000';
         const resultsUrl = `${protocol}://${host}/poll/${pollId}`;
-        sendVoteConfirmationEmail({
-          email: voterEmail,
-          pollTitle: poll.title,
-          voteId: savedVote.id,
-          resultsUrl,
-        }).catch((e) => console.error('Failed to send vote confirmation email:', e));
+
+        if (poll.pollType === 'EXAM') {
+          await sendExamSubmissionConfirmationEmail({
+            email: voterEmail,
+            examTitle: poll.title,
+            submissionId: savedVote.id,
+            resultsUrl: `${protocol}://${host}/poll/${pollId}/analysis`,
+            resultsReleased: !!poll.settings?.resultsReleased,
+          });
+        } else {
+          await sendVoteConfirmationEmail({
+            email: voterEmail,
+            pollTitle: poll.title,
+            voteId: savedVote.id,
+            resultsUrl,
+          });
+        }
       } catch (err) {
-        console.error('Failed to send vote confirmation email:', err);
+        console.error('Failed to send confirmation email:', err);
       }
     }
 

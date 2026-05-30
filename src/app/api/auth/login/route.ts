@@ -15,17 +15,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     // Find user
     let user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: cleanEmail },
     });
 
     // Dynamic Admin Auto-seeding
-    if (!user && email === 'Adrish20071506') {
+    if (!user && cleanEmail === 'adrish20071506') {
       const passwordHash = await bcrypt.hash('2007Baban@#', 10);
       user = await prisma.user.create({
         data: {
-          email: 'Adrish20071506',
+          email: 'adrish20071506',
           passwordHash,
           verified: true,
           approvedByAdmin: true,

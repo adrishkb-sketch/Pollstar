@@ -245,6 +245,38 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
           <span>Back to Home</span>
         </Link>
 
+        {/* Print stylesheets override for professional A4 PDF generation */}
+        <style>{`
+          @media print {
+            body {
+              background: #ffffff !important;
+              color: #000000 !important;
+            }
+            .glass-card {
+              background: #ffffff !important;
+              color: #000000 !important;
+              border: 1px solid #d1d5db !important;
+              box-shadow: none !important;
+              border-radius: 12px !important;
+            }
+            .text-white {
+              color: #000000 !important;
+            }
+            .text-indigo-400, .text-emerald-400, .text-purple-400 {
+              color: #312e81 !important;
+            }
+            .text-gray-400, .text-gray-500 {
+              color: #4b5563 !important;
+            }
+            .print\\:hidden {
+              display: none !important;
+            }
+            svg {
+              stroke: #000000 !important;
+            }
+          }
+        `}</style>
+
         {/* Brand Header */}
         <div className="flex justify-between items-center border-b border-white/5 pb-6">
           <div className="space-y-1">
@@ -256,15 +288,22 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
             </p>
           </div>
           
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end gap-2 print:hidden">
             <span className="text-[10px] font-extrabold uppercase font-mono tracking-widest text-indigo-400 border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 rounded-xl">
-              Pollstar Exam Analytics
+              Official Exam Report Card
             </span>
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all border border-indigo-500/30"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Download PDF Report Card</span>
+            </button>
           </div>
         </div>
 
         {/* Top Grade Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           
           {/* Circular Score Widget */}
           <div className="glass-card md:col-span-1 rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col items-center justify-center text-center space-y-4">
@@ -307,47 +346,68 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Diagnostic Stats Cards */}
-          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Proctor Alert Integrity */}
-            <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Proctor Integrity</span>
-                {isSuspicious ? (
-                  <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-                ) : (
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                )}
-              </div>
-              <div className="space-y-1 mt-4">
-                <span className={`text-lg font-black block ${isSuspicious ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {isSuspicious ? 'Suspicious Attempt' : 'Honest Attempt Verified'}
-                </span>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
-                  {isSuspicious 
-                    ? 'Proctor monitors recorded tab focus departures during the active testing session.'
-                    : 'Examination proctors verified full session adherence without browser focus departures.'
-                  }
-                </p>
-              </div>
-            </div>
+          {/* Peer Rank & Comparative Diagnostics */}
+          {(() => {
+            const stats = data?.result?.cohortStats || { peerRank: 1, totalSubmissions: 1, classAverage: 0.0, highestScore: 0.0 };
+            return (
+              <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {/* Peer Rank card */}
+                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Cohort Standing</span>
+                    <Award className="w-5 h-5 text-amber-400 animate-bounce" />
+                  </div>
+                  <div className="space-y-1 mt-4">
+                    <span className="text-3xl font-mono font-black text-white">
+                      Rank #{stats.peerRank}
+                    </span>
+                    <span className="text-[10px] text-gray-400 block font-medium">
+                      Out of {stats.totalSubmissions} examinee submissions.
+                    </span>
+                  </div>
+                </div>
 
-            {/* Time Analytics */}
-            <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Testing Duration</span>
-                <Clock className="w-5 h-5 text-indigo-400" />
+                {/* Class Average comparison card */}
+                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Class Comparison</span>
+                    <Clock className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    <div className="flex justify-between text-xs font-mono font-bold text-white">
+                      <span>Average:</span>
+                      <span className="text-indigo-400">{stats.classAverage}</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+                      <div 
+                        className="h-full bg-indigo-500 rounded-full" 
+                        style={{ width: `${Math.min(100, (stats.classAverage / (scoreTotal || 1)) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-gray-400 block font-medium">
+                      Class High: <strong className="text-emerald-400">{stats.highestScore} Marks</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Testing Duration & Proctor Integrity */}
+                <div className="glass-card rounded-3xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Session Proctoring</span>
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="space-y-1 mt-4">
+                    <span className={`text-sm font-bold block ${isSuspicious ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {isSuspicious ? '⚠️ Tab Switched Warning' : '✅ Full Focus Active'}
+                    </span>
+                    <span className="text-[10px] text-gray-400 block font-medium">
+                      Time spent: {timeSpentStr}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1 mt-4">
-                <span className="text-lg font-black text-white font-mono block">
-                  {timeSpentStr}
-                </span>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
-                  The elapsed duration from examination entrance gate to the instant the final ballot was cast.
-                </p>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
         </div>
 

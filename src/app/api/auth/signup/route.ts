@@ -25,6 +25,8 @@ export async function POST(req: Request) {
       );
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     if (password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters' },
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
 
     // Check if user already exists and is verified
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: cleanEmail },
     });
 
     if (existingUser && existingUser.verified) {
@@ -70,13 +72,13 @@ export async function POST(req: Request) {
         updateData.referredById = referredById;
       }
       await prisma.user.update({
-        where: { email },
+        where: { email: cleanEmail },
         data: updateData,
       });
     } else {
       await prisma.user.create({
         data: {
-          email,
+          email: cleanEmail,
           passwordHash,
           verified: false,
           approvedByAdmin: true,
@@ -93,18 +95,18 @@ export async function POST(req: Request) {
 
     // Save OTP to DB (upsert based on email)
     await prisma.oTP.upsert({
-      where: { email },
+      where: { email: cleanEmail },
       update: { otp, expiresAt },
-      create: { email, otp, expiresAt },
+      create: { email: cleanEmail, otp, expiresAt },
     });
 
     // Send email — propagate failure so user sees real error
     try {
-      await sendOTPEmail(email, otp);
+      await sendOTPEmail(cleanEmail, otp);
     } catch (emailErr: any) {
       console.error('Signup OTP Email Send Failed:', emailErr);
       // Clean up the OTP record so user can retry cleanly
-      await prisma.oTP.delete({ where: { email } }).catch(() => {});
+      await prisma.oTP.delete({ where: { email: cleanEmail } }).catch(() => {});
       return NextResponse.json(
         { error: 'We could not deliver the verification email. Please check the email address and try again, or contact support.' },
         { status: 503 }

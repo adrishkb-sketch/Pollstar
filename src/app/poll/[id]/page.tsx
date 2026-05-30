@@ -2461,6 +2461,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             <form onSubmit={handleVerifyVoterOtp} className="space-y-6">
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 required
                 maxLength={6}
                 value={otpCode}

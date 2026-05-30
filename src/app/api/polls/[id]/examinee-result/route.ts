@@ -122,6 +122,32 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const examBreakdown = answersObj?.__examBreakdown || {};
     const examScore = answersObj?.__examScore || { earned: 0.0, total: 0.0 };
 
+    // Fetch all votes for this exam to calculate peer rank and class average
+    const allVotes = await prisma.vote.findMany({
+      where: { pollId },
+      select: { answers: true }
+    });
+
+    const scoresList: number[] = [];
+    allVotes.forEach((v) => {
+      try {
+        const parsedV = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        const score = parsedV?.__examScore;
+        if (score) {
+          scoresList.push(score.earned || 0.0);
+        }
+      } catch (e) {}
+    });
+
+    scoresList.sort((a, b) => b - a);
+
+    const studentEarned = examScore.earned || 0.0;
+    const peerRank = scoresList.indexOf(studentEarned) + 1;
+    const totalSubmissions = scoresList.length;
+    const classAverage = totalSubmissions > 0 
+      ? Number((scoresList.reduce((acc, curr) => acc + curr, 0) / totalSubmissions).toFixed(2))
+      : 0.0;
+
     // Format output with strict security (returning only this examinee's context)
     const resultDetails = {
       poll: {
@@ -141,6 +167,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         createdAt: vote.createdAt,
       },
       score: examScore,
+      cohortStats: {
+        peerRank,
+        totalSubmissions,
+        classAverage,
+        highestScore: scoresList[0] || 0.0,
+      },
       questions: poll.questions.map((q) => {
         const qb = examBreakdown[q.id] || {};
         return {

@@ -18,17 +18,33 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Helper to parse confirmer2 into department and classYear
-const parseConfirmer2 = (val: string) => {
-  if (!val) return { department: 'General', classYear: 'General' };
+// Helper to parse confirmer2 into session, department and classYear
+const parseConfirmer2 = (val: string | null) => {
+  if (!val) return { session: 'General', department: 'General', classYear: 'General' };
+  
+  try {
+    const parsed = JSON.parse(val);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        session: parsed.session || 'General',
+        classYear: parsed.class || parsed.classYear || 'General',
+        department: parsed.department || 'General',
+      };
+    }
+  } catch (_) {}
   
   // Try splitting by common delimiters like comma, slash, hyphen
   const parts = val.split(/[,\/-]/).map(s => s.trim()).filter(Boolean);
   
+  let session = 'General';
   let department = 'General';
   let classYear = 'General';
   
-  if (parts.length >= 2) {
+  if (parts.length >= 3) {
+    session = parts[0];
+    classYear = parts[1];
+    department = parts[2];
+  } else if (parts.length === 2) {
     department = parts[0];
     classYear = parts[1];
   } else if (parts.length === 1) {
@@ -41,7 +57,7 @@ const parseConfirmer2 = (val: string) => {
     }
   }
   
-  return { department, classYear };
+  return { session, department, classYear };
 };
 
 export default function PollInsights({ params }: PageProps) {
@@ -78,6 +94,11 @@ export default function PollInsights({ params }: PageProps) {
   // Class & Department gradebook filters
   const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
   const [selectedClassYear, setSelectedClassYear] = useState<string>('ALL');
+  const [selectedSession, setSelectedSession] = useState<string>('ALL');
+
+  // Reevaluate & finalization states
+  const [isReevaluating, setIsReevaluating] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   
   // Real-time Proctoring mock telemetry
   const [proctorTelemetry, setProctorTelemetry] = useState<Record<string, { status: 'ACTIVE' | 'OFFLINE', alert: string, lastActive: string }>>({});
@@ -1059,6 +1080,54 @@ export default function PollInsights({ params }: PageProps) {
     } finally {
       setIsSavingOverride(false);
     }
+  };
+
+  const handleReevaluateExam = async () => {
+    if (!poll) return;
+    if (!confirm('Are you sure you want to reevaluate all student submissions? This will re-grade all Short/Long Text answers against the updated model answers, excluding any grades you have manually overridden.')) {
+      return;
+    }
+    setIsReevaluating(true);
+    try {
+      const res = await fetch(`/api/polls/${poll.id}/reevaluate`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to reevaluate exam grades');
+      }
+      alert(data.message || 'Exam grades reevaluated successfully!');
+      window.location.reload();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsReevaluating(false);
+    }
+  };
+
+  const handleFinalizeExam = async () => {
+    if (!poll) return;
+    if (!confirm('🚨 IMPORTANT: Are you sure you want to finalize all exam grades and publish report cards? Once finalized, you cannot change any scores or reevaluate grades. Student report card receipts will be securely sent to their emails immediately.')) {
+      return;
+    }
+    setIsFinalizing(true);
+    try {
+      const res = await fetch(`/api/polls/${poll.id}/finalize`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to finalize exam');
+      }
+      alert(data.message || 'Exam finalized and report cards published successfully!');
+      window.location.reload();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   const fetchCollaborators = async () => {
     setCollaboratorsLoading(true);
     try {
@@ -1524,6 +1593,7 @@ export default function PollInsights({ params }: PageProps) {
   const renderGradesPanel = () => {
     if (!poll) return null;
 
+    const isViewer = collaboratorRole === 'VIEWER';
     const isClosed = !poll.isOpenVoting;
     const examinees: any[] = [];
 
@@ -1535,7 +1605,7 @@ export default function PollInsights({ params }: PageProps) {
         );
         
         // Parse department & class/year from confirmer2
-        const { department, classYear } = parseConfirmer2(av.confirmer2);
+        const { session, department, classYear } = parseConfirmer2(av.confirmer2);
 
         examinees.push({
           id: av.id,
@@ -1543,6 +1613,7 @@ export default function PollInsights({ params }: PageProps) {
           name: av.confirmer1,
           email: av.email,
           confirmer2: av.confirmer2,
+          session,
           department,
           classYear,
           voted: !!matchingVote,
@@ -1557,6 +1628,7 @@ export default function PollInsights({ params }: PageProps) {
           name: v.userIdentifier || 'Guest Voter',
           email: v.email || 'N/A',
           confirmer2: 'General',
+          session: 'General',
           department: 'General',
           classYear: 'General',
           voted: true,
@@ -1565,6 +1637,7 @@ export default function PollInsights({ params }: PageProps) {
       });
     }
 
+    const uniqueSessions = Array.from(new Set(examinees.map(e => e.session).filter(Boolean)));
     const uniqueDepartments = Array.from(new Set(examinees.map(e => e.department).filter(Boolean)));
     const uniqueClassYears = Array.from(new Set(examinees.map(e => e.classYear).filter(Boolean)));
 
@@ -1586,6 +1659,11 @@ export default function PollInsights({ params }: PageProps) {
         matchesIntegrity = !ex.voted || !ex.vote?.flaggedSuspicious;
       }
 
+      let matchesSession = true;
+      if (selectedSession !== 'ALL') {
+        matchesSession = ex.session === selectedSession;
+      }
+
       let matchesDept = true;
       if (selectedDepartment !== 'ALL') {
         matchesDept = ex.department === selectedDepartment;
@@ -1596,7 +1674,7 @@ export default function PollInsights({ params }: PageProps) {
         matchesClass = ex.classYear === selectedClassYear;
       }
 
-      return matchesSearch && matchesStatus && matchesIntegrity && matchesDept && matchesClass;
+      return matchesSearch && matchesStatus && matchesIntegrity && matchesDept && matchesClass && matchesSession;
     });
 
     // Calculate segment stats
@@ -1605,7 +1683,9 @@ export default function PollInsights({ params }: PageProps) {
       if (selectedDepartment !== 'ALL') matchesDept = ex.department === selectedDepartment;
       let matchesClass = true;
       if (selectedClassYear !== 'ALL') matchesClass = ex.classYear === selectedClassYear;
-      return matchesDept && matchesClass;
+      let matchesSession = true;
+      if (selectedSession !== 'ALL') matchesSession = ex.session === selectedSession;
+      return matchesDept && matchesClass && matchesSession;
     });
 
     const segmentTotal = segmentExaminees.length;
@@ -1752,41 +1832,99 @@ export default function PollInsights({ params }: PageProps) {
         .slice(0, 5);
     };
 
+    // Check if the exam is finalized
+    let isFinalPublished = false;
+    let examMeta: any = {};
+    if (poll.settings?.postEmailMessage) {
+      try {
+        examMeta = JSON.parse(poll.settings.postEmailMessage);
+        if (examMeta && examMeta.isFinalPublished) {
+          isFinalPublished = true;
+        }
+      } catch (e) {}
+    }
+
     return (
       <div className="space-y-6 animate-fade-in print:hidden">
-        {/* Results Release Settings & Stats Cards */}
-        <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-1">
-            <h3 className="font-outfit text-base font-bold text-white flex items-center space-x-2">
-              <Award className="w-5 h-5 text-indigo-400" />
-              <span>Results Release Settings</span>
-            </h3>
-            <p className="text-gray-400 text-xs leading-relaxed max-w-xl">
-              Releasing results emails examinees a comprehensive report of their score, direct concept analysis links, and tutoring resources.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4 shrink-0">
-            <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${
-              poll.settings?.resultsReleased 
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-            }`}>
-              {poll.settings?.resultsReleased ? '✅ Results Released' : '🔒 Results Withheld'}
+        {/* Results Release Settings & Finalization Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Release status controls */}
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="font-outfit text-base font-bold text-white flex items-center space-x-2">
+                <Award className="w-5 h-5 text-indigo-400" />
+                <span>Results Release Settings</span>
+              </h3>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Release immediate results scorecard feedback to examinees.
+              </p>
             </div>
 
-            <button
-              onClick={handleToggleReleaseResults}
-              disabled={releasingResults}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                poll.settings?.resultsReleased
-                  ? 'bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600 hover:text-white'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20'
-              } disabled:opacity-50 flex items-center gap-2`}
-            >
-              {releasingResults && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {poll.settings?.resultsReleased ? 'Retract Score Reports' : 'Release Score Reports'}
-            </button>
+            <div className="flex items-center justify-between gap-4 pt-2">
+              <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${
+                poll.settings?.resultsReleased 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                {poll.settings?.resultsReleased ? '✅ Results Released' : '🔒 Results Withheld'}
+              </div>
+
+              <button
+                onClick={handleToggleReleaseResults}
+                disabled={releasingResults || isFinalPublished}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  poll.settings?.resultsReleased
+                    ? 'bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600 hover:text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20'
+                } disabled:opacity-50 flex items-center gap-2`}
+              >
+                {releasingResults && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {poll.settings?.resultsReleased ? 'Retract Score Reports' : 'Release Score Reports'}
+              </button>
+            </div>
+          </div>
+
+          {/* Exam Grade Finalization panel */}
+          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 flex flex-col justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="font-outfit text-base font-bold text-white flex items-center space-x-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <span>Exam Report Finalization</span>
+              </h3>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                {isFinalPublished 
+                  ? "This exam is finalized and officially published. All scores are locked permanently."
+                  : "Regrade semantic essay responses on answer updates or finalize all scorecards to email students."}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              {isFinalPublished ? (
+                <div className="w-full text-center py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>🔒 Grades Finalized & Report Cards Emailed</span>
+                </div>
+              ) : (
+                <div className="flex w-full gap-3">
+                  <button
+                    onClick={handleReevaluateExam}
+                    disabled={isReevaluating || isFinalizing}
+                    className="flex-1 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isReevaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <History className="w-3.5 h-3.5" />}
+                    <span>Reevaluate Grades</span>
+                  </button>
+                  <button
+                    onClick={handleFinalizeExam}
+                    disabled={isReevaluating || isFinalizing}
+                    className="flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                  >
+                    {isFinalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Finalize & Publish</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1887,6 +2025,19 @@ export default function PollInsights({ params }: PageProps) {
                   <option value="CLEAN">Clear Attempts</option>
                 </select>
 
+                {uniqueSessions.length > 0 && (
+                  <select
+                    value={selectedSession}
+                    onChange={(e: any) => setSelectedSession(e.target.value)}
+                    className="bg-[#030712] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">All Sessions</option>
+                    {uniqueSessions.map((sess) => (
+                      <option key={sess} value={sess}>{sess}</option>
+                    ))}
+                  </select>
+                )}
+
                 {uniqueDepartments.length > 0 && (
                   <select
                     value={selectedDepartment}
@@ -1915,10 +2066,10 @@ export default function PollInsights({ params }: PageProps) {
               </div>
             </div>
 
-            {(selectedDepartment !== 'ALL' || selectedClassYear !== 'ALL') && (
+            {(selectedDepartment !== 'ALL' || selectedClassYear !== 'ALL' || selectedSession !== 'ALL') && (
               <div className="p-4 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up">
                 <div className="flex flex-col space-y-1">
-                  <span className="text-[9px] uppercase font-bold text-indigo-300 tracking-wider">Filtered Group ({selectedDepartment !== 'ALL' ? selectedDepartment : ''} {selectedClassYear !== 'ALL' ? selectedClassYear : ''}) Turnout</span>
+                  <span className="text-[9px] uppercase font-bold text-indigo-300 tracking-wider">Filtered Group ({selectedSession !== 'ALL' ? selectedSession : ''} {selectedDepartment !== 'ALL' ? selectedDepartment : ''} {selectedClassYear !== 'ALL' ? selectedClassYear : ''}) Turnout</span>
                   <div className="flex items-baseline space-x-1.5">
                     <span className="text-xl font-extrabold text-white">{segmentVoted}</span>
                     <span className="text-xs text-gray-400">/ {segmentTotal} ({segmentTurnoutRate.toFixed(1)}%)</span>
@@ -1940,7 +2091,9 @@ export default function PollInsights({ params }: PageProps) {
                 <thead>
                   <tr className="border-b border-white/5 text-gray-500 font-bold uppercase tracking-wider">
                     <th className="pb-3 pr-4">Candidate Details</th>
+                    <th className="pb-3 px-4">Cohort</th>
                     <th className="pb-3 px-4">Attendance</th>
+                    <th className="pb-3 px-4">Marking Status</th>
                     <th className="pb-3 px-4">Integrity Status</th>
                     <th className="pb-3 px-4">Time Spent</th>
                     <th className="pb-3 px-4">Evaluated Score</th>
@@ -1950,7 +2103,7 @@ export default function PollInsights({ params }: PageProps) {
                 <tbody className="divide-y divide-white/5">
                   {filteredExaminees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                      <td colSpan={8} className="py-8 text-center text-gray-500">
                         No candidates match your active search and filter constraints.
                       </td>
                     </tr>
@@ -1960,6 +2113,7 @@ export default function PollInsights({ params }: PageProps) {
                       let scoreStr = '-';
                       let isFlagged = false;
                       let parsedAnswers: any = null;
+                      let markingStatus = 'UNMARKED';
 
                       if (ex.vote) {
                         isFlagged = ex.vote.flaggedSuspicious;
@@ -1977,17 +2131,39 @@ export default function PollInsights({ params }: PageProps) {
                           if (score) {
                             scoreStr = `${score.earned} / ${score.total}`;
                           }
+                          markingStatus = parsedAnswers?.__markingStatus || 'FULLY_MARKED';
                         } catch (e) {
                           console.error(e);
                         }
                       }
 
+                      // Check for other collaborators editing this candidate cell
+                      const otherInspector = activeCollaborators.find((c) => c.focus === `grading-inspect-${ex.vote?.id}`);
+                      const inspectorCollabStyle = otherInspector ? getColorForCollaborator(otherInspector.email) : null;
+
                       return (
-                        <tr key={ex.id} className="hover:bg-white/2 transition-colors">
+                        <tr 
+                          key={ex.id} 
+                          className={`hover:bg-white/2 transition-colors relative ${
+                            inspectorCollabStyle ? `border-2 ${inspectorCollabStyle.border} ${inspectorCollabStyle.glow} bg-indigo-500/5` : ''
+                          }`}
+                        >
                           <td className="py-4 pr-4">
-                            <div className="flex flex-col space-y-0.5">
+                            <div className="flex flex-col space-y-0.5 relative">
                               <span className="font-bold text-white text-sm">{ex.name || 'Anonymous Student'}</span>
                               <span className="text-gray-500 text-[10px] font-mono">{ex.identifier} • {ex.email}</span>
+                              {otherInspector && inspectorCollabStyle && (
+                                <span className={`absolute top-0 right-0 px-1.5 py-0.5 rounded text-[8px] font-bold ${inspectorCollabStyle.bg} ${inspectorCollabStyle.text} animate-pulse`}>
+                                  👤 {otherInspector.fullName} is grading
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-[10px] text-gray-400">
+                            <div className="flex flex-col space-y-0.5">
+                              <span>Sess: {ex.session || 'General'}</span>
+                              <span>Class: {ex.classYear || 'General'}</span>
+                              <span>Dept: {ex.department || 'General'}</span>
                             </div>
                           </td>
                           <td className="py-4 px-4">
@@ -1998,6 +2174,19 @@ export default function PollInsights({ params }: PageProps) {
                             }`}>
                               {ex.voted ? 'Submitted' : 'Absent'}
                             </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            {ex.voted ? (
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
+                                markingStatus === 'FULLY_MARKED' 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                  : markingStatus === 'PARTIALLY_MARKED' 
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
+                              }`}>
+                                {markingStatus === 'FULLY_MARKED' ? 'Fully Graded' : markingStatus === 'PARTIALLY_MARKED' ? 'Partially Graded' : 'Ungraded'}
+                              </span>
+                            ) : '-'}
                           </td>
                           <td className="py-4 px-4">
                             {ex.voted ? (
@@ -2027,6 +2216,7 @@ export default function PollInsights({ params }: PageProps) {
                               <button
                                 onClick={() => {
                                   setGradeInspectorVote(ex.vote);
+                                  !isViewer && setFocusedField(`grading-inspect-${ex.vote.id}`);
                                   try {
                                     const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
                                     const breakdown = parsed?.__examBreakdown || {};
@@ -2042,9 +2232,11 @@ export default function PollInsights({ params }: PageProps) {
                                     console.error(e);
                                   }
                                 }}
-                                className="px-3 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px]"
+                                className={`px-3 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px] ${
+                                  inspectorCollabStyle ? `ring-2 ring-indigo-500` : ''
+                                }`}
                               >
-                                Inspect Answers
+                                {isFinalPublished ? 'View Detailed Grade' : 'Inspect & Grade'}
                               </button>
                             ) : (
                               <span className="text-gray-600 text-xs italic">Not submitted</span>
@@ -2309,7 +2501,7 @@ export default function PollInsights({ params }: PageProps) {
                   </p>
                 </div>
                 <button
-                  onClick={() => setGradeInspectorVote(null)}
+                  onClick={() => { setGradeInspectorVote(null); setFocusedField(''); }}
                   className="text-gray-400 hover:text-white text-xs border border-white/5 hover:border-white/10 px-3 py-1.5 rounded-xl bg-white/2"
                 >
                   Close Inspector
@@ -2448,7 +2640,7 @@ export default function PollInsights({ params }: PageProps) {
 
               <div className="border-t border-white/5 p-6 flex justify-end">
                 <button
-                  onClick={() => setGradeInspectorVote(null)}
+                  onClick={() => { setGradeInspectorVote(null); setFocusedField(''); }}
                   className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs border border-white/5"
                 >
                   Close & Done
@@ -4421,5 +4613,4 @@ export default function PollInsights({ params }: PageProps) {
       `}</style>
     </div>
   );
-}
 }

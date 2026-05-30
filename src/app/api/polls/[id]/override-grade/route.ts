@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
+      include: { settings: true },
     });
 
     if (!poll) {
@@ -52,6 +53,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Only creator or admin can grade
     if (poll.creatorId !== user.id && user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Check if finalized
+    let isFinalPublished = false;
+    if (poll.settings?.postEmailMessage) {
+      try {
+        const meta = JSON.parse(poll.settings.postEmailMessage);
+        if (meta && meta.isFinalPublished) {
+          isFinalPublished = true;
+        }
+      } catch (e) {}
+    }
+
+    if (isFinalPublished) {
+      return NextResponse.json(
+        { error: 'This exam has been finalized and published. Grades can no longer be modified.' },
+        { status: 400 }
+      );
     }
 
     const { voteId, questionId, marksAwarded, feedback } = await req.json();

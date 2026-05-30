@@ -287,15 +287,17 @@ export async function POST(
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
+      const cleanEmail = email.trim().toLowerCase();
+
       // Upsert OTP
       await prisma.oTP.upsert({
-        where: { email: email.trim() },
+        where: { email: cleanEmail },
         update: { otp, expiresAt },
-        create: { email: email.trim(), otp, expiresAt },
+        create: { email: cleanEmail, otp, expiresAt },
       });
 
       // Dispatch mail
-      await sendOTPEmail(email.trim(), otp);
+      await sendOTPEmail(cleanEmail, otp);
 
       return NextResponse.json({
         success: true,
@@ -316,8 +318,10 @@ export async function POST(
         );
       }
 
+      const cleanEmail = email.trim().toLowerCase();
+
       const otpRecord = await prisma.oTP.findUnique({
-        where: { email: email.trim() },
+        where: { email: cleanEmail },
       });
 
       if (!otpRecord || otpRecord.otp !== otp || new Date() > otpRecord.expiresAt) {
@@ -331,7 +335,7 @@ export async function POST(
       const allowedVoter = await prisma.allowedVoter.findFirst({
         where: {
           pollId,
-          email: { equals: email.trim(), mode: 'insensitive' },
+          email: { equals: cleanEmail, mode: 'insensitive' },
         },
       });
 
@@ -344,7 +348,7 @@ export async function POST(
 
       // Clean up OTP record
       await prisma.oTP.delete({
-        where: { email: email.trim() },
+        where: { email: cleanEmail },
       });
 
       // Generate short-lived (15 minutes) voter verification token

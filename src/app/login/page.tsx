@@ -176,6 +176,8 @@ function LoginForm() {
             </label>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               required
               maxLength={6}
               value={twoFactorOtp}
@@ -340,6 +342,8 @@ function LoginForm() {
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
                   maxLength={6}
                   value={resetOtp}

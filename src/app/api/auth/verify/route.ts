@@ -13,9 +13,11 @@ export async function POST(req: Request) {
       );
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     // Retrieve OTP
     const otpRecord = await prisma.oTP.findUnique({
-      where: { email },
+      where: { email: cleanEmail },
     });
 
     if (!otpRecord) {
@@ -43,13 +45,13 @@ export async function POST(req: Request) {
 
     // Verify user in database
     const user = await prisma.user.update({
-      where: { email },
+      where: { email: cleanEmail },
       data: { verified: true },
     });
 
     // Delete OTP record
     await prisma.oTP.delete({
-      where: { email },
+      where: { email: cleanEmail },
     });
 
     // Create session payload

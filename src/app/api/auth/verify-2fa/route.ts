@@ -10,9 +10,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email and OTP are required' }, { status: 400 });
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     // 1. Fetch OTP record
     const otpRecord = await prisma.oTP.findUnique({
-      where: { email }
+      where: { email: cleanEmail }
     });
 
     if (!otpRecord) {
@@ -26,16 +28,16 @@ export async function POST(req: Request) {
 
     // 3. Check expiration
     if (new Date() > otpRecord.expiresAt) {
-      await prisma.oTP.delete({ where: { email } });
+      await prisma.oTP.delete({ where: { email: cleanEmail } });
       return NextResponse.json({ error: 'Verification code has expired. Please log in again to request a new code.' }, { status: 400 });
     }
 
     // 4. Delete the OTP record upon success
-    await prisma.oTP.delete({ where: { email } });
+    await prisma.oTP.delete({ where: { email: cleanEmail } });
 
     // 5. Find the user
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: cleanEmail },
     });
 
     if (!user) {
