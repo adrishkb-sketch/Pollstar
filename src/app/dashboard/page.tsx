@@ -7,7 +7,7 @@ import {
   Vote, Plus, LogOut, Loader2, AlertCircle, Calendar, 
   BarChart3, Users, CheckCircle, Copy, Check, Eye, Edit, Trash2, X, Upload,
   Share2, Link as LinkIcon, Code2, Zap, ExternalLink, Settings, Mail, PlusCircle, Lock, Megaphone,
-  History, ChevronDown, ChevronUp, TrendingUp
+  History, ChevronDown, ChevronUp, TrendingUp, Award
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 import AdvertisementZone from '@/components/AdvertisementZone';
@@ -537,9 +537,10 @@ export default function Dashboard() {
   }
 
   // Calculate aggregated stats
-  const activePolls = polls.filter((p: any) => p.status === 'ACTIVE').length;
-  const totalVotes = polls.reduce((sum: number, p: any) => sum + (p.votes?.length || 0), 0);
-  const totalSurveys = polls.filter((p: any) => p.pollType === 'SURVEY').length;
+  const totalPollsCount = polls.filter((p: any) => p.pollType === 'POLL').length;
+  const totalSurveysCount = polls.filter((p: any) => p.pollType === 'SURVEY').length;
+  const totalExamsCount = polls.filter((p: any) => p.pollType === 'EXAM').length;
+  const activeSessionsCount = polls.filter((p: any) => p.status === 'ACTIVE').length;
 
   // Filtered list for the grid
   const filteredPolls = polls.filter((p: any) => {
@@ -639,11 +640,11 @@ export default function Dashboard() {
         
 
         {/* Stats Grid */}
-        <div id="dashboard-stats" className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div id="dashboard-stats" className="grid grid-cols-1 sm:grid-cols-4 gap-6">
           <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
             <div>
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Total Polls</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{polls.length}</span>
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Polls</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{totalPollsCount}</span>
             </div>
             <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400">
               <Vote className="w-7 h-7" />
@@ -652,21 +653,31 @@ export default function Dashboard() {
 
           <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
             <div>
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Active Polls</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{activePolls}</span>
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Surveys</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{totalSurveysCount}</span>
             </div>
-            <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-400">
-              <CheckCircle className="w-7 h-7" />
+            <div className="p-4 bg-violet-500/10 rounded-2xl text-violet-400">
+              <BarChart3 className="w-7 h-7" />
             </div>
           </div>
 
           <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
             <div>
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Surveys</span>
-              <span className="font-outfit text-3xl font-extrabold text-white">{totalSurveys}</span>
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Exams</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{totalExamsCount}</span>
             </div>
-            <div className="p-4 bg-violet-500/10 rounded-2xl text-violet-400">
-              <BarChart3 className="w-7 h-7" />
+            <div className="p-4 bg-cyan-500/10 rounded-2xl text-cyan-400">
+              <Award className="w-7 h-7" />
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-6 flex items-center justify-between">
+            <div>
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-wider block mb-1">Active Sessions</span>
+              <span className="font-outfit text-3xl font-extrabold text-white">{activeSessionsCount}</span>
+            </div>
+            <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-400">
+              <CheckCircle className="w-7 h-7" />
             </div>
           </div>
         </div>
@@ -1077,13 +1088,23 @@ export default function Dashboard() {
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center justify-between gap-3">
                       {/* Edit Button */}
-                      <button
-                        onClick={() => handleOpenEdit(poll)}
-                        className="flex-1 px-3.5 py-2.5 rounded-xl border border-white/5 hover:border-white/15 bg-white/3 hover:bg-white/8 text-gray-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-center space-x-1.5"
-                      >
-                        <Edit className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Edit Poll</span>
-                      </button>
+                      {(poll.status === 'DRAFT' || (poll.collaborators && poll.collaborators.length > 0) || poll.creatorId !== user?.id) ? (
+                        <Link
+                          href={`/dashboard/create?id=${poll.id}`}
+                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-white/5 hover:border-white/15 bg-white/3 hover:bg-white/8 text-gray-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-center space-x-1.5"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Edit Wizard</span>
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenEdit(poll)}
+                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-white/5 hover:border-white/15 bg-white/3 hover:bg-white/8 text-gray-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-center space-x-1.5"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Edit Details</span>
+                        </button>
+                      )}
 
                       {/* Delete Button */}
                       <button

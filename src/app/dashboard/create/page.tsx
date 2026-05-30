@@ -8,7 +8,7 @@ import {
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy, Lock,
   Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search, GripVertical,
-  X, Eraser, RotateCcw, FileText, Palette
+  X, Eraser, RotateCcw, FileText, Palette, Clock, Activity
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -17,6 +17,14 @@ export default function CreatePoll() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Collaboration / Co-editing states
+  const [editingPollId, setEditingPollId] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<string>('');
+  const [activeCollaborators, setActiveCollaborators] = useState<any[]>([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsList, setLogsList] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   // ────────────────────────────────────────────────────────
   // POLL FORM STATES
@@ -704,6 +712,209 @@ export default function CreatePoll() {
     setEndTime(formatIST(end));
   }, []);
 
+  // Load poll details if editing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const editId = params.get('id');
+      if (editId) {
+        setEditingPollId(editId);
+        setLoading(true);
+        fetch(`/api/polls/${editId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.poll) {
+              const p = data.poll;
+              setPollType(p.pollType);
+              setTitle(p.title || '');
+              setDescription(p.description || '');
+              setPosterUrl(p.posterUrl || '');
+              setIsOpenVoting(!!p.isOpenVoting);
+              setIsAnonymous(!!p.isAnonymous);
+              setIsResultPublic(!!p.isResultPublic);
+
+              const formatIST = (dateInput: any) => {
+                if (!dateInput) return '';
+                const d = new Date(dateInput);
+                const fmt = new Intl.DateTimeFormat('en-US', {
+                  timeZone: 'Asia/Kolkata',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                });
+                const parts = fmt.formatToParts(d);
+                const getVal = (type: string) => parts.find(x => x.type === type)?.value || '';
+
+                const year = getVal('year');
+                const month = getVal('month');
+                const day = getVal('day');
+                let hour = getVal('hour');
+                const minute = getVal('minute');
+
+                if (hour === '24') hour = '00';
+                return `${year}-${month}-${day}T${hour}:${minute}`;
+              };
+              if (p.startTime) setStartTime(formatIST(p.startTime));
+              if (p.endTime) setEndTime(formatIST(p.endTime));
+
+              if (p.questions && p.questions.length > 0) {
+                setQuestions(p.questions.map((q: any) => ({
+                  id: q.id,
+                  questionText: q.questionText || '',
+                  type: q.type || 'SINGLE',
+                  options: q.options?.map((o: any) => o.text) || [],
+                  pageNumber: q.pageNumber || 1,
+                  logicRules: q.logicRules || null,
+                  correctAnswer: q.correctAnswer || null,
+                  correctAnswers: q.correctAnswers || null,
+                  marks: q.marks !== undefined ? String(q.marks) : '0.0',
+                  inputConstraint: q.inputConstraint || 'NONE',
+                  fileUploadDriveUrl: q.fileUploadDriveUrl || null,
+                  enableWhiteboard: !!q.enableWhiteboard,
+                })));
+              }
+
+              const s = p.settings || {};
+              setLimitOneVotePerUser(s.limitOneVotePerUser !== undefined ? !!s.limitOneVotePerUser : true);
+              setLimitOneVotePerIP(!!s.limitOneVotePerIP);
+              setLimitOneVotePerISP(!!s.limitOneVotePerISP);
+              setHideResultsUntilEnd(!!s.hideResultsUntilEnd);
+              setPublicShowMaps(s.publicShowMaps !== undefined ? !!s.publicShowMaps : true);
+              setPublicShowCharts(s.publicShowCharts !== undefined ? !!s.publicShowCharts : true);
+              setPublicShowStats(s.publicShowStats !== undefined ? !!s.publicShowStats : true);
+              setEnableConfidenceSlider(!!s.enableConfidenceSlider);
+              setEnableDragAndDropPodium(!!s.enableDragAndDropPodium);
+              setEnableHotStreaks(!!s.enableHotStreaks);
+              setEnableLiveTicker(!!s.enableLiveTicker);
+              setEnableSmartDebrief(!!s.enableSmartDebrief);
+              setLeaderboardVisibility(s.leaderboardVisibility || 'HIDDEN');
+
+              // Load features
+              const rFeats: any = {};
+              Object.keys(rankedFeatures).forEach(k => { rFeats[k] = !!s[k]; });
+              setRankedFeatures(rFeats);
+
+              const sFeats: any = {};
+              Object.keys(singleFeatures).forEach(k => { sFeats[k] = !!s[k]; });
+              setSingleFeatures(sFeats);
+
+              const kFeats: any = {};
+              Object.keys(knockoutFeatures).forEach(k => { kFeats[k] = !!s[k]; });
+              setKnockoutFeatures(kFeats);
+
+              setRankedTieBreakerRule(s.rankedTieBreakerRule || 'FIRST_PLACE');
+              setRankedCompletenessRule(s.rankedCompletenessRule || 'PARTIAL');
+
+              if (p.pollType === 'SURVEY') {
+                setPostSurveyAction(s.postSurveyAction || 'Thank you for completing this survey!');
+                setCollectEmail(!!s.collectEmail);
+                setPostEmailMessage(s.postEmailMessage || '');
+                setEnableDropOffTracking(!!s.enableDropOffTracking);
+                setEnableSemanticAnalysis(!!s.enableSemanticAnalysis);
+                setEnableCrossTabulation(!!s.enableCrossTabulation);
+                setEnableTimeAnalytics(!!s.enableTimeAnalytics);
+                setEnableCustomNavLabels(!!s.enableCustomNavLabels);
+                setEnablePreOnboarding(!!s.enablePreOnboarding);
+                setEnableBranchingLogic(!!s.enableBranchingLogic);
+                setEnableDomainRestriction(!!s.enableDomainRestriction);
+                setEnableDirectInbox(!!s.enableDirectInbox);
+                setEnableDraftSave(!!s.enableDraftSave);
+              } else if (p.pollType === 'EXAM') {
+                setPostExamMessage(s.postSurveyAction || 'Thank you for completing the exam! Your answers have been recorded.');
+                setResultsReleased(!!s.resultsReleased);
+                setExamTimerDuration(s.examTimerDuration || 60);
+                setEnableProctorCamera(!!s.enableProctorCamera);
+                setEnableProctorMicrophone(!!s.enableProctorMicrophone);
+                setProctorDriveFolderUrl(s.proctorDriveFolderUrl || '');
+                setEnableAutoSubmitOnTabLeave(!!s.enableAutoSubmitOnTabLeave);
+                setEnableAutoSubmitOnCacheClear(!!s.enableAutoSubmitOnCacheClear);
+                setEnableAutoSubmitOnLeave(!!s.enableAutoSubmitOnLeave);
+                setEnableShuffleQuestions(!!s.enableShuffleQuestions);
+                setEnableShuffleOptions(!!s.enableShuffleOptions);
+                setEnableCopyPasteBlock(!!s.enableCopyPasteBlock);
+                setEnableInstantFeedback(!!s.enableInstantFeedback);
+                setEnableNegativeMarking(!!s.enableNegativeMarking);
+                setEnableCalculator(!!s.enableCalculator);
+                setEnableOtpBypass(!!s.enableOtpBypass);
+                setEnableStrictTimeBuffer(!!s.enableStrictTimeBuffer);
+                setEnableTabDepartureSound(!!s.enableTabDepartureSound);
+              } else if (p.pollType === 'POLL') {
+                setEnableDemographicWeighting(!!s.enableDemographicWeighting);
+                setEnableVpnBlocking(!!s.enableVpnBlocking);
+                setEnableWriteInOptions(!!s.enableWriteInOptions);
+                setEnableQuadraticVoting(!!s.enableQuadraticVoting);
+                setEnableTieBreakerEngine(!!s.enableTieBreakerEngine);
+                setEnableConsensusScore(!!s.enableConsensusScore);
+                setEnableSentimentChat(!!s.enableSentimentChat);
+                setEnableSwingMap(!!s.enableSwingMap);
+              }
+
+              setVerificationMethod(s.verificationMethod || 'EMAIL');
+              setVerificationType(s.verificationType || 'OTP');
+
+              setEnableCustomBranding(!!s.enableCustomBranding);
+              setCustomLogoUrl(s.customLogoUrl || '');
+              setCustomBrandingText(s.customBrandingText || '');
+              setCustomTheme(s.customTheme || 'MIDNIGHT');
+              setEnableSaveAndResumeLater(!!s.enableSaveAndResumeLater);
+              setStudentWhiteboardDriveUrl(s.studentWhiteboardDriveUrl || '');
+
+              if (p.allowedVoters && p.allowedVoters.length > 0) {
+                setAllowedVoters(p.allowedVoters.map((av: any) => ({
+                  identifier: av.identifier || '',
+                  confirmer1: av.confirmer1 || '',
+                  confirmer2: av.confirmer2 || '',
+                  email: av.email || '',
+                  phone: av.phone || '',
+                  password: av.password || '',
+                  voterAuthType: av.voterAuthType || 'GLOBAL',
+                })));
+                setNumVoters(p.allowedVoters.length);
+              }
+
+              setIdentifierLabel(p.identifierLabel || 'Roll Number');
+              setConfirmer1Label(p.confirmer1Label || 'Student Name');
+              if (p.confirmer2Label) {
+                setConfirmer2Label(p.confirmer2Label);
+                setUseConfirmer2(true);
+              } else {
+                setConfirmer2Label('');
+                setUseConfirmer2(false);
+              }
+            }
+            setLoading(false);
+          })
+          .catch(e => {
+            console.error('Failed to load edit poll:', e);
+            setLoading(false);
+          });
+      }
+    }
+  }, []);
+
+  // Presence / Co-editing sync
+  useEffect(() => {
+    if (!editingPollId) return;
+
+    const syncPresence = () => {
+      fetch(`/api/polls/${editingPollId}?focus=${encodeURIComponent(focusedField)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.activeCollaborators) {
+            setActiveCollaborators(data.activeCollaborators);
+          }
+        })
+        .catch(e => console.error('Presence poll error:', e));
+    };
+
+    syncPresence();
+    const interval = setInterval(syncPresence, 3000);
+    return () => clearInterval(interval);
+  }, [editingPollId, focusedField]);
+
   // Fetch previous closed poll rosters
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -1233,6 +1444,163 @@ export default function CreatePoll() {
     }
   };
 
+  // ────────────────────────────────────────────────────────
+  // DRAFT EDIT: PATCH when editingPollId is set
+  // ────────────────────────────────────────────────────────
+  const handleUpdateDraftPoll = async (status: 'DRAFT' | 'ACTIVE') => {
+    if (!editingPollId) return;
+    setLoading(true);
+    setError('');
+
+    const payload = {
+      title,
+      description: ballotPriority === 'LOW' && !isOpenVoting && pollType !== 'SURVEY' ? `${description} [priority: LOW]` : description,
+      posterUrl,
+      isOpenVoting,
+      isAnonymous,
+      isResultPublic,
+      startTime: new Date(startTime).toISOString(),
+      endTime: new Date(endTime).toISOString(),
+      status,
+      questions: questions.map((q, idx) => ({
+        questionText: q.questionText,
+        type: q.type,
+        options: ['SHORT_TEXT', 'LONG_TEXT', 'RATING'].includes(q.type) ? [] : q.options,
+        pageNumber: q.pageNumber || 1,
+        order: idx + 1,
+        logicRules: q.logicRules || null,
+        correctAnswer: q.correctAnswer || null,
+        correctAnswers: q.correctAnswers || null,
+        marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+        inputConstraint: q.inputConstraint || 'NONE',
+        fileUploadDriveUrl: q.fileUploadDriveUrl || null,
+        enableWhiteboard: !!q.enableWhiteboard,
+      })),
+      settings: {
+        limitOneVotePerUser,
+        limitOneVotePerIP,
+        limitOneVotePerISP,
+        hideResultsUntilEnd,
+        publicShowMaps,
+        publicShowCharts,
+        publicShowStats,
+        enableConfidenceSlider: questions.some(q => q.type === 'SINGLE') ? enableConfidenceSlider : false,
+        enableDragAndDropPodium,
+        enableHotStreaks,
+        enableLiveTicker,
+        enableFomoPopups: false,
+        enableSmartDebrief,
+        leaderboardVisibility,
+        ...Object.fromEntries(Object.entries(rankedFeatures).map(([key, enabled]) => [key, hasRankedQuestion ? enabled : false])),
+        ...Object.fromEntries(Object.entries(singleFeatures).map(([key, enabled]) => [key, hasSingleQuestion ? enabled : false])),
+        ...Object.fromEntries(Object.entries(knockoutFeatures).map(([key, enabled]) => [key, hasKnockoutQuestion ? enabled : false])),
+        rankedTieBreakerRule,
+        rankedCompletenessRule,
+        postSurveyAction: pollType === 'SURVEY' ? postSurveyAction : pollType === 'EXAM' ? postExamMessage : null,
+        resultsReleased: pollType === 'EXAM' ? resultsReleased : false,
+        collectEmail: pollType === 'SURVEY' ? collectEmail : false,
+        postEmailMessage: pollType === 'SURVEY' ? postEmailMessage : null,
+        enableDropOffTracking: pollType === 'SURVEY' ? enableDropOffTracking : false,
+        enableSemanticAnalysis: pollType === 'SURVEY' ? enableSemanticAnalysis : false,
+        enableCrossTabulation: pollType === 'SURVEY' ? enableCrossTabulation : false,
+        enableTimeAnalytics: pollType === 'SURVEY' ? enableTimeAnalytics : false,
+        verificationMethod,
+        verificationType,
+        examTimerDuration: pollType === 'EXAM' ? examTimerDuration : null,
+        enableProctorCamera: pollType === 'EXAM' ? enableProctorCamera : false,
+        enableProctorMicrophone: pollType === 'EXAM' ? enableProctorMicrophone : false,
+        proctorDriveFolderUrl: pollType === 'EXAM' ? proctorDriveFolderUrl : null,
+        enableAutoSubmitOnTabLeave: pollType === 'EXAM' ? enableAutoSubmitOnTabLeave : false,
+        enableAutoSubmitOnCacheClear: pollType === 'EXAM' ? enableAutoSubmitOnCacheClear : false,
+        enableAutoSubmitOnLeave: pollType === 'EXAM' ? enableAutoSubmitOnLeave : false,
+        enableCustomBranding,
+        customLogoUrl,
+        customBrandingText,
+        enableShuffleQuestions: pollType === 'EXAM' ? enableShuffleQuestions : false,
+        enableShuffleOptions: pollType === 'EXAM' ? enableShuffleOptions : false,
+        enableCopyPasteBlock: pollType === 'EXAM' ? enableCopyPasteBlock : false,
+        enableInstantFeedback: pollType === 'EXAM' ? enableInstantFeedback : false,
+        enableNegativeMarking: pollType === 'EXAM' ? enableNegativeMarking : false,
+        enableCalculator: pollType === 'EXAM' ? enableCalculator : false,
+        enableOtpBypass: pollType === 'EXAM' ? enableOtpBypass : false,
+        enableStrictTimeBuffer: pollType === 'EXAM' ? enableStrictTimeBuffer : false,
+        enableTabDepartureSound: pollType === 'EXAM' ? enableTabDepartureSound : false,
+        enableDemographicWeighting: pollType === 'POLL' ? enableDemographicWeighting : false,
+        enableVpnBlocking: pollType === 'POLL' ? enableVpnBlocking : false,
+        enableWriteInOptions: pollType === 'POLL' ? enableWriteInOptions : false,
+        enableQuadraticVoting: pollType === 'POLL' ? enableQuadraticVoting : false,
+        enableTieBreakerEngine: pollType === 'POLL' ? enableTieBreakerEngine : false,
+        enableConsensusScore: pollType === 'POLL' ? enableConsensusScore : false,
+        enableSentimentChat: pollType === 'POLL' ? enableSentimentChat : false,
+        enableSwingMap: pollType === 'POLL' ? enableSwingMap : false,
+        enableCustomNavLabels: pollType === 'SURVEY' ? enableCustomNavLabels : false,
+        enablePreOnboarding: pollType === 'SURVEY' ? enablePreOnboarding : false,
+        enableBranchingLogic: pollType === 'SURVEY' ? enableBranchingLogic : false,
+        enableDomainRestriction: pollType === 'SURVEY' ? enableDomainRestriction : false,
+        enableDirectInbox: pollType === 'SURVEY' ? enableDirectInbox : false,
+        enableDraftSave: pollType === 'SURVEY' ? enableDraftSave : false,
+        customTheme,
+        enableSaveAndResumeLater: ['EXAM', 'SURVEY'].includes(pollType) ? enableSaveAndResumeLater : false,
+        studentWhiteboardDriveUrl: ['EXAM', 'SURVEY'].includes(pollType) && studentWhiteboardDriveUrl ? studentWhiteboardDriveUrl : null,
+      },
+      allowedVoters: isOpenVoting 
+        ? [] 
+        : allowedVoters.map(v => {
+            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+            const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            return {
+              identifier: v.identifier,
+              confirmer1: v.confirmer1,
+              confirmer2: useConfirmer2 ? v.confirmer2 : '',
+              email: cleanEmail,
+              phone: v.phone || null,
+              password: v.password || null,
+              voterAuthType: v.voterAuthType || 'GLOBAL',
+            };
+          }),
+      identifierLabel: isOpenVoting ? 'Roll Number' : identifierLabel,
+      confirmer1Label: isOpenVoting ? 'Student Name' : confirmer1Label,
+      confirmer2Label: isOpenVoting ? 'Parent Name' : (useConfirmer2 ? confirmer2Label : ''),
+    };
+
+    try {
+      const res = await fetch(`/api/polls/${editingPollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update poll');
+      }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
+  // FETCH AUDIT LOGS FOR THIS POLL
+  // ────────────────────────────────────────────────────────
+  const fetchLogs = async () => {
+    if (!editingPollId) return;
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(`/api/polls/${editingPollId}/logs`);
+      const data = await res.json();
+      if (data.success) {
+        setLogsList(data.logs || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch logs:', e);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
   const stepsList = pollType === 'EXAM'
     ? ['Details', 'Questions', 'Completion', 'Audience', 'Security', 'Anti-Cheat', 'Schedule', 'Visibility', 'Settings']
     : pollType === 'SURVEY'
@@ -1241,6 +1609,17 @@ export default function CreatePoll() {
 
   const showPhoneColumn = verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
   const showPasswordColumn = verificationType === 'PASSWORD' || allowedVoters.some(v => v.voterAuthType === 'EMAIL_PASSWORD' || v.voterAuthType === 'PHONE_PASSWORD');
+
+  // Helper: get which collaborator (if any) is focused on the given field
+  const getCollabOnField = (fieldName: string) => {
+    return activeCollaborators.find((c: any) => c.focus === fieldName) || null;
+  };
+
+  const collabRingColors = ['ring-violet-500', 'ring-cyan-500', 'ring-rose-500', 'ring-amber-500', 'ring-green-500'];
+  const getCollabRingColor = (collab: any) => {
+    const idx = activeCollaborators.indexOf(collab);
+    return collabRingColors[idx % collabRingColors.length];
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -1251,13 +1630,51 @@ export default function CreatePoll() {
             <BrandLogo iconSize={22} textSize="text-xl" />
           </Link>
 
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white flex items-center space-x-1.5 transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Cancel</span>
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* Collaborator presence badges */}
+            {editingPollId && activeCollaborators.length > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-2">
+                  {activeCollaborators.slice(0, 5).map((collab: any, i: number) => {
+                    const colors = ['bg-violet-500', 'bg-cyan-500', 'bg-rose-500', 'bg-amber-500', 'bg-green-500'];
+                    const name = collab.fullName || collab.email || 'User';
+                    return (
+                      <div
+                        key={collab.id || i}
+                        title={`${name} is editing`}
+                        className={`w-7 h-7 rounded-full ${colors[i % colors.length]} border-2 border-[#080d1a] flex items-center justify-center text-white text-[9px] font-black uppercase shadow-md`}
+                      >
+                        {name.charAt(0)}
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] text-gray-400 font-semibold">
+                  {activeCollaborators.length} editing
+                </span>
+              </div>
+            )}
+
+            {/* Logs button (only visible when editing existing poll) */}
+            {editingPollId && (
+              <button
+                type="button"
+                onClick={() => { setShowLogsModal(true); fetchLogs(); }}
+                className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 hover:text-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                Logs
+              </button>
+            )}
+
+            <Link
+              href="/dashboard"
+              className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white flex items-center space-x-1.5 transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Cancel</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -1325,30 +1742,60 @@ export default function CreatePoll() {
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
                     Title
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={pollType === 'POLL' ? "e.g. Student Council Presidential Election 2026" : "e.g. Customer Satisfaction Survey"}
-                    className="w-full glass-input placeholder-gray-600 text-sm"
-                  />
+                  {(() => {
+                    const collab = getCollabOnField('title');
+                    return (
+                      <div className="relative">
+                        {collab && (
+                          <div className="absolute -top-5 left-0 flex items-center gap-1">
+                            <div className={`w-2 h-2 rounded-full bg-violet-400 animate-pulse`} />
+                            <span className="text-[9px] text-violet-400 font-semibold">{collab.fullName || collab.email} is editing this</span>
+                          </div>
+                        )}
+                        <input
+                          type="text"
+                          required
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          onFocus={() => setFocusedField('title')}
+                          onBlur={() => setFocusedField('')}
+                          placeholder={pollType === 'POLL' ? "e.g. Student Council Presidential Election 2026" : "e.g. Customer Satisfaction Survey"}
+                          className={`w-full glass-input placeholder-gray-600 text-sm transition-all ${collab ? `ring-2 ${getCollabRingColor(collab)} ring-offset-0 ring-offset-transparent` : ''}`}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div>
                   <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
                     {pollType === 'SURVEY' ? 'Description / Survey Guidelines' : 'Description / Voter Guidelines'}
                   </label>
-                  <textarea
-                    required
-                    rows={4}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder={pollType === 'SURVEY' 
-                      ? "Provide details about the survey's purpose, scope, guidelines, and other rules." 
-                      : "Provide details about the poll candidate bios, voting guidelines, and other rules."}
-                    className="w-full glass-input placeholder-gray-600 text-sm resize-none"
-                  />
+                  {(() => {
+                    const collab = getCollabOnField('description');
+                    return (
+                      <div className="relative">
+                        {collab && (
+                          <div className="absolute -top-5 left-0 flex items-center gap-1">
+                            <div className={`w-2 h-2 rounded-full bg-cyan-400 animate-pulse`} />
+                            <span className="text-[9px] text-cyan-400 font-semibold">{collab.fullName || collab.email} is editing this</span>
+                          </div>
+                        )}
+                        <textarea
+                          required
+                          rows={4}
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          onFocus={() => setFocusedField('description')}
+                          onBlur={() => setFocusedField('')}
+                          placeholder={pollType === 'SURVEY' 
+                            ? "Provide details about the survey's purpose, scope, guidelines, and other rules." 
+                            : "Provide details about the poll candidate bios, voting guidelines, and other rules."}
+                          className={`w-full glass-input placeholder-gray-600 text-sm resize-none transition-all ${collab ? `ring-2 ${getCollabRingColor(collab)} ring-offset-0 ring-offset-transparent` : ''}`}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div>
@@ -1451,18 +1898,34 @@ export default function CreatePoll() {
                           <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Page {q.pageNumber}</span>
                         )}
                       </label>
-                      <input
-                        type="text"
-                        required
-                        value={q.questionText}
-                        onChange={(e) => {
-                          const updated = [...questions];
-                          updated[qIndex].questionText = e.target.value;
-                          setQuestions(updated);
-                        }}
-                        placeholder={pollType === 'EXAM' ? "Type exam question here..." : "Type your question here..."}
-                        className="w-full glass-input placeholder-gray-600 text-sm pr-12"
-                      />
+                      {(() => {
+                        const fieldName = `question-${qIndex}`;
+                        const collab = getCollabOnField(fieldName);
+                        return (
+                          <div className="relative">
+                            {collab && (
+                              <div className="absolute -top-5 left-0 flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                <span className="text-[9px] text-amber-400 font-semibold">{collab.fullName || collab.email} is editing this</span>
+                              </div>
+                            )}
+                            <input
+                              type="text"
+                              required
+                              value={q.questionText}
+                              onChange={(e) => {
+                                const updated = [...questions];
+                                updated[qIndex].questionText = e.target.value;
+                                setQuestions(updated);
+                              }}
+                              onFocus={() => setFocusedField(fieldName)}
+                              onBlur={() => setFocusedField('')}
+                              placeholder={pollType === 'EXAM' ? "Type exam question here..." : "Type your question here..."}
+                              className={`w-full glass-input placeholder-gray-600 text-sm pr-12 transition-all ${collab ? `ring-2 ${getCollabRingColor(collab)} ring-offset-0 ring-offset-transparent` : ''}`}
+                            />
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {['SURVEY', 'EXAM'].includes(pollType) && (
@@ -1615,30 +2078,44 @@ export default function CreatePoll() {
                           Options / Choices
                         </label>
                         <div className="space-y-2">
-                          {q.options.map((opt: string, optIdx: number) => (
-                            <div key={optIdx} className="flex items-center space-x-2.5">
-                              <input
-                                type="text"
-                                required
-                                value={opt}
-                                onChange={(e) => handleOptionChange(e.target.value, qIndex, optIdx)}
-                                placeholder={`Option ${optIdx + 1}`}
-                                className="flex-1 glass-input placeholder-gray-600 text-sm py-2"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveOption(qIndex, optIdx)}
-                                disabled={q.options.length <= 2}
-                                className={`p-2.5 rounded-xl border border-white/5 transition-all ${
-                                  q.options.length > 2
-                                    ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
-                                    : 'text-gray-600 cursor-not-allowed'
-                                }`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                          {q.options.map((opt: string, optIdx: number) => {
+                            const fieldName = `question-${qIndex}-option-${optIdx}`;
+                            const collab = getCollabOnField(fieldName);
+                            return (
+                              <div key={optIdx} className="flex items-center space-x-2.5 relative">
+                                <div className="flex-1 relative">
+                                  {collab && (
+                                    <div className="absolute -top-5 left-0 flex items-center gap-1 z-10">
+                                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                      <span className="text-[9px] text-amber-400 font-semibold">{collab.fullName || collab.email} is editing this</span>
+                                    </div>
+                                  )}
+                                  <input
+                                    type="text"
+                                    required
+                                    value={opt}
+                                    onChange={(e) => handleOptionChange(e.target.value, qIndex, optIdx)}
+                                    onFocus={() => setFocusedField(fieldName)}
+                                    onBlur={() => setFocusedField('')}
+                                    placeholder={`Option ${optIdx + 1}`}
+                                    className={`w-full glass-input placeholder-gray-600 text-sm py-2 transition-all ${collab ? `ring-2 ${getCollabRingColor(collab)} ring-offset-0 ring-offset-transparent` : ''}`}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveOption(qIndex, optIdx)}
+                                  disabled={q.options.length <= 2}
+                                  className={`p-2.5 rounded-xl border border-white/5 transition-all ${
+                                    q.options.length > 2
+                                      ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
+                                      : 'text-gray-600 cursor-not-allowed'
+                                  }`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         <button
@@ -3685,16 +4162,16 @@ export default function CreatePoll() {
               <>
                 <button
                   type="button"
-                  onClick={() => handleSubmitPoll('DRAFT')}
+                  onClick={() => editingPollId ? handleUpdateDraftPoll('DRAFT') : handleSubmitPoll('DRAFT')}
                   disabled={loading}
                   className="px-6 py-3 rounded-xl font-bold glass-card border-white/15 text-indigo-300 hover:text-white text-sm flex items-center space-x-2"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Save Draft</span>
+                  <span>{editingPollId ? 'Save Changes' : 'Save Draft'}</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSubmitPoll('ACTIVE')}
+                  onClick={() => editingPollId ? handleUpdateDraftPoll('ACTIVE') : handleSubmitPoll('ACTIVE')}
                   disabled={loading}
                   className="px-6 py-3 rounded-xl font-bold gradient-btn text-white text-sm flex items-center space-x-2"
                 >
@@ -3703,7 +4180,7 @@ export default function CreatePoll() {
                   ) : (
                     <>
                       <Check className="w-4 h-4" />
-                      <span>Launch Poll</span>
+                      <span>{editingPollId ? 'Publish Now' : 'Launch Poll'}</span>
                     </>
                   )}
                 </button>
@@ -3712,6 +4189,159 @@ export default function CreatePoll() {
           </div>
         </div>
       </main>
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* LOGS MODAL                                         */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {showLogsModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowLogsModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative w-full max-w-2xl max-h-[80vh] flex flex-col bg-[#0a0f1e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#080d1a]">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/15 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Edit Audit Logs</h3>
+                  <p className="text-[10px] text-gray-500">All tracked changes and collaborator activity for this poll</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLogsModal(false)}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Active Collaborators Section */}
+            {activeCollaborators.length > 0 && (
+              <div className="px-6 py-3 border-b border-white/5 bg-indigo-500/5">
+                <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider mb-2">Currently Editing</p>
+                <div className="flex flex-wrap gap-2">
+                  {activeCollaborators.map((collab: any, i: number) => {
+                    const colorPairs = [
+                      { bg: 'bg-violet-500/20', text: 'text-violet-300', border: 'border-violet-500/30' },
+                      { bg: 'bg-cyan-500/20', text: 'text-cyan-300', border: 'border-cyan-500/30' },
+                      { bg: 'bg-rose-500/20', text: 'text-rose-300', border: 'border-rose-500/30' },
+                      { bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/30' },
+                      { bg: 'bg-green-500/20', text: 'text-green-300', border: 'border-green-500/30' },
+                    ];
+                    const cp = colorPairs[i % colorPairs.length];
+                    const name = collab.fullName || collab.email || 'User';
+                    return (
+                      <div
+                        key={collab.id || i}
+                        className={`flex items-center gap-2 px-2.5 py-1 rounded-full ${cp.bg} border ${cp.border}`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${cp.text.replace('text-', 'bg-')} animate-pulse`} />
+                        <span className={`text-[10px] font-semibold ${cp.text}`}>{name}</span>
+                        {collab.focusedField && (
+                          <span className="text-[9px] text-gray-500">editing {collab.focusedField}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Logs Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              {loadingLogs ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              ) : logsList.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-white/3 border border-white/5 flex items-center justify-center mx-auto mb-3">
+                    <Clock className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <p className="text-gray-500 text-sm font-semibold">No activity logged yet</p>
+                  <p className="text-gray-600 text-xs mt-1">Changes made to this poll will appear here</p>
+                </div>
+              ) : (
+                logsList.map((log: any, idx: number) => {
+                  const actionColors: Record<string, string> = {
+                    COEDIT_UPDATE: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+                    MODIFY_POLL: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                    CREATE_POLL: 'text-green-400 bg-green-500/10 border-green-500/20',
+                    STATUS_CHANGE: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+                    DELETE_POLL: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+                  };
+                  const color = actionColors[log.action] || 'text-gray-400 bg-white/5 border-white/10';
+                  const timestamp = new Date(log.timestamp);
+                  const relTime = (() => {
+                    const diffMs = Date.now() - timestamp.getTime();
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHrs = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+                    if (diffMins < 1) return 'just now';
+                    if (diffMins < 60) return `${diffMins}m ago`;
+                    if (diffHrs < 24) return `${diffHrs}h ago`;
+                    return `${diffDays}d ago`;
+                  })();
+
+                  return (
+                    <div
+                      key={log.id || idx}
+                      className="flex items-start gap-3 p-3.5 rounded-xl bg-white/2 border border-white/5 hover:border-white/10 transition-all"
+                    >
+                      {/* Timeline dot */}
+                      <div className="shrink-0 mt-0.5">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center border text-[9px] font-black uppercase ${color}`}>
+                          {log.action === 'COEDIT_UPDATE' ? '✎' : log.action === 'CREATE_POLL' ? '+' : log.action === 'MODIFY_POLL' ? '△' : '⬤'}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold text-white truncate">
+                              {log.admin?.fullName || log.admin?.email || 'System'}
+                            </span>
+                            <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${color}`}>
+                              {log.action?.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-gray-600 shrink-0">{relTime}</span>
+                        </div>
+                        {log.details && (
+                          <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{log.details}</p>
+                        )}
+                        <p className="text-[9px] text-gray-600 mt-0.5">
+                          {timestamp.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-white/5 bg-[#080d1a]/80 flex items-center justify-between">
+              <span className="text-[10px] text-gray-600">{logsList.length} log entries found</span>
+              <button
+                type="button"
+                onClick={() => { fetchLogs(); }}
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🧠 Floating Creator Brain Board Button */}
       <button

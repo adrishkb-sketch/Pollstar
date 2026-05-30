@@ -431,7 +431,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       enableCustomBranding, customLogoUrl, customBrandingText,
       // Custom theme and save/resume fields
       customTheme, enableSaveAndResumeLater, studentWhiteboardDriveUrl,
-      questions
+      questions,
+      // Full-wizard draft save fields
+      isOpenVoting, isAnonymous,
+      allowedVoters: allowedVotersPayload,
+      identifierLabel, confirmer1Label, confirmer2Label,
     } = await req.json();
 
     const updateData: any = {};
@@ -449,6 +453,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (posterUrl !== undefined) {
       updateData.posterUrl = posterUrl;
+    }
+    if (isOpenVoting !== undefined) {
+      updateData.isOpenVoting = !!isOpenVoting;
+    }
+    if (isAnonymous !== undefined) {
+      updateData.isAnonymous = !!isAnonymous;
+    }
+    if (identifierLabel) {
+      updateData.identifierLabel = identifierLabel;
+    }
+    if (confirmer1Label) {
+      updateData.confirmer1Label = confirmer1Label;
+    }
+    if (confirmer2Label !== undefined) {
+      updateData.confirmer2Label = confirmer2Label;
     }
     const originalStartTime = poll.startTime;
     const originalEndTime = poll.endTime;
@@ -656,6 +675,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               }
             }
           }
+        }
+      }
+
+      // Rewrite allowed voters if provided
+      if (allowedVotersPayload !== undefined && Array.isArray(allowedVotersPayload)) {
+        await tx.allowedVoter.deleteMany({ where: { pollId } });
+        if (allowedVotersPayload.length > 0) {
+          await tx.allowedVoter.createMany({
+            data: allowedVotersPayload.map((v: any) => ({
+              pollId,
+              identifier: v.identifier || '',
+              confirmer1: v.confirmer1 || '',
+              confirmer2: v.confirmer2 || '',
+              email: v.email || '',
+              phone: v.phone || null,
+              password: v.password || null,
+              voterAuthType: v.voterAuthType || 'GLOBAL',
+            }))
+          });
         }
       }
 
