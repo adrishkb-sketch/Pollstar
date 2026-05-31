@@ -4,6 +4,7 @@ import { PollType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+import { getDynamicParticipantLimit } from '@/lib/participantLimits';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
 
@@ -108,42 +109,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }, { status: 200 });
     }
 
-    // Fetch associated invoice or plan to determine participant limit
-    let participantLimit = 5000; // default backup
-    if (poll.invoiceId) {
-      const inv = await prisma.invoice.findUnique({
-        where: { id: poll.invoiceId },
-        include: { plan: true }
-      });
-      if (inv && inv.plan) {
-        const limitVal = inv.plan.maxParticipantsExam;
-        if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
-          participantLimit = limitVal;
-        }
-      }
-    } else {
-      const creator = await prisma.user.findUnique({
-        where: { id: poll.creatorId },
-        include: { plan: true }
-      });
-      if (creator && creator.plan) {
-        const plan = creator.plan;
-        let limit = plan.maxParticipantsExam;
-
-        // Check if there are duration overrides for this plan
-        if (plan.durations && creator.planBillingCycle) {
-          const durs = plan.durations as any;
-          const cycle = creator.planBillingCycle;
-          if (durs[cycle] && durs[cycle].enabled) {
-            const cfg = durs[cycle];
-            if (cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
-          }
-        }
-        if (limit !== null && limit !== undefined && limit !== -1) {
-          participantLimit = limit;
-        }
-      }
-    }
+    // Fetch dynamic participant limit (base plan + active add-on boosts)
+    const participantLimit = await getDynamicParticipantLimit(poll.creatorId, poll.pollType);
 
     // Find the student's vote
     const vote = await prisma.vote.findFirst({

@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { checkFeatureAccess } from '@/lib/featureGate';
 import { checkAndExpirePlan } from '@/lib/planExpiry';
+import { getDynamicParticipantLimit } from '@/lib/participantLimits';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -105,7 +106,7 @@ export async function GET(req: Request) {
     let anyExceeded = false;
 
     // Populate registry of students
-    polls.forEach((p) => {
+    for (const p of polls) {
       // 1. Register from AllowedVoters first (for closed invitations roster)
       p.allowedVoters.forEach((av) => {
         const key = (av.email || av.phone || av.confirmer1).trim().toLowerCase();
@@ -128,40 +129,8 @@ export async function GET(req: Request) {
       });
 
       // 2. Correlation from actual Votes (voted details) with participant limits
-      let participantLimit = 5000;
-      if (p.invoiceId) {
-        const plan = invoicePlanMap.get(p.invoiceId);
-        if (plan) {
-          const limitVal = p.pollType === 'SURVEY' 
-            ? plan.maxParticipantsSurvey 
-            : p.pollType === 'EXAM' 
-              ? plan.maxParticipantsExam 
-              : plan.maxParticipantsPoll;
-          if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
-            participantLimit = limitVal;
-          }
-        }
-      } else if (creatorPlan) {
-        let limit = p.pollType === 'SURVEY' 
-          ? creatorPlan.maxParticipantsSurvey 
-          : p.pollType === 'EXAM' 
-            ? creatorPlan.maxParticipantsExam 
-            : creatorPlan.maxParticipantsPoll;
-
-        if (creatorPlan.durations && user.planBillingCycle) {
-          const durs = creatorPlan.durations as any;
-          const cycle = user.planBillingCycle;
-          if (durs[cycle] && durs[cycle].enabled) {
-            const cfg = durs[cycle];
-            if (p.pollType === 'POLL' && cfg.maxParticipantsPoll) limit = parseInt(cfg.maxParticipantsPoll);
-            if (p.pollType === 'SURVEY' && cfg.maxParticipantsSurvey) limit = parseInt(cfg.maxParticipantsSurvey);
-            if (p.pollType === 'EXAM' && cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
-          }
-        }
-        if (limit !== null && limit !== undefined && limit !== -1) {
-          participantLimit = limit;
-        }
-      }
+      // Resolve cumulative participant limit dynamically
+      const participantLimit = await getDynamicParticipantLimit(user.id, p.pollType);
 
       // Sort votes chronologically and slice
       const sortedVotes = [...p.votes].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -237,7 +206,7 @@ export async function GET(req: Request) {
           };
         }
       });
-    });
+    }
 
     // Format grid rows
     const rows = Array.from(studentMap.values()).map((student, idx) => {

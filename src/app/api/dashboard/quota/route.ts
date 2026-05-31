@@ -36,8 +36,13 @@ export async function GET() {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const plan = user.plan;
-    const isFreePlan = !plan || plan.name.toLowerCase() === 'free';
+    let plan = user.plan;
+    if (!plan) {
+      plan = await prisma.plan.findFirst({
+        where: { OR: [{ isFree: true }, { name: { equals: 'Free', mode: 'insensitive' } }] }
+      });
+    }
+    const isFreePlan = !plan || plan.isFree || plan.name.toLowerCase() === 'free';
 
     // ── 1. Subscription quota ────────────────────────────────────────────────
     // Determine billing cycle window
@@ -68,9 +73,9 @@ export async function GET() {
     }
 
     // Base limits from plan
-    let subLimitPolls: number = isFreePlan ? 3 : (plan?.maxPolls ?? -1);
-    let subLimitSurveys: number = isFreePlan ? 3 : (plan?.maxSurveys ?? -1);
-    let subLimitExams: number = isFreePlan ? 3 : (plan?.maxExams ?? -1);
+    let subLimitPolls: number = isFreePlan ? (plan?.maxPolls ?? 3) : (plan?.maxPolls ?? -1);
+    let subLimitSurveys: number = isFreePlan ? (plan?.maxSurveys ?? 3) : (plan?.maxSurveys ?? -1);
+    let subLimitExams: number = isFreePlan ? (plan?.maxExams ?? 3) : (plan?.maxExams ?? -1);
 
     // Override with duration-specific limits if available
     if (plan && plan.durations && !isFreePlan) {

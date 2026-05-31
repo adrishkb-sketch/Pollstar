@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getClientIP, lookupIP } from '@/lib/geo';
 import jwt from 'jsonwebtoken';
 import { sendVoteConfirmationEmail, sendExamSubmissionConfirmationEmail } from '@/lib/nodemailer';
+import { getDynamicParticipantLimit } from '@/lib/participantLimits';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-pollstar-2026-auth-access';
 
@@ -137,19 +138,9 @@ export async function POST(
     const currentVotesCount = await prisma.vote.count({
       where: { pollId: poll.id }
     });
-    const maxLimits = await prisma.plan.aggregate({
-      where: { isActive: true },
-      _max: {
-        maxParticipantsPoll: true,
-        maxParticipantsSurvey: true,
-        maxParticipantsExam: true
-      }
-    });
-    const absoluteMax = Math.max(
-      maxLimits._max.maxParticipantsPoll || 5000,
-      maxLimits._max.maxParticipantsSurvey || 5000,
-      maxLimits._max.maxParticipantsExam || 5000
-    );
+    // Fetch dynamic participant limit (base plan + active add-on boosts)
+    const absoluteMax = await getDynamicParticipantLimit(poll.creatorId, poll.pollType);
+
     if (currentVotesCount >= absoluteMax) {
       return NextResponse.json(
         { error: `This session has reached its absolute maximum limit of ${absoluteMax} participants and is no longer accepting responses.` },

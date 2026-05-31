@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 import { sendPollInvitationEmail, sendPollClosedEmail, sendPollScheduleUpdatedEmail, sendExamResultsReleasedEmail } from '@/lib/nodemailer';
 import { checkFeatureAccess } from '@/lib/featureGate';
+import { getDynamicParticipantLimit } from '@/lib/participantLimits';
 
 // Helper to authenticate user from cookies
 async function getAuthUser() {
@@ -112,52 +113,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       poll.status = 'ENDED';
     }
 
-    // Fetch associated invoice or plan to determine participant limit
-    let participantLimit = 5000; // default backup
-    if (poll.invoiceId) {
-      const inv = await prisma.invoice.findUnique({
-        where: { id: poll.invoiceId },
-        include: { plan: true }
-      });
-      if (inv && inv.plan) {
-        const limitVal = poll.pollType === 'SURVEY' 
-          ? inv.plan.maxParticipantsSurvey 
-          : poll.pollType === 'EXAM' 
-            ? inv.plan.maxParticipantsExam 
-            : inv.plan.maxParticipantsPoll;
-        if (limitVal !== null && limitVal !== undefined && limitVal !== -1) {
-          participantLimit = limitVal;
-        }
-      }
-    } else {
-      const creator = await prisma.user.findUnique({
-        where: { id: poll.creatorId },
-        include: { plan: true }
-      });
-      if (creator && creator.plan) {
-        const plan = creator.plan;
-        let limit = poll.pollType === 'SURVEY' 
-          ? plan.maxParticipantsSurvey 
-          : poll.pollType === 'EXAM' 
-            ? plan.maxParticipantsExam 
-            : plan.maxParticipantsPoll;
-
-        // Check if there are duration overrides for this plan
-        if (plan.durations && creator.planBillingCycle) {
-          const durs = plan.durations as any;
-          const cycle = creator.planBillingCycle;
-          if (durs[cycle] && durs[cycle].enabled) {
-            const cfg = durs[cycle];
-            if (poll.pollType === 'POLL' && cfg.maxParticipantsPoll) limit = parseInt(cfg.maxParticipantsPoll);
-            if (poll.pollType === 'SURVEY' && cfg.maxParticipantsSurvey) limit = parseInt(cfg.maxParticipantsSurvey);
-            if (poll.pollType === 'EXAM' && cfg.maxParticipantsExam) limit = parseInt(cfg.maxParticipantsExam);
-          }
-        }
-        if (limit !== null && limit !== undefined && limit !== -1) {
-          participantLimit = limit;
-        }
-      }
-    }
+    // Fetch dynamic participant limit (base plan + active add-on boosts)
+    const participantLimit = await getDynamicParticipantLimit(poll.creatorId, poll.pollType);
 
     // Sort votes by creation time so first N are the oldest (earliest) ones
     const sortedVotes = [...poll.votes].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

@@ -170,8 +170,13 @@ export async function POST(req: Request) {
       });
 
       if (userWithPlan) {
-        const plan = userWithPlan.plan;
-        const isFreePlan = !plan || plan.name.toLowerCase() === 'free';
+        let plan = userWithPlan.plan;
+        if (!plan) {
+          plan = await prisma.plan.findFirst({
+            where: { OR: [{ isFree: true }, { name: { equals: 'Free', mode: 'insensitive' } }] }
+          });
+        }
+        const isFreePlan = !plan || plan.isFree || plan.name.toLowerCase() === 'free';
         const targetType = pollType === 'SURVEY' ? 'SURVEY' : pollType === 'EXAM' ? 'EXAM' : 'POLL';
 
         if (resolvedInvoiceId) {
@@ -263,7 +268,9 @@ export async function POST(req: Request) {
             cycleEnd = expEnd;
           }
 
-          let subLimit: number = isFreePlan ? 3 : (targetType === 'POLL' ? (plan?.maxPolls ?? -1) : targetType === 'SURVEY' ? (plan?.maxSurveys ?? -1) : (plan?.maxExams ?? -1));
+          let subLimit: number = isFreePlan 
+            ? (targetType === 'POLL' ? (plan?.maxPolls ?? 3) : targetType === 'SURVEY' ? (plan?.maxSurveys ?? 3) : (plan?.maxExams ?? 3))
+            : (targetType === 'POLL' ? (plan?.maxPolls ?? -1) : targetType === 'SURVEY' ? (plan?.maxSurveys ?? -1) : (plan?.maxExams ?? -1));
 
           // Override with duration-specific limits if available
           if (plan && plan.durations && !isFreePlan) {
