@@ -403,12 +403,15 @@ export default function PublicPricingPage() {
           <div className="flex items-center gap-3 text-red-400">
             <AlertCircle className="w-6 h-6 stroke-[2]" />
             <h2 className="text-lg md:text-xl font-black uppercase tracking-wider font-outfit">
-              Strict Refund Policy & Agreement
+              Strict Payment Rules and Refund Policy & Agreement
             </h2>
           </div>
           <div className="text-xs md:text-sm text-gray-400 leading-relaxed space-y-3 font-semibold">
             <p>
               Please read carefully before finalizing any purchase or transaction on the Pollstar platform.
+            </p>
+            <p className="border-l-2 border-red-500/40 pl-3 text-red-200">
+              <strong>Only UPI Payments:</strong> All payments to be made by UPI and upto 24 hours taken for verification and plan activation<strong>Verification within 24 hours of payment.</strong>.
             </p>
             <p className="border-l-2 border-red-500/40 pl-3 text-red-200">
               <strong>100% NON-REFUNDABLE AND FINAL SALES:</strong> All payments made to Pollstar—including but not limited to Electoral Subscriptions (monthly, quarterly, yearly, or multi-year tiers), Pay-As-You-Go credit packs (Polls, Surveys, Exams, or Combos), and Premium Add-On expansions—are completely <strong>non-refundable</strong>.
