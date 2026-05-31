@@ -72,18 +72,21 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Fetch global referral percentage config
-    const referralConfig = await prisma.siteConfig.findUnique({
-      where: { key: 'global_referral_percentage' }
-    });
+    // Fetch global referral percentage config and minimum withdrawal amount
+    const [referralConfig, minWithdrawalConfig] = await Promise.all([
+      prisma.siteConfig.findUnique({ where: { key: 'global_referral_percentage' } }),
+      prisma.siteConfig.findUnique({ where: { key: 'min_withdrawal_amount' } })
+    ]);
     const globalReferralPercentage = referralConfig ? parseFloat(referralConfig.value) : 10;
+    const minimumWithdrawalAmount = minWithdrawalConfig ? parseFloat(minWithdrawalConfig.value) : 0;
 
     return NextResponse.json({
       success: true,
       wallet,
       payoutRequests,
       referredUsers,
-      globalReferralPercentage
+      globalReferralPercentage,
+      minimumWithdrawalAmount
     });
   } catch (error: any) {
     console.error('Fetch Dashboard Earnings Error:', error);
@@ -110,6 +113,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 });
     }
 
+    // Enforce platform minimum withdrawal threshold
+    const minWithdrawalConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'min_withdrawal_amount' }
+    });
+    const minimumWithdrawalAmount = minWithdrawalConfig ? parseFloat(minWithdrawalConfig.value) : 0;
+    if (minimumWithdrawalAmount > 0 && requestAmount < minimumWithdrawalAmount) {
+      return NextResponse.json({
+        error: `Minimum withdrawal amount is ${minimumWithdrawalAmount.toFixed(2)}. Please request at least this amount.`
+      }, { status: 400 });
+    }
+
     let wallet = await prisma.wallet.findUnique({
       where: { userId: user.id }
     });
@@ -132,7 +146,7 @@ export async function POST(req: Request) {
       prisma.wallet.update({
         where: { id: wallet.id },
         data: {
-          balance: wallet.balance - requestAmount
+          balance: { decrement: requestAmount }
         }
       }),
       prisma.transaction.create({

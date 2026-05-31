@@ -1017,17 +1017,40 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       }
     };
 
+    // Grace period: ignore all blur/visibility events for the first 3 seconds
+    // after the effect mounts to prevent spurious submissions during page load
+    // or browser focus transitions when the exam first opens.
+    let graceActive = true;
+    const gracePeriodTimer = setTimeout(() => { graceActive = false; }, 3000);
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && shouldTabLeaveSubmit) {
+      // Tab switch is always intentional — no debounce needed
+      if (document.visibilityState === 'hidden' && shouldTabLeaveSubmit && !graceActive) {
         triggerAutoSubmit();
         alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
       }
     };
 
+    // Debounce blur by 2 seconds: transient focus losses (URL bar, devtools,
+    // system dialogs, slight window movement) are cancelled if focus returns quickly.
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleWindowBlur = () => {
-      if (shouldTabLeaveSubmit) {
-        triggerAutoSubmit();
-        alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
+      if (!shouldTabLeaveSubmit || graceActive) return;
+      blurTimer = setTimeout(() => {
+        // Only submit if the window is still blurred (focus hasn't returned)
+        if (!document.hasFocus()) {
+          triggerAutoSubmit();
+          alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
+        }
+      }, 2000);
+    };
+
+    const handleWindowFocus = () => {
+      // Cancel pending blur-submit if focus returns within the debounce window
+      if (blurTimer !== null) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
       }
     };
 
@@ -1051,6 +1074,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     if (shouldTabLeaveSubmit) {
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('blur', handleWindowBlur);
+      window.addEventListener('focus', handleWindowFocus);
     }
 
     if (shouldLeaveSubmit) {
@@ -1058,8 +1082,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }
 
     return () => {
+      clearTimeout(gracePeriodTimer);
+      if (blurTimer !== null) clearTimeout(blurTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [timerActive, poll, selectedAnswers, confidenceValues, voterToken, openEmail, pollId]);

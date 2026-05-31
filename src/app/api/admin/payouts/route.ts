@@ -40,15 +40,14 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Get global referral percentage config
-    let config = await prisma.siteConfig.findUnique({
-      where: { key: 'global_referral_percentage' }
+    // Get referral/payout configs
+    const [referralConfig, minWithdrawalConfig] = await Promise.all([
+      prisma.siteConfig.findUnique({ where: { key: 'global_referral_percentage' } }),
+      prisma.siteConfig.findUnique({ where: { key: 'min_withdrawal_amount' } })
+    ]);
+    const config = referralConfig ?? await prisma.siteConfig.create({
+      data: { key: 'global_referral_percentage', value: '10' }
     });
-    if (!config) {
-      config = await prisma.siteConfig.create({
-        data: { key: 'global_referral_percentage', value: '10' }
-      });
-    }
 
     // Calculate quick monetization/referral stats
     const totalEarnedAggregate = await prisma.wallet.aggregate({
@@ -75,6 +74,7 @@ export async function GET() {
       success: true,
       payouts,
       globalReferralPercentage: config.value,
+      minimumWithdrawalAmount: minWithdrawalConfig?.value ?? '0',
       stats
     });
   } catch (error: any) {
@@ -93,20 +93,36 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    // Case 1: Update global referral percentage
-    if (body.globalReferralPercentage !== undefined) {
-      const pct = parseFloat(body.globalReferralPercentage);
-      if (isNaN(pct) || pct < 0 || pct > 100) {
-        return NextResponse.json({ error: 'Invalid percentage value. Must be between 0 and 100.' }, { status: 400 });
+    // Case 1: Update global referral percentage and/or minimum withdrawal amount
+    if (body.globalReferralPercentage !== undefined || body.minimumWithdrawalAmount !== undefined) {
+      const ops: any[] = [];
+
+      if (body.globalReferralPercentage !== undefined) {
+        const pct = parseFloat(body.globalReferralPercentage);
+        if (isNaN(pct) || pct < 0 || pct > 100) {
+          return NextResponse.json({ error: 'Invalid percentage value. Must be between 0 and 100.' }, { status: 400 });
+        }
+        ops.push(prisma.siteConfig.upsert({
+          where: { key: 'global_referral_percentage' },
+          update: { value: pct.toString() },
+          create: { key: 'global_referral_percentage', value: pct.toString() }
+        }));
       }
 
-      await prisma.siteConfig.upsert({
-        where: { key: 'global_referral_percentage' },
-        update: { value: pct.toString() },
-        create: { key: 'global_referral_percentage', value: pct.toString() }
-      });
+      if (body.minimumWithdrawalAmount !== undefined) {
+        const minAmt = parseFloat(body.minimumWithdrawalAmount);
+        if (isNaN(minAmt) || minAmt < 0) {
+          return NextResponse.json({ error: 'Invalid minimum withdrawal amount.' }, { status: 400 });
+        }
+        ops.push(prisma.siteConfig.upsert({
+          where: { key: 'min_withdrawal_amount' },
+          update: { value: minAmt.toString() },
+          create: { key: 'min_withdrawal_amount', value: minAmt.toString() }
+        }));
+      }
 
-      return NextResponse.json({ success: true, message: 'Global referral percentage updated' });
+      if (ops.length > 0) await Promise.all(ops);
+      return NextResponse.json({ success: true, message: 'Affiliate settings updated successfully' });
     }
 
     // Case 2: Process payout request status (clear/reject)

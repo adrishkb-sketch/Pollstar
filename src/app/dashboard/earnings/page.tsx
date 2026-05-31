@@ -69,6 +69,7 @@ export default function EarningsPage() {
   const [error, setError] = useState<string | null>(null);
   const [displayCurrency, setDisplayCurrency] = useState('INR');
   const [l1Rate, setL1Rate] = useState(10);
+  const [minWithdrawalAmount, setMinWithdrawalAmount] = useState(0);
 
   // Copy states
   const [copiedLink, setCopiedLink] = useState(false);
@@ -109,6 +110,9 @@ export default function EarningsPage() {
           if (data.globalReferralPercentage) {
             setL1Rate(parseFloat(data.globalReferralPercentage) || 10);
           }
+          if (data.minimumWithdrawalAmount !== undefined) {
+            setMinWithdrawalAmount(parseFloat(data.minimumWithdrawalAmount) || 0);
+          }
         }
       }
     } catch (err) {
@@ -146,6 +150,11 @@ export default function EarningsPage() {
     const amt = parseFloat(withdrawAmount);
     if (isNaN(amt) || amt <= 0) {
       setWithdrawErrorMsg('Please input a valid positive amount.');
+      return;
+    }
+
+    if (minWithdrawalAmount > 0 && amt < minWithdrawalAmount) {
+      setWithdrawErrorMsg(`Minimum withdrawal amount is ${getCurrencySymbol(displayCurrency)}${minWithdrawalAmount.toFixed(2)}. Please request at least this amount.`);
       return;
     }
 
@@ -437,6 +446,11 @@ export default function EarningsPage() {
                         className="w-full glass-input text-sm px-4 py-3"
                       />
                       <span className="text-[10px] text-gray-500">Available: {getCurrencySymbol(displayCurrency)}{wallet.balance.toFixed(2)}</span>
+                      {minWithdrawalAmount > 0 && (
+                        <div className="text-[10px] text-indigo-400 mt-1 block">
+                          Minimum withdrawal amount: {getCurrencySymbol(displayCurrency)}{minWithdrawalAmount.toFixed(2)}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">

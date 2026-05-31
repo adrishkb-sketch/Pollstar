@@ -183,6 +183,7 @@ export default function AdminPortal() {
   // Monetization & Referrals
   const [payouts, setPayouts] = useState<any[]>([]);
   const [globalReferralPercentage, setGlobalReferralPercentage] = useState('10');
+  const [minimumWithdrawalAmount, setMinimumWithdrawalAmount] = useState('0');
   const [monetizationStats, setMonetizationStats] = useState<any>({
     totalEarned: 0,
     currentOutstandingBalance: 0,
@@ -451,6 +452,7 @@ export default function AdminPortal() {
         if (data.success) {
           setPayouts(data.payouts || []);
           setGlobalReferralPercentage(data.globalReferralPercentage || '10');
+          setMinimumWithdrawalAmount(data.minimumWithdrawalAmount || '0');
           setMonetizationStats(data.stats || {
             totalEarned: 0,
             currentOutstandingBalance: 0,
@@ -646,18 +648,19 @@ export default function AdminPortal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          globalReferralPercentage
+          globalReferralPercentage,
+          minimumWithdrawalAmount
         })
       });
       if (res.ok) {
-        setPayoutSuccess('Platform global referral commission rate successfully updated!');
+        setPayoutSuccess('Platform affiliate commission settings successfully updated!');
         fetchPayoutsAndStats();
       } else {
         const data = await res.json();
-        setPayoutError(data.error || 'Failed to update commission rate.');
+        setPayoutError(data.error || 'Failed to update commission settings.');
       }
     } catch (err) {
-      setPayoutError('Connection error saving rate.');
+      setPayoutError('Connection error saving settings.');
     }
   };
 
@@ -3677,12 +3680,29 @@ export default function AdminPortal() {
                     </span>
                   </div>
 
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Min Withdrawal Amount ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={minimumWithdrawalAmount}
+                      onChange={e => setMinimumWithdrawalAmount(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 text-center font-bold text-lg"
+                    />
+                    <span className="text-[9px] text-gray-500 leading-relaxed block">
+                      Specifies the minimum wallet balance required for users to request a payout withdrawal.
+                    </span>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-3 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs transition-all border border-purple-400/20 active:scale-95 flex items-center justify-center gap-1.5"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    <span>Save MLM Parameters</span>
+                    <span>Save Affiliate Settings</span>
                   </button>
                 </form>
               </div>
