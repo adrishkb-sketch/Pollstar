@@ -1,0 +1,183 @@
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import prisma from '@/lib/prisma';
+import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
+
+async function getAuthAdmin() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('accessToken')?.value;
+  let payload = token ? verifyAccessToken(token) : null;
+
+  if (!payload) {
+    const refreshToken = cookieStore.get('refreshToken')?.value;
+    if (refreshToken) {
+      payload = verifyRefreshToken(refreshToken);
+    }
+  }
+
+  if (!payload || payload.role !== 'ADMIN') return null;
+
+  return prisma.user.findUnique({
+    where: { id: payload.userId },
+  });
+}
+
+export async function POST(req: Request) {
+  try {
+    const admin = await getAuthAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { invoiceId, action } = await req.json();
+
+    if (!invoiceId || !action) {
+      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    }
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { plan: true, user: true }
+    });
+
+    if (!invoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+
+    if (invoice.paymentStatus !== 'PENDING') {
+      return NextResponse.json({ error: 'This invoice has already been processed' }, { status: 400 });
+    }
+
+    if (action === 'APPROVE') {
+      // 1. Mark invoice as COMPLETED
+      await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { paymentStatus: 'COMPLETED' }
+      });
+
+      // 2. Activate plan for user (if it is not an add-on plan)
+      if (!invoice.isAddon) {
+        const isLifetime = invoice.billingCycle === 'LIFETIME' || invoice.billingCycle === 'ONE_TIME';
+        await prisma.user.update({
+          where: { id: invoice.userId },
+          data: {
+            planId: invoice.planId,
+            planExpiresAt: invoice.planExpiresAt,
+            planBillingCycle: invoice.billingCycle,
+            isLifetimePlan: isLifetime
+          }
+        });
+      }
+
+      // 3. Process MLM splits
+      await distributeCommissions(invoice.userId, invoice.amountPaid);
+
+    } else if (action === 'REJECT') {
+      // Mark invoice as REJECTED
+      await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { paymentStatus: 'REJECTED' }
+      });
+    } else {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Verify Payment API Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+async function distributeCommissions(userId: string, finalPrice: number) {
+  if (finalPrice <= 0) return;
+
+  let config = await prisma.siteConfig.findUnique({
+    where: { key: 'global_referral_percentage' }
+  });
+  const l1Percentage = config ? parseFloat(config.value) : 10;
+  const l2Percentage = l1Percentage / 2;
+  const l3Percentage = l1Percentage / 4;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      referredById: true
+    }
+  });
+
+  if (!user || !user.referredById) return;
+
+  const l1Referrer = await prisma.user.findUnique({
+    where: { id: user.referredById },
+    select: { id: true, email: true, referredById: true }
+  });
+  if (l1Referrer) {
+    const amount = (finalPrice * l1Percentage) / 100;
+    if (amount > 0) {
+      await addWalletFunds(l1Referrer.id, amount, `Level 1 Referral: User ${user.email} purchased plan`);
+    }
+
+    if (l1Referrer.referredById) {
+      const l2Referrer = await prisma.user.findUnique({
+        where: { id: l1Referrer.referredById },
+        select: { id: true, email: true, referredById: true }
+      });
+      if (l2Referrer) {
+        const amount2 = (finalPrice * l2Percentage) / 100;
+        if (amount2 > 0) {
+          await addWalletFunds(l2Referrer.id, amount2, `Level 2 Referral: Sub-user ${user.email} purchased plan`);
+        }
+
+        if (l2Referrer.referredById) {
+          const l3Referrer = await prisma.user.findUnique({
+            where: { id: l2Referrer.referredById },
+            select: { id: true, email: true }
+          });
+          if (l3Referrer) {
+            const amount3 = (finalPrice * l3Percentage) / 100;
+            if (amount3 > 0) {
+              await addWalletFunds(l3Referrer.id, amount3, `Level 3 Referral: Sub-user ${user.email} purchased plan`);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+async function addWalletFunds(userId: string, amount: number, description: string) {
+  let wallet = await prisma.wallet.findUnique({
+    where: { userId }
+  });
+
+  if (!wallet) {
+    wallet = await prisma.wallet.create({
+      data: {
+        userId,
+        balance: 0,
+        totalEarned: 0,
+        totalWithdrawn: 0
+      }
+    });
+  }
+
+  await prisma.$transaction([
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: wallet.balance + amount,
+        totalEarned: wallet.totalEarned + amount
+      }
+    }),
+    prisma.transaction.create({
+      data: {
+        walletId: wallet.id,
+        amount,
+        type: 'EARNING',
+        description
+      }
+    })
+  ]);
+}

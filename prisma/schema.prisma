@@ -525,6 +525,10 @@ model Invoice {
   polls          Poll[]
   createdAt      DateTime @default(now())
 
+  paymentStatus  String   @default("COMPLETED") // PENDING, COMPLETED, REJECTED
+  upiUtr         String?
+  screenshotUrl  String?
+
   @@index([userId])
   @@index([planId])
 }

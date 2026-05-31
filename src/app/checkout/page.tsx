@@ -71,12 +71,21 @@ function CheckoutContent() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
 
+  const upiQrUrl = plan 
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(
+        `upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=${plan.currency || 'INR'}&tn=Invoice_${plan.name.replace(/\s+/g, '_')}`
+      )}`
+    : '';
+
   // Payment states
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'netbanking' | 'paypal'>('card');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [upiId, setUpiId] = useState('');
+  const [upiUtr, setUpiUtr] = useState('');
+  const [screenshotBase64, setScreenshotBase64] = useState('');
+  const [pendingVerification, setPendingVerification] = useState(false);
   const [selectedBank, setSelectedBank] = useState('');
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
@@ -202,12 +211,38 @@ function CheckoutContent() {
     setFinalPrice(basePrice);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Screenshot image must be less than 5MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotBase64(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Submit secure simulated transaction
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email) {
       setError('Please fill in required billing details.');
       return;
+    }
+
+    if (paymentMethod === 'upi' && finalPrice > 0) {
+      if (!upiUtr.trim() || upiUtr.trim().length !== 12 || isNaN(Number(upiUtr))) {
+        setError('Please enter a valid 12-digit UPI Transaction Reference Number (UTR).');
+        return;
+      }
+      if (!screenshotBase64) {
+        setError('Please upload a screenshot of your UPI payment receipt.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -226,13 +261,17 @@ function CheckoutContent() {
           billingZip: zipCode || 'N/A',
           billingPhone: phone || null,
           duration: selectedDuration,
-          trial: isTrial
+          trial: isTrial,
+          paymentMethod,
+          upiUtr: paymentMethod === 'upi' ? upiUtr : undefined,
+          screenshotUrl: paymentMethod === 'upi' ? screenshotBase64 : undefined,
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        setPendingVerification(data.pendingVerification || false);
         setGeneratedInvoice({
-          id: `inv_${Math.random().toString(36).substring(2, 9)}`,
+          id: data.invoiceId || `inv_${Math.random().toString(36).substring(2, 9)}`,
           receiptRef: `PST-${Math.floor(Math.random()*900000+100000)}`,
           billingName: fullName,
           billingAddress: address || 'N/A',
@@ -272,18 +311,30 @@ function CheckoutContent() {
     return (
       <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center p-4">
         <div className="glass-card max-w-xl w-full border border-purple-500/30 rounded-3xl p-8 md:p-12 text-center space-y-6 shadow-[0_0_50px_rgba(168,85,247,0.15)] bg-gradient-to-b from-purple-950/20 to-transparent animate-fade-in">
-          <div className="mx-auto w-20 h-20 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/5">
-            <CheckCircle2 className="w-10 h-10 animate-bounce" />
-          </div>
+          {pendingVerification ? (
+            <div className="mx-auto w-20 h-20 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/5">
+              <span className="text-3xl animate-pulse">⏳</span>
+            </div>
+          ) : (
+            <div className="mx-auto w-20 h-20 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/5">
+              <CheckCircle2 className="w-10 h-10 animate-bounce" />
+            </div>
+          )}
           <div className="space-y-2">
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Order Completed!
+              {pendingVerification ? 'Verification Pending!' : 'Order Completed!'}
             </h1>
             <p className="text-purple-300 font-semibold text-lg">
-              Welcome to the {plan.name} Tier
+              {pendingVerification ? `UPI Payment proof submitted for ${plan.name}` : `Welcome to the ${plan.name} Tier`}
             </p>
             <p className="text-gray-400 text-sm max-w-md mx-auto">
-              Your subscription has been successfully provisioned. Global MLM commission splits have been computed and distributed cleanly.
+              {pendingVerification ? (
+                <>
+                  We have received your payment details. We will match transaction UTR <strong className="text-white font-mono">{upiUtr}</strong> with our bank logs. Your subscription will be activated shortly once verified.
+                </>
+              ) : (
+                'Your subscription has been successfully provisioned. Global MLM commission splits have been computed and distributed cleanly.'
+              )}
             </p>
           </div>
 
@@ -300,6 +351,20 @@ function CheckoutContent() {
               <span>Billing Cycle</span>
               <span className="text-gray-400 font-semibold">{selectedDuration}</span>
             </div>
+            {pendingVerification && (
+              <>
+                <div className="flex justify-between text-xs text-gray-500 border-t border-white/5 pt-2 mt-2">
+                  <span>Payment Status</span>
+                  <span className="text-amber-400 font-bold uppercase tracking-wider">Verification Pending</span>
+                </div>
+                {upiUtr && (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Submitted UTR</span>
+                    <span className="font-mono text-gray-400">{upiUtr}</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center w-full max-w-sm mx-auto">
@@ -641,25 +706,78 @@ function CheckoutContent() {
 
                   {/* UPI Fields */}
                   {paymentMethod === 'upi' && (
-                    <div className="space-y-5 animate-fade-in text-center">
-                      <div className="space-y-2 text-left">
-                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">UPI Address VPA</label>
-                        <input 
-                          type="text" 
-                          value={upiId}
-                          onChange={(e) => setUpiId(e.target.value)}
-                          placeholder="e.g. user@ybl or user@okhdfc"
-                          className="w-full glass-input text-sm px-4 py-3"
-                        />
-                      </div>
-                      <div className="border border-white/5 rounded-2xl bg-white/[0.01] p-6 max-w-sm mx-auto flex flex-col items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-xl shadow-purple-500/5">
-                          <QrCode className="w-36 h-36 text-gray-900" />
+                    <div className="space-y-5 animate-fade-in">
+                      {finalPrice === 0 ? (
+                        <div className="text-center py-6 space-y-2">
+                          <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+                          <p className="text-sm font-semibold">Free Upgrade Mode</p>
+                          <p className="text-xs text-gray-500">Your total amount due is 0.00. No QR scan or verification is required.</p>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-400">Scan this code using any UPI enabled app (GPay, PhonePe, Paytm, BHIM) to simulate clearance instantly.</p>
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="text-center space-y-1">
+                            <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                              🇮🇳 Direct Bank Transfer via UPI
+                            </span>
+                            <p className="text-[10px] text-gray-500 mt-2">
+                              Scan the QR code below on GPay, PhonePe, Paytm, or BHIM to pay <strong>{getCurrencySymbol(plan?.currency)}{finalPrice.toFixed(2)}</strong> directly.
+                            </p>
+                          </div>
+
+                          <div className="border border-white/5 rounded-2xl bg-white/[0.01] p-6 max-w-xs mx-auto flex flex-col items-center gap-4">
+                            <div className="p-3 bg-white rounded-2xl shadow-xl shadow-purple-500/5">
+                              <img 
+                                src={upiQrUrl}
+                                alt="UPI payment QR Code" 
+                                className="w-40 h-40 object-contain mx-auto"
+                              />
+                            </div>
+                            <div className="text-center font-mono text-[10px] text-gray-400 bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 w-full">
+                              UPI ID: <strong>work.adrishkb@oksbi</strong>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-1.5 text-left">
+                              <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">12-Digit UPI Ref No. / UTR</label>
+                              <input 
+                                type="text" 
+                                required
+                                value={upiUtr}
+                                onChange={(e) => setUpiUtr(e.target.value.replace(/\D/g, '').substring(0, 12))}
+                                placeholder="e.g. 345678901234"
+                                className="w-full glass-input text-sm px-4 py-3"
+                              />
+                              <span className="text-[9px] text-gray-500 block">Provide the 12-digit transaction ID from your payment receipt screenshot.</span>
+                            </div>
+
+                            <div className="space-y-1.5 text-left">
+                              <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">Upload Payment Screenshot</label>
+                              <div className="relative border border-dashed border-white/10 hover:border-purple-500/50 rounded-2xl p-4 bg-white/[0.01] transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
+                                <input 
+                                  type="file" 
+                                  accept="image/*"
+                                  required
+                                  onChange={handleFileChange}
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                                {screenshotBase64 ? (
+                                  <div className="flex flex-col items-center gap-2 w-full">
+                                    <img src={screenshotBase64} alt="Screenshot preview" className="max-h-32 rounded-xl object-contain border border-white/10" />
+                                    <span className="text-[9px] text-purple-300 font-semibold">Click or drag to change image</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-2">
+                                    <span className="text-lg">📸</span>
+                                    <p className="text-xs text-gray-400 font-semibold mt-1">Select receipt image file</p>
+                                    <p className="text-[8px] text-gray-500 mt-0.5">JPEG, PNG up to 5MB</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 

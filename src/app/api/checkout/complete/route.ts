@@ -44,6 +44,9 @@ export async function POST(req: Request) {
       duration,       // user-selected billing cycle: MONTHLY | QUARTERLY | YEARLY | TWO_YEAR | LIFETIME
       isAddon,        // boolean: true if purchasing an add-on plan
       trial,          // boolean: true if starting a free trial
+      paymentMethod,
+      upiUtr,
+      screenshotUrl,
     } = await req.json();
 
     if (!planId) {
@@ -200,8 +203,10 @@ export async function POST(req: Request) {
     }
     if (upgradeNote) invoiceNotes += upgradeNote;
 
-    // Update user plan (only for non-add-on subscription plans)
-    if (!isAddonPlan) {
+    const isManualUPI = paymentMethod === 'upi' && finalPrice > 0;
+
+    // Update user plan (only for non-add-on subscription plans, and only if NOT manual UPI)
+    if (!isAddonPlan && !isManualUPI) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -229,17 +234,25 @@ export async function POST(req: Request) {
         isAddon: isAddonPlan,
         planExpiresAt,
         notes: invoiceNotes,
+        paymentStatus: isManualUPI ? 'PENDING' : 'COMPLETED',
+        upiUtr: isManualUPI ? upiUtr : null,
+        screenshotUrl: isManualUPI ? screenshotUrl : null,
       }
     });
 
-    // Process MLM Referral commission splits
-    await distributeCommissions(user.id, finalPrice);
+    // Process MLM Referral commission splits (only if NOT manual UPI)
+    if (!isManualUPI) {
+      await distributeCommissions(user.id, finalPrice);
+    }
 
     return NextResponse.json({
       success: true,
-      message: isLifetime
-        ? `🎉 Welcome to ${plan.name} — Lifetime Access Activated!`
-        : `Successfully subscribed to ${plan.name} (${billingCycleLabel})!`,
+      pendingVerification: isManualUPI,
+      message: isManualUPI
+        ? `💰 UPI payment submitted for verification! Your UTR is ${upiUtr}. Our admin will verify the payment and activate your plan shortly.`
+        : isLifetime
+          ? `🎉 Welcome to ${plan.name} — Lifetime Access Activated!`
+          : `Successfully subscribed to ${plan.name} (${billingCycleLabel})!`,
       planName: plan.name,
       finalPricePaid: finalPrice,
       billingCycle: selectedBillingCycle,

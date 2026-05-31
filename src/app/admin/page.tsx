@@ -196,6 +196,7 @@ export default function AdminPortal() {
 
   // Inspector States
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [activeScreenshot, setActiveScreenshot] = useState<string | null>(null);
   const [selectedPoll, setSelectedPoll] = useState<any | null>(null);
   const [editingVote, setEditingVote] = useState<any | null>(null);
   const [overrideAnswers, setOverrideAnswers] = useState<Record<string, any>>({});
@@ -677,6 +678,32 @@ export default function AdminPortal() {
       }
     } catch (err) {
       setPayoutError('Connection error processing request.');
+    }
+  };
+
+  const handleProcessUPIPayment = async (invoiceId: string, action: 'APPROVE' | 'REJECT') => {
+    if (!confirm(`Are you sure you want to ${action === 'APPROVE' ? 'APPROVE and activate' : 'REJECT and cancel'} this UPI payment?`)) return;
+    setPayoutError(null);
+    setPayoutSuccess(null);
+    try {
+      const res = await fetch('/api/admin/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId,
+          action
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPayoutSuccess(`UPI Payment has been successfully ${action === 'APPROVE' ? 'approved & plan activated' : 'rejected'}!`);
+        fetchInvoices();
+        fetchAdminData();
+      } else {
+        setPayoutError(data.error || 'Failed to process UPI payment verification.');
+      }
+    } catch (err) {
+      setPayoutError('Connection error processing UPI verification.');
     }
   };
 
@@ -3487,6 +3514,91 @@ export default function AdminPortal() {
               </div>
             </div>
 
+            {/* Pending UPI Verification Queue */}
+            {invoices.some(inv => inv.paymentStatus === 'PENDING') && (
+              <div className="glass-card rounded-3xl p-6 border border-amber-500/20 bg-amber-500/5 space-y-4 mt-6">
+                <div className="border-b border-amber-500/10 pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-outfit text-base font-bold text-amber-400 flex items-center gap-1.5">
+                      <span>💰 Pending UPI Payments Verification Queue</span>
+                    </h3>
+                    <p className="text-gray-400 text-[10px] mt-0.5 font-outfit">Validate user-submitted reference numbers (UTR) against bank records before clearance</p>
+                  </div>
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 animate-pulse uppercase">
+                    Requires Action
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border border-amber-500/10 bg-slate-950/40 rounded-2xl">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/2 text-[10px] uppercase font-bold text-gray-400 font-outfit">
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Creator / Email</th>
+                        <th className="px-5 py-3">Invoice Details</th>
+                        <th className="px-5 py-3">UTR Reference</th>
+                        <th className="px-5 py-3">Receipt Screenshot</th>
+                        <th className="px-5 py-3 text-right">Clearance Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {invoices.filter(inv => inv.paymentStatus === 'PENDING').map((inv) => (
+                        <tr key={inv.id} className="text-gray-300 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
+                            {new Date(inv.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="font-bold text-white block">{inv.billingName}</span>
+                            <span className="text-[10px] text-gray-500 font-mono block">{inv.user?.email}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="uppercase font-extrabold text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-purple-300">
+                              {inv.plan?.name}
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-bold block mt-1 font-mono">${inv.amountPaid.toFixed(2)}</span>
+                          </td>
+                          <td className="px-5 py-3.5 font-bold font-mono text-amber-300 text-sm">
+                            {inv.upiUtr || 'N/A'}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {inv.screenshotUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveScreenshot(inv.screenshotUrl)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-purple-500/50 hover:bg-white/10 text-gray-400 hover:text-white transition-all text-[10px] font-bold"
+                              >
+                                <span>👁️ View Screenshot</span>
+                              </button>
+                            ) : (
+                              <span className="text-gray-500 font-mono text-[10px]">No Proof Uploaded</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleProcessUPIPayment(inv.id, 'REJECT')}
+                                className="px-2.5 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-red-400 text-[10px] font-bold uppercase transition-all"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleProcessUPIPayment(inv.id, 'APPROVE')}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all border border-emerald-400/20 shadow-md shadow-emerald-500/10"
+                              >
+                                Approve & Activate
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Invoice Purchase Records Ledger */}
             <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4 mt-8">
               <div className="border-b border-white/5 pb-3">
@@ -3510,6 +3622,7 @@ export default function AdminPortal() {
                         <th className="px-5 py-3">Plan Details</th>
                         <th className="px-5 py-3">Paid Amount</th>
                         <th className="px-5 py-3">Billing Address</th>
+                        <th className="px-5 py-3 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -3539,6 +3652,20 @@ export default function AdminPortal() {
                               <div>{inv.billingCity}, {inv.billingZip}</div>
                               {inv.billingPhone && <div>Tel: {inv.billingPhone}</div>}
                             </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
+                              inv.paymentStatus === 'COMPLETED'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : inv.paymentStatus === 'PENDING'
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                            }`}>
+                              {inv.paymentStatus || 'COMPLETED'}
+                            </span>
+                            {inv.paymentStatus === 'PENDING' && inv.upiUtr && (
+                              <div className="text-[8px] text-gray-500 font-mono mt-1">UTR: {inv.upiUtr}</div>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -4486,6 +4613,36 @@ export default function AdminPortal() {
                 <span>Reject</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── UPI PAYMENT SCREENSHOT PREVIEW MODAL ───────────────────────── */}
+      {activeScreenshot && (
+        <div className="fixed inset-0 bg-[#020612]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 z-[60] animate-fade-in">
+          <div className="max-w-3xl w-full bg-[#080d1a] border border-white/10 rounded-3xl p-6 relative flex flex-col items-center gap-4 max-h-[90vh]">
+            <button
+              onClick={() => setActiveScreenshot(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 border border-white/5 rounded-lg p-1.5 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-left w-full border-b border-white/5 pb-2">
+              <span className="text-[10px] text-purple-400 font-extrabold uppercase tracking-widest block">Audit Evidence</span>
+              <h4 className="text-white text-base font-bold mt-0.5">UPI Receipt Screenshot Proof</h4>
+            </div>
+            <div className="flex-1 w-full overflow-hidden flex items-center justify-center bg-black/40 rounded-2xl border border-white/5 p-4">
+              <img 
+                src={activeScreenshot} 
+                alt="UPI payment proof screenshot" 
+                className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-2xl" 
+              />
+            </div>
+            <button
+              onClick={() => setActiveScreenshot(null)}
+              className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              Done Reviewing
+            </button>
           </div>
         </div>
       )}
