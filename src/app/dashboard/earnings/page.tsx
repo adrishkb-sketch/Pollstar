@@ -15,7 +15,9 @@ import {
   Building, 
   CreditCard,
   AlertCircle,
-  FileText
+  FileText,
+  UserCheck,
+  Users
 } from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 
@@ -36,6 +38,14 @@ interface PayoutRequest {
   createdAt: string;
 }
 
+interface ReferredUser {
+  id: string;
+  fullName: string | null;
+  email: string;
+  createdAt: string;
+  plan: { name: string } | null;
+}
+
 interface Wallet {
   id: string;
   balance: number;
@@ -54,9 +64,11 @@ export default function EarningsPage() {
   const [user, setUser] = useState<any>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
+  const [referredUsers, setReferredUsers] = useState<ReferredUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [displayCurrency, setDisplayCurrency] = useState('INR');
+  const [l1Rate, setL1Rate] = useState(10);
 
   // Copy states
   const [copiedLink, setCopiedLink] = useState(false);
@@ -93,6 +105,10 @@ export default function EarningsPage() {
         if (data.success) {
           setWallet(data.wallet);
           setPayouts(data.payoutRequests || []);
+          setReferredUsers(data.referredUsers || []);
+          if (data.globalReferralPercentage) {
+            setL1Rate(parseFloat(data.globalReferralPercentage) || 10);
+          }
         }
       }
     } catch (err) {
@@ -361,7 +377,7 @@ export default function EarningsPage() {
                       <span className="w-5 h-5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-400 flex items-center justify-center font-bold font-mono">1</span>
                       <span className="text-white font-semibold">Level 1 (Direct Referred)</span>
                     </div>
-                    <span className="text-emerald-400 font-bold">10% Commission</span>
+                    <span className="text-emerald-400 font-bold">{l1Rate}% Commission</span>
                   </div>
 
                   <div className="flex justify-between items-center border-b border-white/5 pb-2 text-xs">
@@ -369,7 +385,7 @@ export default function EarningsPage() {
                       <span className="w-5 h-5 rounded bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 flex items-center justify-center font-bold font-mono">2</span>
                       <span className="text-white font-semibold">Level 2 (Secondary Sub-tier)</span>
                     </div>
-                    <span className="text-indigo-300 font-bold">5% Commission</span>
+                    <span className="text-indigo-300 font-bold">{(l1Rate / 2).toFixed(1).replace(/\.0$/, '')}% Commission</span>
                   </div>
 
                   <div className="flex justify-between items-center text-xs">
@@ -377,7 +393,7 @@ export default function EarningsPage() {
                       <span className="w-5 h-5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold font-mono">3</span>
                       <span className="text-white font-semibold">Level 3 (Tertiary Sub-tier)</span>
                     </div>
-                    <span className="text-blue-300 font-bold">2.5% Commission</span>
+                    <span className="text-blue-300 font-bold">{(l1Rate / 4).toFixed(1).replace(/\.0$/, '')}% Commission</span>
                   </div>
                 </div>
 
@@ -507,6 +523,66 @@ export default function EarningsPage() {
                 </div>
               </div>
             )}
+
+            {/* Referred Users & Creators Ledger */}
+            <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-purple-400" />
+                  <span>Referred Users &amp; Creators</span>
+                </h3>
+                <span className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-bold">
+                  {referredUsers.length} Total
+                </span>
+              </div>
+
+              {referredUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 space-y-3 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                    <Users className="w-7 h-7 text-purple-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm font-semibold">No referred users yet.</p>
+                  <p className="text-gray-600 text-xs max-w-xs">Share your referral link above. When someone signs up using your code, they will appear here and you'll earn commissions on their plan purchases.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full scrollbar-thin scrollbar-thumb-purple-500/20">
+                  <table className="min-w-[600px] w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
+                        <th className="pb-3 pr-4">Name</th>
+                        <th className="pb-3 pr-4">Email</th>
+                        <th className="pb-3 pr-4">Plan</th>
+                        <th className="pb-3 pr-4 text-right">Joined</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {referredUsers.map((ru) => (
+                        <tr key={ru.id} className="text-gray-300 hover:bg-white/[0.01] transition-colors">
+                          <td className="py-3.5 pr-4 font-semibold text-white">
+                            {ru.fullName || <span className="text-gray-500 italic">No name</span>}
+                          </td>
+                          <td className="py-3.5 pr-4 text-gray-400 font-mono text-[11px]">{ru.email}</td>
+                          <td className="py-3.5 pr-4">
+                            {ru.plan ? (
+                              <span className="inline-block px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                                {ru.plan.name}
+                              </span>
+                            ) : (
+                              <span className="inline-block px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                                Free
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 pr-4 text-right font-mono text-[10px] text-gray-500">
+                            {new Date(ru.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
             {/* Historical Ledgers */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -686,7 +686,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               type: q.type || 'SINGLE',
               pageNumber: q.pageNumber || 1,
               order: q.order || (i + 1),
-              marks: q.marks !== undefined ? parseFloat(String(q.marks)) : 0.0,
+              marks: q.marks !== undefined && q.marks !== null ? parseFloat(String(q.marks)) : 1.0,
               inputConstraint: q.inputConstraint || 'NONE',
               enableWhiteboard: !!q.enableWhiteboard,
               correctAnswer: q.correctAnswer || null,

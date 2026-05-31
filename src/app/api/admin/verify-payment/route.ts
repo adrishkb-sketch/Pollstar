@@ -175,27 +175,25 @@ async function distributeCommissions(userId: string, finalPrice: number) {
 }
 
 async function addWalletFunds(userId: string, amount: number, description: string) {
-  let wallet = await prisma.wallet.findUnique({
-    where: { userId }
+  // Upsert wallet so we always have a valid ID, then use atomic increments
+  // to avoid lost-update race conditions when multiple commissions fire in parallel.
+  const wallet = await prisma.wallet.upsert({
+    where: { userId },
+    create: {
+      userId,
+      balance: 0,
+      totalEarned: 0,
+      totalWithdrawn: 0
+    },
+    update: {} // no-op – we just need the wallet record
   });
-
-  if (!wallet) {
-    wallet = await prisma.wallet.create({
-      data: {
-        userId,
-        balance: 0,
-        totalEarned: 0,
-        totalWithdrawn: 0
-      }
-    });
-  }
 
   await prisma.$transaction([
     prisma.wallet.update({
       where: { id: wallet.id },
       data: {
-        balance: wallet.balance + amount,
-        totalEarned: wallet.totalEarned + amount
+        balance: { increment: amount },
+        totalEarned: { increment: amount }
       }
     }),
     prisma.transaction.create({

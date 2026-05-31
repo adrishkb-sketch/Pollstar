@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, Inter } from "next/font/google";
 import RaiseIssueButton from "@/components/RaiseIssueButton";
+import MaintenanceCheck from "@/components/MaintenanceCheck";
+import DevModeBanner from "@/components/DevModeBanner";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -65,8 +67,11 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: zoomBlockerScript }} />
       </head>
       <body className="font-sans antialiased text-gray-100 min-h-screen flex flex-col bg-[#030712]">
-        {children}
+        <MaintenanceCheck>
+          {children}
+        </MaintenanceCheck>
         <RaiseIssueButton />
+        <DevModeBanner />
       </body>
     </html>
   );

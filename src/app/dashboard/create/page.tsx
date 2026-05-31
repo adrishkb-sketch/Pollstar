@@ -836,7 +836,7 @@ export default function CreatePoll() {
                   logicRules: q.logicRules || null,
                   correctAnswer: q.correctAnswer || null,
                   correctAnswers: q.correctAnswers || null,
-                  marks: q.marks !== undefined ? String(q.marks) : '0.0',
+                  marks: q.marks !== undefined ? String(q.marks) : '1.0',
                   inputConstraint: q.inputConstraint || 'NONE',
                   fileUploadDriveUrl: q.fileUploadDriveUrl || null,
                   enableWhiteboard: !!q.enableWhiteboard,
@@ -1110,12 +1110,12 @@ export default function CreatePoll() {
 
   const handleAddQuestion = () => {
     const lastPage = questions.length > 0 ? questions[questions.length - 1].pageNumber : 1;
-    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage, logicRules: null }]);
+    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage, marks: 1, logicRules: null }]);
   };
 
   const handleAddPage = () => {
     const lastPage = questions.length > 0 ? questions[questions.length - 1].pageNumber : 0;
-    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage + 1, logicRules: null }]);
+    setQuestions([...questions, { id: Date.now(), questionText: '', type: 'SINGLE', options: ['Option 1', 'Option 2'], pageNumber: lastPage + 1, marks: 1, logicRules: null }]);
   };
 
   const handleRemoveQuestion = (qIndex: number) => {
@@ -1469,7 +1469,7 @@ export default function CreatePoll() {
         logicRules: q.logicRules || null,
         correctAnswer: q.correctAnswer || null,
         correctAnswers: q.correctAnswers || null,
-        marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+        marks: q.marks !== undefined && q.marks !== null ? parseFloat(String(q.marks)) : 1.0,
         inputConstraint: q.inputConstraint || 'NONE',
         fileUploadDriveUrl: q.fileUploadDriveUrl || null,
         enableWhiteboard: !!q.enableWhiteboard,
@@ -1625,7 +1625,7 @@ export default function CreatePoll() {
         logicRules: q.logicRules || null,
         correctAnswer: q.correctAnswer || null,
         correctAnswers: q.correctAnswers || null,
-        marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+        marks: q.marks !== undefined && q.marks !== null ? parseFloat(String(q.marks)) : 1.0,
         inputConstraint: q.inputConstraint || 'NONE',
         fileUploadDriveUrl: q.fileUploadDriveUrl || null,
         enableWhiteboard: !!q.enableWhiteboard,

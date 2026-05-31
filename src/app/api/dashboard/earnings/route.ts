@@ -59,10 +59,31 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
+    // Fetch users who signed up using this user's referral code
+    const referredUsers = await prisma.user.findMany({
+      where: { referredById: user.id },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        createdAt: true,
+        plan: { select: { name: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Fetch global referral percentage config
+    const referralConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'global_referral_percentage' }
+    });
+    const globalReferralPercentage = referralConfig ? parseFloat(referralConfig.value) : 10;
+
     return NextResponse.json({
       success: true,
       wallet,
-      payoutRequests
+      payoutRequests,
+      referredUsers,
+      globalReferralPercentage
     });
   } catch (error: any) {
     console.error('Fetch Dashboard Earnings Error:', error);

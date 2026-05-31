@@ -400,7 +400,7 @@ export async function POST(req: Request) {
             logicRules: q.logicRules ? q.logicRules : null,
             correctAnswer: q.correctAnswer || null,
             correctAnswers: q.correctAnswers ? q.correctAnswers : null,
-            marks: q.marks !== undefined ? parseFloat(q.marks) : 0.0,
+            marks: q.marks !== undefined && q.marks !== null ? parseFloat(String(q.marks)) : 1.0,
             inputConstraint: q.inputConstraint || 'NONE',
             fileUploadDriveUrl: q.fileUploadDriveUrl || null,
             enableWhiteboard: !!q.enableWhiteboard,

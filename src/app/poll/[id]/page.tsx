@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use, useRef } from 'react';
+import { useEffect, useState, use, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Vote as VoteIcon, Loader2, AlertCircle, CheckCircle, 
@@ -945,33 +945,94 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     const shouldTabLeaveSubmit = settings.enableAutoSubmitOnTabLeave;
     const shouldLeaveSubmit = settings.enableAutoSubmitOnLeave;
 
-    const triggerAutoSubmit = () => {
+    const triggerAutoSubmit = async () => {
       console.log("Triggering exam auto-submit due to safeguard policy");
-      const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
-      if (submitBtn) {
-        submitBtn.click();
+
+      // Play a Web Audio API beep sound if enabled
+      if (poll?.settings?.enableTabDepartureSound) {
+        try {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz
+          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + 0.3); // 300ms beep
+        } catch (audioErr) {
+          console.error("Web Audio API beep failure:", audioErr);
+        }
+      }
+
+      setVoteLoading(true);
+      try {
+        let detectedDevice = 'Desktop';
+        const rawUA = navigator?.userAgent || '';
+        const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
+        const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
+        const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
+        const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
+        const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
+        const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
+
+        if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
+          detectedDevice = 'Mobile';
+        } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
+          detectedDevice = 'Tablet';
+        } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
+          detectedDevice = 'Tablet';
+        }
+
+        const res = await fetch(`/api/polls/${pollId}/vote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers: selectedAnswers,
+            confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
+            voterToken: poll.isOpenVoting ? undefined : voterToken,
+            email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
+            latitude: null,
+            longitude: null,
+            device: detectedDevice,
+            isAutoSubmitted: true,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to submit exam paper');
+        }
+
+        setVotedSuccessfully(true);
+        setFlaggedSuspicious(data.flaggedSuspicious || false);
+        localStorage.removeItem(`poll_start_time_${pollId}`);
+        localStorage.removeItem(`pollstar_resume_${pollId}`);
+      } catch (err: any) {
+        console.error("Auto submit submission error:", err);
+        setError(err.message || "Failed to auto-submit exam.");
+      } finally {
+        setVoteLoading(false);
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && shouldTabLeaveSubmit) {
-        alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
         triggerAutoSubmit();
+        alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
       }
     };
 
     const handleWindowBlur = () => {
       if (shouldTabLeaveSubmit) {
-        alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
         triggerAutoSubmit();
+        alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
       }
     };
 
     const handleBeforeUnload = () => {
       if (shouldLeaveSubmit) {
-        // Trigger auto submit in background via navigator.sendBeacon
-        const host = window.location.host;
-        const protocol = window.location.protocol;
         const detectedDevice = 'Desktop'; 
         const bodyStr = JSON.stringify({
           answers: selectedAnswers,
@@ -1001,21 +1062,18 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [timerActive, poll, selectedAnswers, voterToken, openEmail, pollId]);
+  }, [timerActive, poll, selectedAnswers, confidenceValues, voterToken, openEmail, pollId]);
 
   // 4. Webcam camera / microphone proctoring tracking
   useEffect(() => {
     const isProctorActive = timerActive && poll?.settings?.enableProctorCamera;
+    let activeStream: MediaStream | null = null;
     if (isProctorActive) {
       navigator.mediaDevices.getUserMedia({ video: true, audio: !!poll.settings.enableProctorMicrophone })
         .then((stream) => {
+          activeStream = stream;
           setCameraStream(stream);
           setCameraError(false);
-          
-          const videoElement = document.getElementById('proctor-facecam') as HTMLVideoElement;
-          if (videoElement) {
-            videoElement.srcObject = stream;
-          }
         })
         .catch((err) => {
           console.error("Camera proctoring permission denied:", err);
@@ -1024,19 +1082,53 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }
 
     return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
+      if (activeStream) {
+        activeStream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [timerActive, poll]);
 
-  // Bind stream if camera element updates
-  useEffect(() => {
-    const videoElement = document.getElementById('proctor-facecam') as HTMLVideoElement;
-    if (videoElement && cameraStream) {
-      videoElement.srcObject = cameraStream;
+  // Callback Ref for the video element to safely bind the stream on mount
+  const videoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node && cameraStream) {
+      node.srcObject = cameraStream;
     }
-  }, [cameraStream, verifiedVoter, showIntro]);
+  }, [cameraStream]);
+
+  // 5. Copy/Paste and ContextMenu blocking for exams
+  useEffect(() => {
+    if (!poll?.settings?.enableCopyPasteBlock) return;
+
+    const handleBlock = (e: Event) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('copy', handleBlock);
+    document.addEventListener('cut', handleBlock);
+    document.addEventListener('paste', handleBlock);
+    document.addEventListener('contextmenu', handleBlock);
+
+    const style = document.createElement('style');
+    style.id = 'block-select-style';
+    style.innerHTML = `
+      body, html {
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+        user-select: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.removeEventListener('copy', handleBlock);
+      document.removeEventListener('cut', handleBlock);
+      document.removeEventListener('paste', handleBlock);
+      document.removeEventListener('contextmenu', handleBlock);
+      const styleEl = document.getElementById('block-select-style');
+      if (styleEl) styleEl.remove();
+    };
+  }, [poll]);
 
   // 1. Fetch Poll Metadata on Mount
   useEffect(() => {
@@ -2228,6 +2320,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             ) : cameraStream ? (
               <video
                 id="proctor-facecam"
+                ref={videoRef}
                 autoPlay
                 muted
                 playsInline

@@ -14,6 +14,18 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+
+  // Capture referral code on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('ref') || params.get('referralCode') || '';
+      if (code) {
+        setReferralCode(code);
+      }
+    }
+  }, []);
 
   // OTP flow states
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -57,7 +69,7 @@ export default function Signup() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, referralCode }),
       });
       const data = await res.json();
 

@@ -134,8 +134,17 @@ export async function POST(req: Request) {
     }
 
     if (action === 'CLEAR') {
-      // Clear payout: update payoutRequest status and increment withdrawn amount in wallet
-      await prisma.$transaction([
+      // Find the pending transaction first
+      const pendingTx = await prisma.transaction.findFirst({
+        where: {
+          walletId: wallet.id,
+          amount: -payout.amount,
+          description: { contains: 'Pending' }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const txs: any[] = [
         prisma.payoutRequest.update({
           where: { id: payoutRequestId },
           data: { status: 'CLEARED' }
@@ -143,18 +152,34 @@ export async function POST(req: Request) {
         prisma.wallet.update({
           where: { id: wallet.id },
           data: {
-            totalWithdrawn: wallet.totalWithdrawn + payout.amount
-          }
-        }),
-        prisma.transaction.create({
-          data: {
-            walletId: wallet.id,
-            amount: -payout.amount,
-            type: 'PAYOUT',
-            description: `Cleared payout via ${payout.method} (${payout.details})`
+            totalWithdrawn: { increment: payout.amount }
           }
         })
-      ]);
+      ];
+
+      if (pendingTx) {
+        txs.push(
+          prisma.transaction.update({
+            where: { id: pendingTx.id },
+            data: {
+              description: `Cleared payout via ${payout.method} (${payout.details})`
+            }
+          })
+        );
+      } else {
+        txs.push(
+          prisma.transaction.create({
+            data: {
+              walletId: wallet.id,
+              amount: -payout.amount,
+              type: 'PAYOUT',
+              description: `Cleared payout via ${payout.method} (${payout.details})`
+            }
+          })
+        );
+      }
+
+      await prisma.$transaction(txs);
 
       return NextResponse.json({ success: true, message: 'Payout request cleared successfully' });
     } else if (action === 'REJECT') {
@@ -167,7 +192,7 @@ export async function POST(req: Request) {
         prisma.wallet.update({
           where: { id: wallet.id },
           data: {
-            balance: wallet.balance + payout.amount
+            balance: { increment: payout.amount }
           }
         }),
         prisma.transaction.create({
@@ -175,7 +200,7 @@ export async function POST(req: Request) {
             walletId: wallet.id,
             amount: payout.amount,
             type: 'EARNING',
-            description: `Refunded rejected payout request of $${payout.amount.toFixed(2)}`
+            description: `Refunded rejected payout request of ${payout.amount.toFixed(2)}`
           }
         })
       ]);
