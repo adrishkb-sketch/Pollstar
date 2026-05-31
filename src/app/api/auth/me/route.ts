@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-import { verifyAccessToken, verifyRefreshToken, generateAccessToken } from '@/lib/jwt';
+import { verifyAccessToken, verifyRefreshToken, generateAccessToken, getCookieOptions } from '@/lib/jwt';
 import { checkAndExpirePlan, checkAndCleanExpiredPlanOffers } from '@/lib/planExpiry';
 import { getCache, setCache } from '@/lib/serverCache';
 
@@ -81,7 +81,7 @@ async function getGlobalDisplayCurrency(): Promise<string> {
   return currency;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('accessToken')?.value;
@@ -257,9 +257,9 @@ export async function GET() {
     });
 
     if (newAccessToken) {
-      const isProduction = process.env.NODE_ENV === 'production';
-      const cookieOptions = `HttpOnly; ${isProduction ? 'Secure; ' : ''}SameSite=Lax; Path=/;`;
-      response.headers.append('Set-Cookie', `accessToken=${newAccessToken}; ${cookieOptions} Max-Age=3600`);
+      const hostHeader = req.headers.get('host');
+      const cookieOptions = getCookieOptions(hostHeader);
+      response.cookies.set('accessToken', newAccessToken, { ...cookieOptions, maxAge: 3600 });
     }
 
     return response;

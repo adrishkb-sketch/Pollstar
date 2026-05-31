@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import prisma from '@/lib/prisma';
-import { generateAccessToken, generateRefreshToken } from '@/lib/jwt';
+import { generateAccessToken, generateRefreshToken, getCookieOptions } from '@/lib/jwt';
 import { sendOTPEmail } from '@/lib/nodemailer';
 
 export async function POST(req: Request) {
@@ -125,17 +125,11 @@ export async function POST(req: Request) {
       },
     });
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const cookieOptions = `HttpOnly; ${isProduction ? 'Secure; ' : ''}SameSite=Lax; Path=/;`;
+    const hostHeader = req.headers.get('host');
+    const cookieOptions = getCookieOptions(hostHeader);
 
-    response.headers.append(
-      'Set-Cookie',
-      `accessToken=${accessToken}; ${cookieOptions} Max-Age=3600` // 1h
-    );
-    response.headers.append(
-      'Set-Cookie',
-      `refreshToken=${refreshToken}; ${cookieOptions} Max-Age=604800` // 7d
-    );
+    response.cookies.set('accessToken', accessToken, { ...cookieOptions, maxAge: 3600 });      // 1h
+    response.cookies.set('refreshToken', refreshToken, { ...cookieOptions, maxAge: 604800 });   // 7d
 
     return response;
   } catch (error: any) {

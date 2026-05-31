@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
+import { getCookieOptions } from '@/lib/jwt';
 
-export async function POST() {
+export async function POST(req: Request) {
   const response = NextResponse.json({
     success: true,
     message: 'Logged out successfully',
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  const cookieOptions = `HttpOnly; ${isProduction ? 'Secure; ' : ''}SameSite=Lax; Path=/;`;
+  const hostHeader = req.headers.get('host');
+  const cookieOptions = getCookieOptions(hostHeader);
 
-  // Overwrite cookies with zero Max-Age to delete them
-  response.headers.append(
-    'Set-Cookie',
-    `accessToken=; ${cookieOptions} Max-Age=0`
-  );
-  response.headers.append(
-    'Set-Cookie',
-    `refreshToken=; ${cookieOptions} Max-Age=0`
-  );
+  // Overwrite cookies with maxAge=0 to delete them
+  response.cookies.set('accessToken', '', { ...cookieOptions, maxAge: 0 });
+  response.cookies.set('refreshToken', '', { ...cookieOptions, maxAge: 0 });
 
   return response;
 }

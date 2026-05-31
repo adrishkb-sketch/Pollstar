@@ -32,3 +32,17 @@ export function verifyRefreshToken(token: string): TokenPayload | null {
     return null;
   }
 }
+
+export function getCookieOptions(hostHeader: string | null): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax';
+  path: string;
+} {
+  const host = hostHeader || '';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+  const isProduction = process.env.NODE_ENV === 'production';
+  // Secure flag only in production when NOT on localhost
+  const secure = isProduction && !isLocal;
+  return { httpOnly: true, secure, sameSite: 'lax', path: '/' };
+}
