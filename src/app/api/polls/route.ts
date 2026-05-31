@@ -185,6 +185,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid credit pack selected for allocation.' }, { status: 400 });
           }
 
+          // Block PENDING/REJECTED UPI payments from granting access
+          if (invoice.paymentStatus !== 'COMPLETED') {
+            return NextResponse.json({ error: 'Your payment for this credit pack is still pending verification. Please wait for admin approval before using it.' }, { status: 403 });
+          }
+
           if (invoice.planExpiresAt && new Date(invoice.planExpiresAt) < new Date()) {
             return NextResponse.json({ error: 'Selected credit pack has expired.' }, { status: 403 });
           }
@@ -285,7 +290,7 @@ export async function POST(req: Request) {
           } else {
             // Subscription is exceeded. Try to find the first active addon pack that has remaining capacity for this category
             const addonInvoices = await prisma.invoice.findMany({
-              where: { userId: user.id, isAddon: true },
+              where: { userId: user.id, isAddon: true, paymentStatus: 'COMPLETED' },
               include: { plan: true },
             });
 

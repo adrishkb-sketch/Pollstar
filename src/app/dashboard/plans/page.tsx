@@ -820,6 +820,50 @@ export default function PlansPage() {
           </div>
         </div>
 
+        {/* ── PENDING UPI PAYMENT NOTICE ── */}
+        {invoices.filter(inv => inv.paymentStatus === 'PENDING').map(inv => (
+          <div key={`pending-${inv.id}`} className="glass-card rounded-2xl p-5 border-2 border-amber-500/40 bg-amber-500/5 flex items-start gap-4 shadow-lg shadow-amber-500/5">
+            <div className="w-10 h-10 bg-amber-500/15 rounded-xl flex items-center justify-center shrink-0 text-xl">⏳</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-amber-300 text-sm uppercase tracking-wide">UPI Payment Under Review</span>
+                <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold uppercase">Pending Verification</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Your UPI payment for <strong className="text-white">{inv.plan?.name}</strong> (UTR: <span className="font-mono text-amber-300">{inv.upiUtr}</span>) has been received and is currently being verified against our bank records.
+              </p>
+              <p className="text-[11px] text-amber-500/70 mt-1.5 font-semibold">
+                ⏱ Verification can take up to 24 hours. Your plan will be activated immediately upon approval. Please do not make duplicate payments.
+              </p>
+            </div>
+          </div>
+        ))}
+
+        {/* ── REJECTED UPI PAYMENT NOTICE ── */}
+        {invoices.filter(inv => inv.paymentStatus === 'REJECTED').map(inv => (
+          <div key={`rejected-${inv.id}`} className="glass-card rounded-2xl p-5 border-2 border-red-500/40 bg-red-500/5 flex items-start gap-4 shadow-lg shadow-red-500/5">
+            <div className="w-10 h-10 bg-red-500/15 rounded-xl flex items-center justify-center shrink-0 text-xl">❌</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-red-300 text-sm uppercase tracking-wide">Payment Verification Failed</span>
+                <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold uppercase">Rejected</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Your UPI payment for <strong className="text-white">{inv.plan?.name}</strong> (UTR: <span className="font-mono text-red-300">{inv.upiUtr}</span>) could not be verified.
+              </p>
+              {inv.rejectionReason && (
+                <div className="mt-2 p-3 rounded-xl bg-red-950/50 border border-red-500/20">
+                  <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-1">Admin Reason:</p>
+                  <p className="text-xs text-red-200">{inv.rejectionReason}</p>
+                </div>
+              )}
+              <p className="text-[11px] text-red-500/70 mt-2 font-semibold">
+                Please contact support or try purchasing again with the correct payment details.
+              </p>
+            </div>
+          </div>
+        ))}
+
         {/* Responsive Grid for Past Plans History & Invoice History */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Past Subscriptions & Plans Timeline */}
@@ -839,8 +883,17 @@ export default function PlansPage() {
                 </div>
               ) : (
                 invoices.map((inv, idx) => {
-                  const isActivePlan = idx === 0 && !inv.isAddon;
-                  const isExpired = inv.planExpiresAt ? new Date(inv.planExpiresAt) < new Date() : false;
+                  const isCompleted = inv.paymentStatus === 'COMPLETED' || !inv.paymentStatus;
+                  const isPending = inv.paymentStatus === 'PENDING';
+                  const isRejected = inv.paymentStatus === 'REJECTED';
+
+                  const isActivePlan = isCompleted && (
+                    inv.isAddon
+                      ? (inv.plan?.addonRank === user?.activeAddonRank && (!inv.planExpiresAt || new Date(inv.planExpiresAt) >= new Date()))
+                      : (user?.plan?.id === inv.planId && (!inv.planExpiresAt || new Date(inv.planExpiresAt) >= new Date()))
+                  );
+
+                  const isExpired = isCompleted && inv.planExpiresAt ? new Date(inv.planExpiresAt) < new Date() : false;
 
                   return (
                     <div 
@@ -862,22 +915,39 @@ export default function PlansPage() {
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-500">
-                          Activated: <strong className="text-gray-400">{new Date(inv.createdAt).toLocaleDateString()}</strong> 
-                          {inv.planExpiresAt && (
-                            <> • Expires: <strong className="text-gray-400">{new Date(inv.planExpiresAt).toLocaleDateString()}</strong></>
+                          {isPending ? (
+                            <span className="text-amber-400/90 font-bold block">⏳ Verification Pending (Submitted: {new Date(inv.createdAt).toLocaleDateString()})</span>
+                          ) : isRejected ? (
+                            <>
+                              <span className="text-red-400 font-bold block">❌ Verification Failed (Submitted: {new Date(inv.createdAt).toLocaleDateString()})</span>
+                              {inv.rejectionReason && (
+                                <span className="block mt-0.5 text-[9px] text-red-500/70 font-semibold italic">Reason: {inv.rejectionReason}</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              Activated: <strong className="text-gray-400">{new Date(inv.createdAt).toLocaleDateString()}</strong> 
+                              {inv.planExpiresAt && (
+                                <> • Expires: <strong className="text-gray-400">{new Date(inv.planExpiresAt).toLocaleDateString()}</strong></>
+                              )}
+                            </>
                           )}
                         </p>
                       </div>
 
                       <div className="text-right">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                          isActivePlan && !isExpired
+                          isActivePlan
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : isExpired
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              : 'bg-gray-500/10 text-gray-400 border border-white/5'
+                            : isPending
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              : isRejected
+                                ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                : isExpired
+                                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  : 'bg-gray-500/10 text-gray-400 border border-white/5'
                         }`}>
-                          {isActivePlan && !isExpired ? 'Active' : isExpired ? 'Expired' : 'Previous'}
+                          {isActivePlan ? 'Active' : isPending ? 'Pending' : isRejected ? 'Rejected' : isExpired ? 'Expired' : 'Previous'}
                         </span>
                       </div>
                     </div>
@@ -925,23 +995,29 @@ export default function PlansPage() {
                           {getCurrencySymbol(inv.plan.currency)}{inv.amountPaid.toFixed(2)}
                         </td>
                         <td className="py-3 pr-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedInvoice({
-                                ...inv,
-                                receiptRef: `PST-${inv.id.substring(0,8).toUpperCase()}`,
-                                planName: inv.plan.name,
-                                planCurrency: inv.plan.currency,
-                                createdAt: new Date(inv.createdAt).toLocaleDateString()
-                              });
-                              setShowInvoiceModal(true);
-                            }}
-                            className="py-1 px-2 rounded border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 text-purple-300 text-[9px] font-bold uppercase transition-all flex items-center gap-1.5 ml-auto"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Invoice</span>
-                          </button>
+                          {inv.paymentStatus === 'PENDING' ? (
+                            <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">⏳ Unverified</span>
+                          ) : inv.paymentStatus === 'REJECTED' ? (
+                            <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">❌ Rejected</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedInvoice({
+                                  ...inv,
+                                  receiptRef: `PST-${inv.id.substring(0,8).toUpperCase()}`,
+                                  planName: inv.plan.name,
+                                  planCurrency: inv.plan.currency,
+                                  createdAt: new Date(inv.createdAt).toLocaleDateString()
+                                });
+                                setShowInvoiceModal(true);
+                              }}
+                              className="py-1 px-2 rounded border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 text-purple-300 text-[9px] font-bold uppercase transition-all flex items-center gap-1.5 ml-auto"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Invoice</span>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))

@@ -190,11 +190,13 @@ export async function GET() {
       );
     }
 
-    // Fetch user's active add-on invoices to find the highest addonRank
+    // Fetch user's COMPLETED active add-on invoices to find the highest addonRank
+    // PENDING/REJECTED UPI invoices are excluded — no access granted until verified
     const activeAddons = await prisma.invoice.findMany({
       where: {
         userId: currentUser.id,
         isAddon: true,
+        paymentStatus: 'COMPLETED',
         OR: [
           { planExpiresAt: null },
           { planExpiresAt: { gte: new Date() } }

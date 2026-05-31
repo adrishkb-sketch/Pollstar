@@ -525,9 +525,10 @@ model Invoice {
   polls          Poll[]
   createdAt      DateTime @default(now())
 
-  paymentStatus  String   @default("COMPLETED") // PENDING, COMPLETED, REJECTED
-  upiUtr         String?
-  screenshotUrl  String?
+  paymentStatus   String   @default("COMPLETED") // PENDING, COMPLETED, REJECTED
+  upiUtr          String?
+  screenshotUrl   String?
+  rejectionReason String?  // admin-provided reason when payment is rejected
 
   @@index([userId])
   @@index([planId])

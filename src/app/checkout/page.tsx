@@ -3,19 +3,15 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
-  CreditCard, 
   Smartphone, 
-  Sparkles, 
   ShieldCheck, 
   ArrowLeft, 
   Loader2, 
   CheckCircle2, 
   Percent, 
-  ChevronRight,
-  QrCode,
+  Sparkles,
   Globe,
-  Building,
-  Coins
+  ArrowUpRight
 } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
 const getCurrencySymbol = (currencyCode?: string) => {
@@ -71,22 +67,11 @@ function CheckoutContent() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
 
-  const upiQrUrl = plan 
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(
-        `upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=${plan.currency || 'INR'}&tn=Invoice_${plan.name.replace(/\s+/g, '_')}`
-      )}`
-    : '';
-
   // Payment states
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'netbanking' | 'paypal'>('card');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  const [upiId, setUpiId] = useState('');
+  const [paymentMethod] = useState<'upi'>('upi');
   const [upiUtr, setUpiUtr] = useState('');
   const [screenshotBase64, setScreenshotBase64] = useState('');
   const [pendingVerification, setPendingVerification] = useState(false);
-  const [selectedBank, setSelectedBank] = useState('');
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   // Fetch plan details
@@ -234,7 +219,7 @@ function CheckoutContent() {
       return;
     }
 
-    if (paymentMethod === 'upi' && finalPrice > 0) {
+    if (finalPrice > 0) {
       if (!upiUtr.trim() || upiUtr.trim().length !== 12 || isNaN(Number(upiUtr))) {
         setError('Please enter a valid 12-digit UPI Transaction Reference Number (UTR).');
         return;
@@ -519,7 +504,7 @@ function CheckoutContent() {
           </button>
           <div className="flex items-center gap-1 text-xs text-gray-500 font-medium">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>SSL Secured Checkout (Simulated)</span>
+            <span>Secure UPI Checkout</span>
           </div>
         </div>
 
@@ -601,218 +586,94 @@ function CheckoutContent() {
                 </div>
               </div>
 
-              {/* Payment Methods */}
+              {/* Payment Method — UPI Only */}
               {finalPrice > 0 && (
                 <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 space-y-6 bg-white/[0.01]">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                      <Coins className="w-5 h-5" />
+                      <Smartphone className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold">Secure Simulated Payment</h2>
-                      <p className="text-xs text-gray-500">Choose one of the simulated gateways below</p>
+                      <h2 className="text-xl font-bold">Pay via UPI</h2>
+                      <p className="text-xs text-gray-500">Scan or open your UPI app to complete payment</p>
                     </div>
                   </div>
 
-                  {/* Tabs */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/[0.02] p-1.5 rounded-2xl border border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('card')}
-                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                        paymentMethod === 'card' 
-                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>Cards</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('upi')}
-                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                        paymentMethod === 'upi' 
-                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                      }`}
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      <span>UPI ID / QR</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('netbanking')}
-                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                        paymentMethod === 'netbanking' 
-                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                      }`}
-                    >
-                      <Building className="w-4 h-4" />
-                      <span>Netbanking</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('paypal')}
-                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border text-xs font-semibold gap-1 transition-all ${
-                        paymentMethod === 'paypal' 
-                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' 
-                          : 'bg-transparent border-transparent text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                      }`}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>PayPal / Pay</span>
-                    </button>
-                  </div>
+                  {/* UPI App launch button */}
+                  <div className="space-y-5">
+                    <div className="text-center space-y-2">
+                      <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-full uppercase tracking-wider inline-block">
+                        🇮🇳 UPI Direct Bank Transfer
+                      </span>
+                      <p className="text-[11px] text-gray-500 max-w-xs mx-auto">
+                        Tap the button below to open your UPI app and pay <strong className="text-white">₹{finalPrice.toFixed(2)}</strong>. After paying, enter the UTR and upload your screenshot below.
+                      </p>
+                    </div>
 
-                  {/* Card Fields */}
-                  {paymentMethod === 'card' && (
-                    <div className="space-y-4 animate-fade-in">
-                      <div className="space-y-2">
-                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Card Number</label>
+                    {/* Pay with UPI Apps button */}
+                    <div className="flex flex-col items-center gap-3">
+                      <a
+                        href={`upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=${plan?.currency || 'INR'}&tn=Pollstar_${plan?.name?.replace(/\s+/g, '_')}`}
+                        className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-purple-600/20 border border-purple-500/30 transition-all active:scale-95"
+                      >
+                        <Smartphone className="w-5 h-5" />
+                        <span>Pay with UPI Apps</span>
+                        <ArrowUpRight className="w-4 h-4 opacity-70" />
+                      </a>
+                      <p className="text-[10px] text-gray-500 text-center">
+                        Opens GPay, PhonePe, Paytm, BHIM or any installed UPI app.<br/>
+                        <span className="text-amber-500/70">If no app opens, your device may not have a UPI app installed.</span>
+                      </p>
+                    </div>
+
+                    <div className="border-t border-white/5 pt-4 space-y-4">
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">12-Digit UPI Reference / UTR <span className="text-red-400">*</span></label>
                         <input 
                           type="text" 
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').substring(0, 16))}
-                          placeholder="4111 2222 3333 4444"
+                          required
+                          value={upiUtr}
+                          onChange={(e) => setUpiUtr(e.target.value.replace(/\D/g, '').substring(0, 12))}
+                          placeholder="e.g. 345678901234"
                           className="w-full glass-input text-sm px-4 py-3"
                         />
+                        <span className="text-[9px] text-gray-500 block">Find the 12-digit transaction ID in your UPI app's payment receipt / history.</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Expiry Date</label>
+
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">Upload Payment Screenshot <span className="text-red-400">*</span></label>
+                        <div className="relative border border-dashed border-white/10 hover:border-purple-500/50 rounded-2xl p-4 bg-white/[0.01] transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
                           <input 
-                            type="text" 
-                            value={cardExpiry}
-                            onChange={(e) => setCardExpiry(e.target.value.substring(0, 5))}
-                            placeholder="MM/YY"
-                            className="w-full glass-input text-sm px-4 py-3 text-center"
+                            type="file" 
+                            accept="image/*"
+                            required
+                            onChange={handleFileChange}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
                           />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Security CVV</label>
-                          <input 
-                            type="password" 
-                            value={cardCvv}
-                            onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').substring(0, 3))}
-                            placeholder="•••"
-                            className="w-full glass-input text-sm px-4 py-3 text-center"
-                          />
+                          {screenshotBase64 ? (
+                            <div className="flex flex-col items-center gap-2 w-full">
+                              <img src={screenshotBase64} alt="Screenshot preview" className="max-h-32 rounded-xl object-contain border border-white/10" />
+                              <span className="text-[9px] text-purple-300 font-semibold">Click or drag to change image</span>
+                            </div>
+                          ) : (
+                            <div className="text-center py-2">
+                              <span className="text-lg">📸</span>
+                              <p className="text-xs text-gray-400 font-semibold mt-1">Select payment receipt screenshot</p>
+                              <p className="text-[8px] text-gray-500 mt-0.5">JPEG, PNG up to 5MB</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* UPI Fields */}
-                  {paymentMethod === 'upi' && (
-                    <div className="space-y-5 animate-fade-in">
-                      {finalPrice === 0 ? (
-                        <div className="text-center py-6 space-y-2">
-                          <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
-                          <p className="text-sm font-semibold">Free Upgrade Mode</p>
-                          <p className="text-xs text-gray-500">Your total amount due is 0.00. No QR scan or verification is required.</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="text-center space-y-1">
-                            <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                              🇮🇳 Direct Bank Transfer via UPI
-                            </span>
-                            <p className="text-[10px] text-gray-500 mt-2">
-                              Scan the QR code below on GPay, PhonePe, Paytm, or BHIM to pay <strong>{getCurrencySymbol(plan?.currency)}{finalPrice.toFixed(2)}</strong> directly.
-                            </p>
-                          </div>
-
-                          <div className="border border-white/5 rounded-2xl bg-white/[0.01] p-6 max-w-xs mx-auto flex flex-col items-center gap-4">
-                            <div className="p-3 bg-white rounded-2xl shadow-xl shadow-purple-500/5">
-                              <img 
-                                src={upiQrUrl}
-                                alt="UPI payment QR Code" 
-                                className="w-40 h-40 object-contain mx-auto"
-                              />
-                            </div>
-                            <div className="text-center font-mono text-[10px] text-gray-400 bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 w-full">
-                              UPI ID: <strong>work.adrishkb@oksbi</strong>
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="space-y-1.5 text-left">
-                              <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">12-Digit UPI Ref No. / UTR</label>
-                              <input 
-                                type="text" 
-                                required
-                                value={upiUtr}
-                                onChange={(e) => setUpiUtr(e.target.value.replace(/\D/g, '').substring(0, 12))}
-                                placeholder="e.g. 345678901234"
-                                className="w-full glass-input text-sm px-4 py-3"
-                              />
-                              <span className="text-[9px] text-gray-500 block">Provide the 12-digit transaction ID from your payment receipt screenshot.</span>
-                            </div>
-
-                            <div className="space-y-1.5 text-left">
-                              <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">Upload Payment Screenshot</label>
-                              <div className="relative border border-dashed border-white/10 hover:border-purple-500/50 rounded-2xl p-4 bg-white/[0.01] transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
-                                <input 
-                                  type="file" 
-                                  accept="image/*"
-                                  required
-                                  onChange={handleFileChange}
-                                  className="absolute inset-0 opacity-0 cursor-pointer"
-                                />
-                                {screenshotBase64 ? (
-                                  <div className="flex flex-col items-center gap-2 w-full">
-                                    <img src={screenshotBase64} alt="Screenshot preview" className="max-h-32 rounded-xl object-contain border border-white/10" />
-                                    <span className="text-[9px] text-purple-300 font-semibold">Click or drag to change image</span>
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-2">
-                                    <span className="text-lg">📸</span>
-                                    <p className="text-xs text-gray-400 font-semibold mt-1">Select receipt image file</p>
-                                    <p className="text-[8px] text-gray-500 mt-0.5">JPEG, PNG up to 5MB</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
+                    {/* 24-hour notice */}
+                    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/15">
+                      <span className="text-base shrink-0 mt-0.5">⏱</span>
+                      <p className="text-[10px] text-amber-500/80 leading-relaxed">
+                        <strong className="text-amber-400">Verification takes up to 24 hours.</strong> Once we match your UTR with our bank records, your plan will be activated automatically. You will see a status update on this Plans page.
+                      </p>
                     </div>
-                  )}
-
-                  {/* Netbanking Fields */}
-                  {paymentMethod === 'netbanking' && (
-                    <div className="space-y-4 animate-fade-in">
-                      <div className="space-y-2">
-                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Select Bank</label>
-                        <select 
-                          value={selectedBank}
-                          onChange={(e) => setSelectedBank(e.target.value)}
-                          className="w-full glass-input text-sm px-4 py-3 bg-[#030712]"
-                        >
-                          <option value="">-- Choose Your Institution --</option>
-                          <option value="sbi">State Bank of India</option>
-                          <option value="hdfc">HDFC Bank</option>
-                          <option value="icici">ICICI Bank</option>
-                          <option value="axis">Axis Bank</option>
-                          <option value="kotak">Kotak Mahindra Bank</option>
-                          <option value="pnb">Punjab National Bank</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PayPal Fields */}
-                  {paymentMethod === 'paypal' && (
-                    <div className="animate-fade-in text-center py-6 space-y-4">
-                      <Sparkles className="w-12 h-12 text-yellow-400 mx-auto animate-pulse" />
-                      <div>
-                        <p className="text-sm font-semibold">Simulate One-Tap PayPal / Apple Pay clearance</p>
-                        <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">No login required. The gateway will bypass prompt challenges and simulate standard authorization tokens.</p>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -827,8 +688,8 @@ function CheckoutContent() {
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>
                       {finalPrice > 0 
-                        ? 'Processing Secure Gateway Authentication...' 
-                        : 'Activating Free Plan Upgrade...'}
+                        ? 'Submitting UPI payment details...' 
+                        : 'Activating Free Plan...'}
                     </span>
                   </>
                 ) : (
@@ -836,8 +697,8 @@ function CheckoutContent() {
                     <ShieldCheck className="w-5 h-5 text-emerald-400" />
                     <span>
                       {finalPrice > 0 
-                        ? `Secure simulated checkout (${getCurrencySymbol(plan.currency)}${finalPrice.toFixed(2)})` 
-                        : 'Activate Free Plan Upgrade'}
+                        ? `Submit UPI Payment (₹${finalPrice.toFixed(2)})` 
+                        : 'Activate Free Plan'}
                     </span>
                   </>
                 )}
@@ -971,7 +832,7 @@ function CheckoutContent() {
                 {/* Security footer disclaimer */}
                 <div className="border-t border-white/5 pt-4">
                   <p className="text-[10px] text-gray-500 leading-relaxed text-center">
-                    By confirming this checkout, you agree to our Simulated Terms of Service. Purchases processed here do not capture real financial credentials and are credited as instant sandbox overrides.
+                    By confirming this checkout, you agree to our Terms of Service. After submitting, your payment will be manually verified within 24 hours and your plan will be activated.
                   </p>
                 </div>
               </div>

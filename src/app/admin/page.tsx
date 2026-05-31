@@ -145,7 +145,7 @@ export default function AdminPortal() {
   const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor' | 'coupons_domains' | 'monetization' | 'newsletter' | 'careers' | 'notices'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'verifications' | 'payments' | 'plans' | 'logs' | 'issues' | 'moderation' | 'contact' | 'site_editor' | 'coupons_domains' | 'monetization' | 'newsletter' | 'careers' | 'notices'>('users');
   const [issueLoadingId, setIssueLoadingId] = useState<string | null>(null);
 
   // Invoices & Newsletter States
@@ -213,6 +213,11 @@ export default function AdminPortal() {
   const [rejectionUser, setRejectionUser] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectionLoading, setRejectionLoading] = useState(false);
+
+  // UPI payment rejection modal
+  const [upiRejectInvoiceId, setUpiRejectInvoiceId] = useState<string | null>(null);
+  const [upiRejectReason, setUpiRejectReason] = useState('');
+  const [upiRejectLoading, setUpiRejectLoading] = useState(false);
 
   // Plans CRUD Panel states
   const [showPlanForm, setShowPlanForm] = useState(false);
@@ -682,21 +687,24 @@ export default function AdminPortal() {
   };
 
   const handleProcessUPIPayment = async (invoiceId: string, action: 'APPROVE' | 'REJECT') => {
-    if (!confirm(`Are you sure you want to ${action === 'APPROVE' ? 'APPROVE and activate' : 'REJECT and cancel'} this UPI payment?`)) return;
     setPayoutError(null);
     setPayoutSuccess(null);
+    if (action === 'REJECT') {
+      // Open rejection reason modal
+      setUpiRejectInvoiceId(invoiceId);
+      setUpiRejectReason('');
+      return;
+    }
+    if (!confirm('Are you sure you want to APPROVE and activate this UPI payment?')) return;
     try {
       const res = await fetch('/api/admin/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId,
-          action
-        })
+        body: JSON.stringify({ invoiceId, action })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setPayoutSuccess(`UPI Payment has been successfully ${action === 'APPROVE' ? 'approved & plan activated' : 'rejected'}!`);
+        setPayoutSuccess('UPI Payment has been successfully approved & plan activated!');
         fetchInvoices();
         fetchAdminData();
       } else {
@@ -704,6 +712,41 @@ export default function AdminPortal() {
       }
     } catch (err) {
       setPayoutError('Connection error processing UPI verification.');
+    }
+  };
+
+  const handleConfirmUPIReject = async () => {
+    if (!upiRejectInvoiceId) return;
+    if (!upiRejectReason.trim()) {
+      setPayoutError('Please provide a reason for rejection.');
+      return;
+    }
+    setUpiRejectLoading(true);
+    setPayoutError(null);
+    try {
+      const res = await fetch('/api/admin/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: upiRejectInvoiceId,
+          action: 'REJECT',
+          rejectionReason: upiRejectReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPayoutSuccess('UPI Payment has been rejected. The user will be notified.');
+        setUpiRejectInvoiceId(null);
+        setUpiRejectReason('');
+        fetchInvoices();
+        fetchAdminData();
+      } else {
+        setPayoutError(data.error || 'Failed to reject payment.');
+      }
+    } catch (err) {
+      setPayoutError('Connection error rejecting payment.');
+    } finally {
+      setUpiRejectLoading(false);
     }
   };
 
@@ -872,6 +915,8 @@ export default function AdminPortal() {
     if (activeTab === 'coupons_domains') {
       fetchCoupons();
       fetchDomainMappings();
+    } else if (activeTab === 'payments') {
+      fetchInvoices();
     } else if (activeTab === 'monetization') {
       fetchPayoutsAndStats();
       fetchInvoices();
@@ -1664,7 +1709,31 @@ export default function AdminPortal() {
           </div>
         )}
 
+        {/* 🚨 PENDING UPI PAYMENTS ALERT BANNER */}
+        {invoices.filter(inv => inv.paymentStatus === 'PENDING').length > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-300 flex items-center justify-between gap-4 animate-pulse-slow shadow-lg shadow-amber-500/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center shrink-0 text-xl">
+                💰
+              </div>
+              <div>
+                <p className="font-extrabold text-sm text-amber-300 uppercase tracking-wide">
+                  {invoices.filter(inv => inv.paymentStatus === 'PENDING').length} Pending UPI Payment{invoices.filter(inv => inv.paymentStatus === 'PENDING').length > 1 ? 's' : ''} Awaiting Verification
+                </p>
+                <p className="text-[11px] text-amber-500/80 mt-0.5">Users are waiting for plan activation. Verify UTR references and approve or reject each payment.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className="shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all active:scale-95 shadow-md"
+            >
+              Review Now →
+            </button>
+          </div>
+        )}
+
         {/* System Stats Bar */}
+
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="glass-card rounded-2xl p-4 border border-white/5 bg-[#080d1a]/50 flex items-center justify-between">
             <div>
@@ -1743,6 +1812,22 @@ export default function AdminPortal() {
               </span>
             )}
             {activeTab === 'verifications' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`pb-3 text-xs font-bold transition-all relative uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'payments' ? 'text-purple-400 font-extrabold' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            💳 Payment Verifications
+            {invoices.filter(inv => inv.paymentStatus === 'PENDING').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold rounded-full animate-pulse">
+                {invoices.filter(inv => inv.paymentStatus === 'PENDING').length}
+              </span>
+            )}
+            {activeTab === 'payments' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 rounded-full" />
             )}
           </button>
@@ -1845,9 +1930,9 @@ export default function AdminPortal() {
             }`}
           >
             💰 Payouts & MLM
-            {payouts.filter(p => p.status === 'PENDING').length > 0 && (
-              <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold rounded-full">
-                {payouts.filter(p => p.status === 'PENDING').length}
+            {(payouts.filter(p => p.status === 'PENDING').length + invoices.filter(inv => inv.paymentStatus === 'PENDING').length) > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full animate-pulse">
+                {payouts.filter(p => p.status === 'PENDING').length + invoices.filter(inv => inv.paymentStatus === 'PENDING').length}
               </span>
             )}
             {activeTab === 'monetization' && (
@@ -2117,6 +2202,174 @@ export default function AdminPortal() {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: PAYMENT VERIFICATIONS */}
+        {activeTab === 'payments' && (
+          <div className="space-y-6">
+            {/* Pending Payments Queue */}
+            <div className="glass-card rounded-3xl p-6 border border-amber-500/20 bg-amber-500/5 space-y-4">
+              <div className="border-b border-amber-500/10 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="font-outfit text-base font-bold text-amber-400 flex items-center gap-1.5">
+                    <span>💳 Pending UPI Payments Verification Queue</span>
+                  </h3>
+                  <p className="text-gray-400 text-[10px] mt-0.5 font-outfit">Validate user-submitted reference numbers (UTR) against bank records before clearance</p>
+                </div>
+                <span className="text-[10px] font-black px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 animate-pulse uppercase">
+                  Requires Action
+                </span>
+              </div>
+
+              {invoices.filter(inv => inv.paymentStatus === 'PENDING').length === 0 ? (
+                <div className="text-center p-12 text-gray-500 font-outfit text-xs italic">
+                  🎉 No pending UPI payments awaiting verification. All caught up!
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-amber-500/10 bg-slate-950/40 rounded-2xl">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/2 text-[10px] uppercase font-bold text-gray-400 font-outfit">
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Creator / Email</th>
+                        <th className="px-5 py-3">Invoice Details</th>
+                        <th className="px-5 py-3">UTR Reference</th>
+                        <th className="px-5 py-3">Receipt Screenshot</th>
+                        <th className="px-5 py-3 text-right">Clearance Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {invoices.filter(inv => inv.paymentStatus === 'PENDING').map((inv) => (
+                        <tr key={inv.id} className="text-gray-300 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
+                            {new Date(inv.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="font-bold text-white block">{inv.billingName}</span>
+                            <span className="text-[10px] text-gray-500 font-mono block">{inv.user?.email}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="uppercase font-extrabold text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-purple-300">
+                              {inv.plan?.name}
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-bold block mt-1 font-mono">${inv.amountPaid.toFixed(2)}</span>
+                          </td>
+                          <td className="px-5 py-3.5 font-bold font-mono text-amber-300 text-sm">
+                            {inv.upiUtr || 'N/A'}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {inv.screenshotUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveScreenshot(inv.screenshotUrl)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-purple-500/50 hover:bg-white/10 text-gray-400 hover:text-white transition-all text-[10px] font-bold"
+                              >
+                                <span>👁️ View Screenshot</span>
+                              </button>
+                            ) : (
+                              <span className="text-gray-500 font-mono text-[10px]">No Proof Uploaded</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleProcessUPIPayment(inv.id, 'REJECT')}
+                                className="px-2.5 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-red-400 text-[10px] font-bold uppercase transition-all"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleProcessUPIPayment(inv.id, 'APPROVE')}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all border border-emerald-400/20 shadow-md shadow-emerald-500/10"
+                              >
+                                Approve & Activate
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Invoice Purchase Records Ledger */}
+            <div className="glass-card rounded-3xl p-6 border border-white/5 bg-[#080d1a] space-y-4">
+              <div className="border-b border-white/5 pb-3">
+                <h3 className="font-outfit text-base font-bold text-white">🧾 Global Invoice Purchase Ledger</h3>
+                <p className="text-gray-500 text-[10px] mt-0.5 font-outfit">Audit ledger of all user plan upgrades, renewals, and package purchases</p>
+              </div>
+
+              {invoicesLoading ? (
+                <div className="flex items-center justify-center p-8 bg-white/2 border border-white/5 rounded-2xl">
+                  <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                </div>
+              ) : invoices.length === 0 ? (
+                <div className="text-center p-6 text-gray-500 font-outfit">No invoices recorded yet.</div>
+              ) : (
+                <div className="overflow-x-auto border border-white/5 bg-slate-950/20 rounded-2xl">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/2 text-[10px] uppercase font-bold text-gray-400 font-outfit">
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Customer Details</th>
+                        <th className="px-5 py-3">Plan Details</th>
+                        <th className="px-5 py-3">Paid Amount</th>
+                        <th className="px-5 py-3">Reference/UTR</th>
+                        <th className="px-5 py-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {invoices.map((inv) => (
+                        <tr key={inv.id} className="text-gray-300 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
+                            {new Date(inv.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="font-bold text-white block">{inv.billingName}</span>
+                            <span className="text-[10px] text-gray-500 font-mono block">{inv.user?.email}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="uppercase font-extrabold text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-purple-300">
+                              {inv.plan?.name}
+                            </span>
+                            {inv.couponCode && (
+                              <span className="text-[10px] text-emerald-400 font-bold block mt-1 font-outfit">Code: {inv.couponCode}</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 font-bold font-mono text-emerald-400 text-[11px]">
+                            ${inv.amountPaid.toFixed(2)}
+                          </td>
+                          <td className="px-5 py-3.5 font-mono text-[11px] text-gray-400">
+                            {inv.upiUtr || 'N/A'}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                              inv.paymentStatus === 'COMPLETED' || !inv.paymentStatus
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : inv.paymentStatus === 'PENDING'
+                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}>
+                              {inv.paymentStatus || 'COMPLETED'}
+                            </span>
+                            {inv.paymentStatus === 'REJECTED' && inv.rejectionReason && (
+                              <span className="block text-[9px] text-red-500/70 font-semibold italic mt-1 max-w-[200px] ml-auto truncate" title={inv.rejectionReason}>
+                                Reason: {inv.rejectionReason}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -4647,7 +4900,58 @@ export default function AdminPortal() {
         </div>
       )}
 
-      {/* ── PLANS CREATE / EDIT FORM MODAL ────────────────────────────── */}
+      {/* ── UPI REJECTION REASON MODAL ───────────────────────────────────── */}
+      {upiRejectInvoiceId && (
+        <div className="fixed inset-0 bg-[#020612]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 z-[60] animate-fade-in">
+          <div className="max-w-lg w-full bg-[#080d1a] border border-red-500/30 rounded-3xl p-6 relative flex flex-col gap-5 shadow-2xl shadow-red-500/10">
+            <button
+              onClick={() => { setUpiRejectInvoiceId(null); setUpiRejectReason(''); }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 border border-white/5 rounded-lg p-1.5 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div>
+              <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-widest block">Payment Rejection</span>
+              <h4 className="text-white text-base font-bold mt-0.5">Provide Rejection Reason</h4>
+              <p className="text-gray-400 text-xs mt-1">This reason will be displayed to the user on their Plans &amp; Billing page so they know why their payment was not accepted.</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-gray-400 font-bold uppercase tracking-wider block">Rejection Reason <span className="text-red-400">*</span></label>
+              <textarea
+                rows={4}
+                value={upiRejectReason}
+                onChange={e => setUpiRejectReason(e.target.value)}
+                placeholder="e.g. UTR number does not match our bank records. Amount mismatch detected. Please retry with correct payment details."
+                className="w-full bg-[#030712] border border-white/10 hover:border-red-500/30 focus:border-red-500/50 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-600 outline-none transition-all resize-none font-outfit"
+              />
+              <p className="text-[10px] text-gray-500">Be specific — the user will see this reason and may need to contact support.</p>
+            </div>
+            {payoutError && (
+              <p className="text-xs text-red-400 font-semibold bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">{payoutError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setUpiRejectInvoiceId(null); setUpiRejectReason(''); setPayoutError(null); }}
+                className="flex-1 py-3 border border-white/10 hover:bg-white/5 text-gray-400 rounded-xl text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUPIReject}
+                disabled={upiRejectLoading || !upiRejectReason.trim()}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all border border-red-400/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {upiRejectLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Confirm Reject & Notify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {showPlanForm && (
         <div className="fixed inset-0 bg-[#020612]/90 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="glass-card rounded-3xl border border-white/10 p-6 md:p-8 max-w-4xl w-full bg-[#080d1a] relative max-h-[90vh] overflow-y-auto space-y-6 animate-fade-in">

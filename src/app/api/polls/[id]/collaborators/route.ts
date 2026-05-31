@@ -306,7 +306,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // ── 2. Pack / Addon quota (all-time, lifetime) ───────────────────────────
         const addonInvoices = await prisma.invoice.findMany({
-          where: { userId: targetUser.id, isAddon: true },
+          where: { userId: targetUser.id, isAddon: true, paymentStatus: 'COMPLETED' },
           include: { plan: true },
         });
 

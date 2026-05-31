@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyAccessToken, verifyRefreshToken } from '@/lib/jwt';
 
+import { computePlanExpiresAt } from '@/lib/planExpiry';
+
 async function getAuthAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('accessToken')?.value;
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { invoiceId, action } = await req.json();
+    const { invoiceId, action, rejectionReason } = await req.json();
 
     if (!invoiceId || !action) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -49,20 +51,40 @@ export async function POST(req: Request) {
     }
 
     if (action === 'APPROVE') {
-      // 1. Mark invoice as COMPLETED
+      // Re-calculate the plan expires at starting from NOW (approval time)
+      const isLifetime = invoice.billingCycle === 'LIFETIME' || invoice.billingCycle === 'ONE_TIME';
+      let planExpiresAt: Date | null = null;
+      
+      if (!isLifetime) {
+        if (invoice.isAddon) {
+          // If it's an addon, it co-terminates with the user's active subscription plan
+          const user = await prisma.user.findUnique({
+            where: { id: invoice.userId },
+            select: { planExpiresAt: true }
+          });
+          planExpiresAt = user?.planExpiresAt || null;
+        } else {
+          // Calculate standard subscription duration starting from NOW
+          planExpiresAt = computePlanExpiresAt(invoice.billingCycle);
+        }
+      }
+
+      // 1. Mark invoice as COMPLETED and update its expiration date
       await prisma.invoice.update({
         where: { id: invoiceId },
-        data: { paymentStatus: 'COMPLETED' }
+        data: { 
+          paymentStatus: 'COMPLETED',
+          planExpiresAt
+        }
       });
 
       // 2. Activate plan for user (if it is not an add-on plan)
       if (!invoice.isAddon) {
-        const isLifetime = invoice.billingCycle === 'LIFETIME' || invoice.billingCycle === 'ONE_TIME';
         await prisma.user.update({
           where: { id: invoice.userId },
           data: {
             planId: invoice.planId,
-            planExpiresAt: invoice.planExpiresAt,
+            planExpiresAt: planExpiresAt,
             planBillingCycle: invoice.billingCycle,
             isLifetimePlan: isLifetime
           }
@@ -73,10 +95,13 @@ export async function POST(req: Request) {
       await distributeCommissions(invoice.userId, invoice.amountPaid);
 
     } else if (action === 'REJECT') {
-      // Mark invoice as REJECTED
+      // Mark invoice as REJECTED with admin-provided reason
       await prisma.invoice.update({
         where: { id: invoiceId },
-        data: { paymentStatus: 'REJECTED' }
+        data: {
+          paymentStatus: 'REJECTED',
+          rejectionReason: rejectionReason || 'Payment could not be verified.'
+        }
       });
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

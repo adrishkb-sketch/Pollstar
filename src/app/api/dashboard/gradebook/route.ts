@@ -94,7 +94,7 @@ export async function GET(req: Request) {
 
     // Fetch user addon invoices for participant limit lookup
     const addonInvoices = await prisma.invoice.findMany({
-      where: { userId: user.id, isAddon: true },
+      where: { userId: user.id, isAddon: true, paymentStatus: 'COMPLETED' },
       include: { plan: true },
     });
     const invoicePlanMap = new Map<string, any>();

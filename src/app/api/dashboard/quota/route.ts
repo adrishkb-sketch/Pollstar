@@ -96,9 +96,10 @@ export async function GET() {
     ]);
 
     // ── 2. Pack / Addon quota (all-time, lifetime) ───────────────────────────
-    // Fetch all addon invoices for the user with their plan details
+    // Fetch all COMPLETED addon invoices for the user with their plan details
+    // PENDING/REJECTED UPI invoices are excluded — they don't grant any quota until verified
     const addonInvoices = await prisma.invoice.findMany({
-      where: { userId: user.id, isAddon: true },
+      where: { userId: user.id, isAddon: true, paymentStatus: 'COMPLETED' },
       include: { plan: true },
     });
 
