@@ -172,9 +172,8 @@ export default function PlansPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
-  const [entityPlans, setEntityPlans] = useState<any[]>([]);
   const [addonPlans, setAddonPlans] = useState<any[]>([]);
-  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ENTITY' | 'ADDON'>('SUBSCRIPTION');
+  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ADDON'>('SUBSCRIPTION');
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -226,17 +225,9 @@ export default function PlansPage() {
         const plansData = await plansRes.json();
         const rawPlans = plansData.plans || [];
         const rawAddons = plansData.addonPlans || [];
-        const rawEntity = plansData.entityPlans || [];
-        const sortedPlans = [...rawPlans].sort((a, b) => {
-          const aFree = a.isFree || a.name === 'Free';
-          const bFree = b.isFree || b.name === 'Free';
-          if (aFree && !bFree) return -1;
-          if (!aFree && bFree) return 1;
-          return a.price - b.price;
-        });
+        const sortedPlans = [...rawPlans].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
         setPlans(sortedPlans);
-        setEntityPlans(rawEntity);
-        setAddonPlans(rawAddons);
+        setAddonPlans(rawAddons.sort((a: any, b: any) => (a.addonRank ?? 0) - (b.addonRank ?? 0)));
       }
 
       if (invoicesRes.ok) {
@@ -311,9 +302,8 @@ export default function PlansPage() {
         <div className="flex justify-center mb-6 pt-2">
           <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
             {[
-              { key: 'SUBSCRIPTION', label: 'Electoral Subscriptions' },
-              { key: 'ENTITY', label: 'Individual Entity Packs' },
-              { key: 'ADDON', label: 'Premium Add-Ons' }
+              { key: 'SUBSCRIPTION', label: '⚡ Electoral Subscriptions' },
+              { key: 'ADDON', label: '🚀 Audience Add-Ons' }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -616,12 +606,17 @@ export default function PlansPage() {
                   <div className="pt-6 mt-6 border-t border-white/5">
                     {(() => {
                       const userPlanIsFree = !user?.plan || user.plan.name.toLowerCase() === 'free';
+                      const now = new Date();
+                      const planExpired = user?.planExpiresAt && new Date(user.planExpiresAt) < now && !user?.isLifetimePlan;
+                      const planActive = isActivePlan && !planExpired;
+
                       const isInferior = user?.plan && !userPlanIsFree && (
                         p.name.toLowerCase() === 'free' ||
-                        (p.rank ?? 0) < (user.plan.rank ?? 0)
+                        (p.rank ?? 0) <= (user.plan.rank ?? 0)
                       ) && p.id !== user.plan.id;
 
-                      if (isActivePlan) {
+                      // Active non-expired plan: just show status
+                      if (planActive) {
                         if (p.isFree || p.name === 'Free') {
                           return (
                             <button
@@ -629,19 +624,44 @@ export default function PlansPage() {
                               disabled
                               className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-400 text-xs border border-white/5 cursor-not-allowed text-center"
                             >
-                              Current Plan ({formatBillingCycle(user?.planBillingCycle || 'LIFETIME')})
+                              ✅ Current Free Plan
                             </button>
                           );
                         } else {
                           return (
-                            <Link
-                              href={`/checkout?planId=${p.id}&duration=${user?.planBillingCycle || 'MONTHLY'}`}
-                              className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs border border-emerald-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                            >
-                              🔄 Renew / Extend {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
-                            </Link>
+                            <div className="space-y-2">
+                              <button
+                                type="button"
+                                disabled
+                                className="w-full py-3 rounded-xl font-bold bg-emerald-500/10 text-emerald-300 text-xs border border-emerald-500/20 cursor-default text-center"
+                              >
+                                ✅ Active {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
+                              </button>
+                              {user?.planExpiresAt && !user?.isLifetimePlan && (
+                                <p className="text-[9px] text-gray-600 text-center">
+                                  Renews: <strong className="text-gray-400">{new Date(user.planExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                                </p>
+                              )}
+                            </div>
                           );
                         }
+                      }
+
+                      // Expired plan: show renew button
+                      if (planExpired && isActivePlan) {
+                        return (
+                          <div className="space-y-2">
+                            <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] text-red-400 font-bold text-center">
+                              ⚠️ Plan expired — you&apos;re on the Free tier until renewed
+                            </div>
+                            <Link
+                              href={`/checkout?planId=${p.id}&duration=${user?.planBillingCycle || 'MONTHLY'}`}
+                              className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs border border-amber-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                            >
+                              🔄 Renew {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
+                            </Link>
+                          </div>
+                        );
                       }
 
                       if (isInferior) {
@@ -677,128 +697,7 @@ export default function PlansPage() {
                         >
                           {p.hasFreeTrial 
                             ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
-                            : (displayPrice > 0 ? `Get Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
-                        </Link>
-                      );
-                    })()}
-                  </div>
-                </div>
-              );
-            })}
-
-            {activeCategory === 'ENTITY' && entityPlans.map((p) => {
-              return (
-                <div 
-                  key={p.id}
-                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
-                >
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
-                        <span 
-                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
-                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
-                        >
-                          {p.badgeLabel || p.planType.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
-                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
-                    </div>
-
-                    <div className="border-t border-b border-white/5 py-4 space-y-1">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase block">One-Off Price</span>
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        {p.price === 0 && p.originalPrice && p.originalPrice > 0 ? (
-                          <span className="text-2xl font-black text-emerald-400 font-outfit">FREE Offer!</span>
-                        ) : (
-                          <span className="text-3xl font-black text-white font-outfit">
-                            {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                          </span>
-                        )}
-                        {p.originalPrice && p.originalPrice > p.price && (
-                          <span className="text-sm text-red-400/70 font-semibold line-through">
-                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                      {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
-                        <div className="mt-1.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-400 flex items-center gap-1">
-                          <span>⏳</span>
-                          <span>Offer ends: {new Date(p.offerEndDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        </div>
-                      )}
-                    </div>
-
-
-                    {/* Pack Validity indicator */}
-                    {p.validityValue && p.validityUnit && (
-                      <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-extrabold text-indigo-300 flex items-center gap-1.5 animate-pulse shrink-0 font-outfit">
-                        <span>⏳</span>
-                        <span>Validity: {p.validityValue} {p.validityUnit.toLowerCase()}</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
-                      <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 bg-white/2 border border-white/5 p-3 rounded-xl">
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>
-                          {p.planType === 'POLL_PACK' && `Adds ${p.packQuantity} Premium Poll creation credits`}
-                          {p.planType === 'SURVEY_PACK' && `Adds ${p.packQuantity} Premium Survey creation credits`}
-                          {p.planType === 'EXAM_PACK' && `Adds ${p.packQuantity} Premium Exam creation credits`}
-                          {p.planType === 'COMBO_PACK' && `Adds ${p.packQuantity} Combo entity creation credits`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Flat Inclusions/Limits Display */}
-                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
-                      <div className="flex items-center justify-between">
-                        <span>Max Polls Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Surveys Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Exams Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Entity Pack CTA — locked if user has active paid subscription */}
-                  <div className="pt-6 mt-6 border-t border-white/5">
-                    {(() => {
-                      const hasActivePaidSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' &&
-                        user?.plan?.planType === 'SUBSCRIPTION' &&
-                        (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
-
-                      if (hasActivePaidSub) {
-                        return (
-                          <div className="space-y-2">
-                            <button
-                              type="button"
-                              disabled
-                              className="w-full py-3 rounded-xl font-bold bg-amber-500/5 text-amber-500/60 text-xs border border-amber-500/20 cursor-not-allowed text-center"
-                            >
-                              🔒 Not Available with Active Subscription
-                            </button>
-                            <p className="text-[9px] text-gray-600 text-center leading-relaxed">
-                              You have an active paid subscription. Individual packs are only for non-subscription users. Check out <strong className="text-gray-400">Add-Ons</strong> instead.
-                            </p>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <Link
-                          href={`/checkout?planId=${p.id}&isAddon=true`}
-                          className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                        >
-                          Buy Credit Pack
+                            : (displayPrice > 0 ? `⬆️ Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
                         </Link>
                       );
                     })()}
@@ -808,7 +707,13 @@ export default function PlansPage() {
             })}
 
             {activeCategory === 'ADDON' && addonPlans.map((p) => {
-              const hasActiveSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' && (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()));
+              const now = new Date();
+              // Determine current user add-on rank from active add-on invoices
+              // (computed server-side via the /api/auth/me response, falling back to 0)
+              const userCurrentAddonRank: number = user?.activeAddonRank ?? 0;
+              const isAddonInferior = (p.addonRank ?? 0) <= userCurrentAddonRank && userCurrentAddonRank > 0;
+              const hasActiveSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' &&
+                (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > now));
 
               return (
                 <div 
@@ -860,39 +765,53 @@ export default function PlansPage() {
                       </div>
                     </div>
 
-                    {/* Flat Inclusions/Limits Display */}
+                    {/* Participant Boost Display for Add-Ons */}
                     <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                      <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Audience Boost (Additive)</div>
                       <div className="flex items-center justify-between">
-                        <span>Max Polls Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                        <span>🗳 Voters per Poll:</span>
+                        <strong className="text-indigo-300 font-bold">+{p.maxParticipantsPoll === null || p.maxParticipantsPoll === -1 ? 'Unlimited' : p.maxParticipantsPoll?.toLocaleString()}</strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Max Surveys Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                        <span>📋 Respondents per Survey:</span>
+                        <strong className="text-violet-300 font-bold">+{p.maxParticipantsSurvey === null || p.maxParticipantsSurvey === -1 ? 'Unlimited' : p.maxParticipantsSurvey?.toLocaleString()}</strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Max Exams Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                        <span>📝 Examinees per Exam:</span>
+                        <strong className="text-cyan-300 font-bold">+{p.maxParticipantsExam === null || p.maxParticipantsExam === -1 ? 'Unlimited' : p.maxParticipantsExam?.toLocaleString()}</strong>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    {hasActiveSub ? (
+                    {!hasActiveSub ? (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full py-3 rounded-xl font-bold bg-white/5 text-amber-500/60 text-xs border border-amber-500/20 cursor-not-allowed text-center"
+                        >
+                          🔒 Requires Active Subscription First
+                        </button>
+                        <p className="text-[9px] text-gray-600 text-center">
+                          Subscribe to a paid tier to unlock audience add-ons.
+                        </p>
+                      </div>
+                    ) : isAddonInferior ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
+                      >
+                        Downgrade Unavailable
+                      </button>
+                    ) : (
                       <Link
                         href={`/checkout?planId=${p.id}&isAddon=true`}
                         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                       >
-                        Buy Add-On Feature
+                        ⬆️ Upgrade Audience Add-On
                       </Link>
-                    ) : (
-                      <button
-                        disabled
-                        title="Requires an active paid subscription tier first."
-                        className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
-                      >
-                        Requires Active Paid Subscription
-                      </button>
                     )}
                   </div>
                 </div>

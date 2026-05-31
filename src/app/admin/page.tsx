@@ -247,6 +247,7 @@ export default function AdminPortal() {
   const [planValidityValue, setPlanValidityValue] = useState('');
   const [planValidityUnit, setPlanValidityUnit] = useState('WEEKS');
   const [planRank, setPlanRank] = useState('0');
+  const [planAddonRank, setPlanAddonRank] = useState('0');
   const [planMaxParticipantsPoll, setPlanMaxParticipantsPoll] = useState('100');
   const [planMaxParticipantsSurvey, setPlanMaxParticipantsSurvey] = useState('100');
   const [planMaxParticipantsExam, setPlanMaxParticipantsExam] = useState('100');
@@ -1146,6 +1147,7 @@ export default function AdminPortal() {
     setPlanValidityValue('');
     setPlanValidityUnit('WEEKS');
     setPlanRank('0');
+    setPlanAddonRank('0');
     setPlanOriginalPrice('0.0');
     setPlanOfferEndDate('');
     setPlanDurations({
@@ -1195,6 +1197,7 @@ export default function AdminPortal() {
     setPlanValidityValue(plan.validityValue !== null && plan.validityValue !== undefined ? plan.validityValue.toString() : '');
     setPlanValidityUnit(plan.validityUnit || 'WEEKS');
     setPlanRank((plan.rank !== null && plan.rank !== undefined) ? plan.rank.toString() : '0');
+    setPlanAddonRank((plan.addonRank !== null && plan.addonRank !== undefined) ? plan.addonRank.toString() : '0');
     setPlanOriginalPrice((plan.originalPrice || 0.0).toString());
     setPlanOfferEndDate(plan.offerEndDate ? new Date(plan.offerEndDate).toISOString().substring(0, 16) : '');
     setPlanDurations(plan.durations || {
@@ -1259,6 +1262,23 @@ export default function AdminPortal() {
       }
     }
 
+    const finalDurations = planType === 'SUBSCRIPTION' ? { ...planDurations } : null;
+    if (finalDurations) {
+      Object.keys(finalDurations).forEach(dur => {
+        if (finalDurations[dur]) {
+          finalDurations[dur] = {
+            ...finalDurations[dur],
+            maxPolls: planMaxPolls,
+            maxSurveys: planMaxSurveys,
+            maxExams: planMaxExams,
+            maxParticipantsPoll: planMaxParticipantsPoll,
+            maxParticipantsSurvey: planMaxParticipantsSurvey,
+            maxParticipantsExam: planMaxParticipantsExam,
+          };
+        }
+      });
+    }
+
     const payload = {
       planId: editingPlan?.id,
       name: planName,
@@ -1282,12 +1302,16 @@ export default function AdminPortal() {
       maxPolls: planMaxPolls,
       maxSurveys: planMaxSurveys,
       maxExams: planMaxExams,
+      maxParticipantsPoll: planMaxParticipantsPoll,
+      maxParticipantsSurvey: planMaxParticipantsSurvey,
+      maxParticipantsExam: planMaxParticipantsExam,
       originalPrice: resolvedOriginalPrice,
       offerEndDate: planOfferEndDate || null,
-      durations: planDurations,
-      validityValue: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON' && planValidityValue) ? parseInt(planValidityValue) : null,
-      validityUnit: (planType !== 'SUBSCRIPTION' && planType !== 'ADDON') ? planValidityUnit : null,
+      durations: finalDurations,
+      validityValue: null,
+      validityUnit: null,
       rank: parseInt(planRank) || 0,
+      addonRank: parseInt(planAddonRank) || 0,
     };
 
     try {
@@ -2176,6 +2200,18 @@ export default function AdminPortal() {
                         <div className="flex items-center justify-between">
                           <span>Max Exams Allowed:</span>
                           <strong className="text-gray-300 font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1">
+                          <span>Voters per Poll:</span>
+                          <strong className="text-indigo-300 font-bold">{p.maxParticipantsPoll === null || p.maxParticipantsPoll === -1 ? 'Unlimited' : p.maxParticipantsPoll}</strong>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Respondents per Survey:</span>
+                          <strong className="text-violet-300 font-bold">{p.maxParticipantsSurvey === null || p.maxParticipantsSurvey === -1 ? 'Unlimited' : p.maxParticipantsSurvey}</strong>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Examinees per Exam:</span>
+                          <strong className="text-pink-300 font-bold">{p.maxParticipantsExam === null || p.maxParticipantsExam === -1 ? 'Unlimited' : p.maxParticipantsExam}</strong>
                         </div>
                       </div>
 
@@ -4502,18 +4538,14 @@ export default function AdminPortal() {
                     className="w-full bg-[#030712] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500 font-semibold"
                   >
                     <option value="SUBSCRIPTION">Recurring Subscription Tier</option>
-                    <option value="ADDON">Add-On Pack/Plan</option>
-                    <option value="POLL_PACK">Individual Polls Pack</option>
-                    <option value="SURVEY_PACK">Individual Surveys Pack</option>
-                    <option value="EXAM_PACK">Individual Exams Pack</option>
-                    <option value="COMBO_PACK">Combo Feature Pack</option>
+                    <option value="ADDON">Audience / Add-On Pack</option>
                   </select>
                 </div>
 
-                {/* Superiority Rank only applies to subscription tiers */}
+                {/* Superiority Rank for subscriptions, Addon Rank for add-ons */}
                 {planType === 'SUBSCRIPTION' && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Superiority Rank (1-N)</label>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subscription Rank (1=lowest, higher=better)</label>
                     <input
                       type="number"
                       min="1"
@@ -4522,6 +4554,21 @@ export default function AdminPortal() {
                       onChange={e => setPlanRank(e.target.value)}
                       className="w-full bg-white/3 border border-white/10 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-purple-500"
                     />
+                    <span className="text-[9px] text-gray-500 block font-outfit">Higher rank = better tier. Users can only upgrade to higher ranks.</span>
+                  </div>
+                )}
+                {planType === 'ADDON' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Add-On Rank (1=lowest, higher=larger boost)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 1"
+                      value={planAddonRank}
+                      onChange={e => setPlanAddonRank(e.target.value)}
+                      className="w-full bg-white/3 border border-amber-500/20 rounded-xl px-4.5 py-2.5 text-xs text-white outline-none focus:border-amber-500"
+                    />
+                    <span className="text-[9px] text-amber-600 block font-outfit">Separate rank track from subscriptions. Users can only upgrade add-ons.</span>
                   </div>
                 )}
               </div>
@@ -4709,51 +4756,7 @@ export default function AdminPortal() {
                                   className="w-full bg-white/3 border border-purple-500/20 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-purple-500 placeholder-purple-500/30"
                                 />
                               </div>
-                              <div className="space-y-1">
-                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Polls</span>
-                                <input
-                                  type="number"
-                                  placeholder="Max Polls (-1 = unlim)"
-                                  value={config.maxPolls !== undefined ? config.maxPolls : '-1'}
-                                  onChange={e => {
-                                    setPlanDurations({
-                                      ...planDurations,
-                                      [dur]: { ...config, maxPolls: e.target.value }
-                                    });
-                                  }}
-                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Surveys</span>
-                                <input
-                                  type="number"
-                                  placeholder="Max Surveys (-1 = unlim)"
-                                  value={config.maxSurveys !== undefined ? config.maxSurveys : '-1'}
-                                  onChange={e => {
-                                    setPlanDurations({
-                                      ...planDurations,
-                                      [dur]: { ...config, maxSurveys: e.target.value }
-                                    });
-                                  }}
-                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Exams</span>
-                                <input
-                                  type="number"
-                                  placeholder="Max Exams (-1 = unlim)"
-                                  value={config.maxExams !== undefined ? config.maxExams : '-1'}
-                                  onChange={e => {
-                                    setPlanDurations({
-                                      ...planDurations,
-                                      [dur]: { ...config, maxExams: e.target.value }
-                                    });
-                                  }}
-                                  className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-purple-500"
-                                />
-                              </div>
+
                               {(() => {
                                 const pPrice = parseFloat(config.price || '0');
                                 const pOriginalPrice = parseFloat(config.originalPrice || '0');
@@ -4977,211 +4980,29 @@ export default function AdminPortal() {
                 />
               </div>
 
-              {/* Row 8: Features list checkboxes */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
-                    Toggle Features Gated ({FEATURES_KEYS.filter(f => isFeatureVisible(f.key)).length} Active / {FEATURES_KEYS.length} Total)
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allTrue = { ...planFeatures };
-                        FEATURES_KEYS.forEach(f => { if (isFeatureVisible(f.key)) allTrue[f.key] = true; });
-                        setPlanFeatures(allTrue);
-                      }}
-                      className="text-[9px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300"
-                    >
-                      Select All
-                    </button>
-                    <span className="text-gray-600 text-[10px]">•</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allFalse = { ...planFeatures };
-                        FEATURES_KEYS.forEach(f => { if (isFeatureVisible(f.key)) allFalse[f.key] = false; });
-                        setPlanFeatures(allFalse);
-                      }}
-                      className="text-[9px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-400"
-                    >
-                      Clear All
-                    </button>
-                  </div>
+              {/* All Features Included Banner */}
+              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-lg">✅</span>
                 </div>
-                
-                <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2">
-                  {/* POLL FEATURES */}
-                  {POLL_FEATURES.some(f => isFeatureVisible(f.key)) && (
-                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
-                      <summary className="px-4 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-indigo-300 select-none">
-                        <span>🗳 Poll Features ({POLL_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {POLL_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
-                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
-                      </summary>
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
-                        {POLL_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
-                          const isChecked = planFeatures[item.key] || false;
-                          return (
-                            <div
-                              key={item.key}
-                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                              }`}
-                            >
-                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  )}
-
-                  {/* SURVEY FEATURES */}
-                  {SURVEY_FEATURES.some(f => isFeatureVisible(f.key)) && (
-                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
-                      <summary className="px-4 py-2.5 bg-violet-500/10 hover:bg-violet-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-violet-300 select-none">
-                        <span>📋 Survey Features ({SURVEY_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {SURVEY_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
-                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
-                      </summary>
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
-                        {SURVEY_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
-                          const isChecked = planFeatures[item.key] || false;
-                          return (
-                            <div
-                              key={item.key}
-                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                              }`}
-                            >
-                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  )}
-
-                  {/* EXAM FEATURES */}
-                  {EXAM_FEATURES.some(f => isFeatureVisible(f.key)) && (
-                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
-                      <summary className="px-4 py-2.5 bg-pink-500/10 hover:bg-pink-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-pink-300 select-none">
-                        <span>🎓 Exam Capabilities ({EXAM_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {EXAM_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
-                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
-                      </summary>
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
-                        {EXAM_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
-                          const isChecked = planFeatures[item.key] || false;
-                          return (
-                            <div
-                              key={item.key}
-                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                              }`}
-                            >
-                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  )}
-
-                  {/* EXAM QUESTION TYPES */}
-                  {EXAM_QUESTION_TYPES.some(f => isFeatureVisible(f.key)) && (
-                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
-                      <summary className="px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-amber-300 select-none">
-                        <span>❓ Question Types / Sub-Categories ({EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
-                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
-                      </summary>
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
-                        {EXAM_QUESTION_TYPES.filter(f => isFeatureVisible(f.key)).map((item) => {
-                          const isChecked = planFeatures[item.key] || false;
-                          return (
-                            <div
-                              key={item.key}
-                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                              }`}
-                            >
-                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  )}
-
-                  {/* PLATFORM & SECURITY FEATURES */}
-                  {PLATFORM_FEATURES.some(f => isFeatureVisible(f.key)) && (
-                    <details open className="group border border-white/5 bg-white/1 rounded-xl overflow-hidden transition-all">
-                      <summary className="px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/15 cursor-pointer flex items-center justify-between text-xs font-bold text-blue-300 select-none">
-                        <span>🛡️ Platform & Anti-Fraud Features ({PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key) && planFeatures[f.key]).length} / {PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key)).length} enabled)</span>
-                        <span className="text-[10px] text-gray-500 group-open:rotate-180 transition-transform">▼</span>
-                      </summary>
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-transparent border-t border-white/5">
-                        {PLATFORM_FEATURES.filter(f => isFeatureVisible(f.key)).map((item) => {
-                          const isChecked = planFeatures[item.key] || false;
-                          return (
-                            <div
-                              key={item.key}
-                              onClick={() => setPlanFeatures({ ...planFeatures, [item.key]: !isChecked })}
-                              className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'border-purple-500/40 bg-purple-500/5' : 'border-white/5 bg-white/2 hover:border-white/8'
-                              }`}
-                            >
-                              <span className="text-[10px] text-gray-300 font-medium truncate" title={item.label}>{item.label}</span>
-                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'border-purple-500 bg-purple-500 text-white' : 'border-white/20'
-                              }`}>
-                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  )}
+                <div>
+                  <p className="text-xs font-bold text-emerald-300">All Features Included in Every Plan</p>
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    Plans on Pollstar are differentiated only by <strong className="text-gray-300">item quotas</strong> (how many polls/surveys/exams you can create) and <strong className="text-gray-300">participant quotas</strong> (how many people&apos;s responses are visible per item). All platform features — AI analytics, proctoring, branding, exports, and more — are available to every plan.
+                  </p>
                 </div>
               </div>
 
-              {/* Row: Plan Quota Limits */}
-              {(() => {
-                const showMaxPolls = planType !== 'SUBSCRIPTION' && (planType === 'POLL_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('POLL')));
-                const showMaxSurveys = planType !== 'SUBSCRIPTION' && (planType === 'SURVEY_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('SURVEY')));
-                const showMaxExams = planType !== 'SUBSCRIPTION' && (planType === 'EXAM_PACK' || ((planType === 'COMBO_PACK' || planType === 'ADDON') && planComboTypes.includes('EXAM')));
-                const numColumns = (showMaxPolls ? 1 : 0) + (showMaxSurveys ? 1 : 0) + (showMaxExams ? 1 : 0);
-
-                if (numColumns === 0) return null;
-
-                return (
-                  <div className={`grid grid-cols-1 ${numColumns === 3 ? 'sm:grid-cols-3' : numColumns === 2 ? 'sm:grid-cols-2' : ''} gap-4 border-t border-white/5 pt-4 animate-slide-in`}>
-                    {showMaxPolls && (
+              {/* Row: Quota Limits — always shown for SUBSCRIPTION and ADDON */}
+              {(planType === 'SUBSCRIPTION' || planType === 'ADDON') && (
+                <div className="space-y-4 p-4 rounded-2xl bg-white/1 border border-white/5 animate-slide-in">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block border-b border-white/5 pb-1">
+                    {planType === 'SUBSCRIPTION' ? '📊 Item Creation Quotas' : '👥 Audience Boost Quotas'}
+                  </label>
+                  {planType === 'SUBSCRIPTION' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Polls Allowed</label>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Polls Creatable</label>
                         <input
                           type="number"
                           value={planMaxPolls}
@@ -5189,12 +5010,10 @@ export default function AdminPortal() {
                           placeholder="-1 for unlimited"
                           className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
                         />
-                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
                       </div>
-                    )}
-                    {showMaxSurveys && (
                       <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Surveys Allowed</label>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Surveys Creatable</label>
                         <input
                           type="number"
                           value={planMaxSurveys}
@@ -5202,12 +5021,10 @@ export default function AdminPortal() {
                           placeholder="-1 for unlimited"
                           className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
                         />
-                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
                       </div>
-                    )}
-                    {showMaxExams && (
                       <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5 font-outfit">Max Exams Allowed</label>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Exams Creatable</label>
                         <input
                           type="number"
                           value={planMaxExams}
@@ -5215,12 +5032,47 @@ export default function AdminPortal() {
                           placeholder="-1 for unlimited"
                           className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
                         />
-                        <span className="text-[9px] text-gray-500 mt-1 block font-outfit">-1 represents unlimited</span>
+                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
                       </div>
-                    )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1.5">Voters per Poll</label>
+                      <input
+                        type="number"
+                        value={planMaxParticipantsPoll}
+                        onChange={e => setPlanMaxParticipantsPoll(e.target.value)}
+                        placeholder="e.g. 150"
+                        className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500/50"
+                      />
+                      <span className="text-[9px] text-gray-500 mt-1 block">{planType === 'ADDON' ? 'Added on top of subscription limit' : 'Max visible voters per poll'}</span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-violet-400 block mb-1.5">Respondents per Survey</label>
+                      <input
+                        type="number"
+                        value={planMaxParticipantsSurvey}
+                        onChange={e => setPlanMaxParticipantsSurvey(e.target.value)}
+                        placeholder="e.g. 300"
+                        className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-violet-500/50"
+                      />
+                      <span className="text-[9px] text-gray-500 mt-1 block">{planType === 'ADDON' ? 'Added on top of subscription limit' : 'Max visible respondents per survey'}</span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-pink-400 block mb-1.5">Examinees per Exam</label>
+                      <input
+                        type="number"
+                        value={planMaxParticipantsExam}
+                        onChange={e => setPlanMaxParticipantsExam(e.target.value)}
+                        placeholder="e.g. 100"
+                        className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500/50"
+                      />
+                      <span className="text-[9px] text-gray-500 mt-1 block">{planType === 'ADDON' ? 'Added on top of subscription limit' : 'Max visible examinees per exam'}</span>
+                    </div>
                   </div>
-                );
-              })()}
+                </div>
+              )}
 
               {/* Row 9: Status Toggle */}
               <div className="flex items-center space-x-2 pt-2">

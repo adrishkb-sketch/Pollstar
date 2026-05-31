@@ -190,6 +190,23 @@ export async function GET() {
       );
     }
 
+    // Fetch user's active add-on invoices to find the highest addonRank
+    const activeAddons = await prisma.invoice.findMany({
+      where: {
+        userId: currentUser.id,
+        isAddon: true,
+        OR: [
+          { planExpiresAt: null },
+          { planExpiresAt: { gte: new Date() } }
+        ]
+      },
+      include: { plan: true }
+    });
+    const activeAddonRank = activeAddons.reduce((maxRank, inv) => {
+      const rank = inv.plan?.addonRank ?? 0;
+      return rank > maxRank ? rank : maxRank;
+    }, 0);
+
     const response = NextResponse.json({
       success: true,
       globalDisplayCurrency,
@@ -233,6 +250,7 @@ export async function GET() {
         planBillingCycle: currentUser.planBillingCycle,
         isLifetimePlan: currentUser.isLifetimePlan,
         domainPlanExpiry: currentUser.domainPlanExpiry,
+        activeAddonRank,
       },
     });
 

@@ -391,6 +391,7 @@ model Plan {
   validityValue   Int?
   validityUnit    String?  // WEEKS, MONTHS
   rank            Int      @default(0)
+  addonRank       Int      @default(0) // Separate rank track for ADDON plans only
 
   users           User[]
   emailDomainMappings EmailDomainMapping[]

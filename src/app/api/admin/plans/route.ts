@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       isActive, features, maxPolls, maxSurveys, maxExams,
       maxParticipantsPoll, maxParticipantsSurvey, maxParticipantsExam,
       originalPrice, offerEndDate, durations,
-      validityValue, validityUnit, rank
+      validityValue, validityUnit, rank, addonRank
     } = body;
 
     if (!name || (!features && planType !== 'SUBSCRIPTION')) {
@@ -108,8 +108,9 @@ export async function POST(req: Request) {
         durations: durations || null,
         validityValue: validityValue ? parseInt(validityValue) : null,
         validityUnit: validityUnit || null,
-        // Superiority rank only applies to subscription tiers
+        // rank only applies to subscription tiers; addonRank only applies to add-on plans
         rank: (planType || 'SUBSCRIPTION') === 'SUBSCRIPTION' ? (rank ? parseInt(rank) : 0) : 0,
+        addonRank: (planType || 'SUBSCRIPTION') === 'ADDON' ? (addonRank ? parseInt(addonRank) : 0) : 0,
       }
     });
 
@@ -247,9 +248,14 @@ export async function PATCH(req: Request) {
       data.validityUnit = updateFields.validityUnit || null;
     }
     if (updateFields.rank !== undefined) {
-      // Superiority rank only applies to subscription tiers
+      // rank only applies to subscription tiers
       const effectivePlanType = updateFields.planType || plan.planType;
       data.rank = effectivePlanType === 'SUBSCRIPTION' ? (parseInt(updateFields.rank) || 0) : 0;
+    }
+    if (updateFields.addonRank !== undefined) {
+      // addonRank only applies to add-on plans
+      const effectivePlanType = updateFields.planType || plan.planType;
+      data.addonRank = effectivePlanType === 'ADDON' ? (parseInt(updateFields.addonRank) || 0) : 0;
     }
     // Enforce isFree is name-based: strictly free only if plan name is 'Free'
     const effectiveName = updateFields.name || plan.name;
