@@ -36,10 +36,9 @@ const FEATURES_INFO = [
 ];
 
 const getCurrencySymbol = (currencyCode?: string) => {
-  if (currencyCode === 'INR') return '₹';
   if (currencyCode === 'EUR') return '€';
   if (currencyCode === 'GBP') return '£';
-  return '$';
+  return '₹'; // Default to INR
 };
 
 const getHasFeature = (features: any, key: string): boolean => {

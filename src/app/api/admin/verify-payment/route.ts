@@ -69,12 +69,13 @@ export async function POST(req: Request) {
         }
       }
 
-      // 1. Mark invoice as COMPLETED and update its expiration date
+      // 1. Mark invoice as COMPLETED, update its expiration date, and clear screenshot
       await prisma.invoice.update({
         where: { id: invoiceId },
         data: { 
           paymentStatus: 'COMPLETED',
-          planExpiresAt
+          planExpiresAt,
+          screenshotUrl: null  // Remove screenshot after verification to save storage
         }
       });
 
@@ -95,12 +96,13 @@ export async function POST(req: Request) {
       await distributeCommissions(invoice.userId, invoice.amountPaid);
 
     } else if (action === 'REJECT') {
-      // Mark invoice as REJECTED with admin-provided reason
+      // Mark invoice as REJECTED with admin-provided reason, and clear screenshot
       await prisma.invoice.update({
         where: { id: invoiceId },
         data: {
           paymentStatus: 'REJECTED',
-          rejectionReason: rejectionReason || 'Payment could not be verified.'
+          rejectionReason: rejectionReason || 'Payment could not be verified.',
+          screenshotUrl: null  // Remove screenshot after rejection to save storage
         }
       });
     } else {

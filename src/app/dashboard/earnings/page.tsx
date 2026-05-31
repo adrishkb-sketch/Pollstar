@@ -45,10 +45,9 @@ interface Wallet {
 }
 
 const getCurrencySymbol = (code: string) => {
-  if (code === 'INR') return '₹';
   if (code === 'EUR') return '€';
   if (code === 'GBP') return '£';
-  return '$';
+  return '₹'; // Default to INR
 };
 
 export default function EarningsPage() {
@@ -57,7 +56,7 @@ export default function EarningsPage() {
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [displayCurrency, setDisplayCurrency] = useState('USD');
+  const [displayCurrency, setDisplayCurrency] = useState('INR');
 
   // Copy states
   const [copiedLink, setCopiedLink] = useState(false);

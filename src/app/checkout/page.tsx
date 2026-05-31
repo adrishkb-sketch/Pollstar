@@ -15,10 +15,9 @@ import {
 } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
 const getCurrencySymbol = (currencyCode?: string) => {
-  if (currencyCode === 'INR') return '₹';
   if (currencyCode === 'EUR') return '€';
   if (currencyCode === 'GBP') return '£';
-  return '$';
+  return '₹'; // Default to INR
 };
 
 interface Plan {
@@ -606,14 +605,33 @@ function CheckoutContent() {
                         🇮🇳 UPI Direct Bank Transfer
                       </span>
                       <p className="text-[11px] text-gray-500 max-w-xs mx-auto">
-                        Tap the button below to open your UPI app and pay <strong className="text-white">₹{finalPrice.toFixed(2)}</strong>. After paying, enter the UTR and upload your screenshot below.
+                        Scan the QR code or tap the button to pay <strong className="text-white">₹{finalPrice.toFixed(2)}</strong>. After paying, enter the UTR and upload your screenshot below.
                       </p>
                     </div>
 
-                    {/* Pay with UPI Apps button */}
-                    <div className="flex flex-col items-center gap-3">
+                    {/* QR Code + Pay with UPI Apps button */}
+                    <div className="flex flex-col items-center gap-4">
+                      {/* Dynamic UPI QR Code */}
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="p-2.5 bg-white rounded-2xl shadow-lg shadow-purple-500/10 border border-purple-500/20">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=INR&tn=Pollstar_${plan?.name?.replace(/\s+/g, '_')}`)}`}
+                            alt="UPI QR Code"
+                            className="w-[180px] h-[180px] rounded-xl object-contain"
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-semibold">Scan with any UPI app</p>
+                        <p className="text-[10px] font-bold text-purple-300">work.adrishkb@oksbi</p>
+                      </div>
+
+                      <div className="flex items-center gap-3 w-full max-w-xs">
+                        <div className="flex-1 h-px bg-white/10" />
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">or</span>
+                        <div className="flex-1 h-px bg-white/10" />
+                      </div>
+
                       <a
-                        href={`upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=${plan?.currency || 'INR'}&tn=Pollstar_${plan?.name?.replace(/\s+/g, '_')}`}
+                        href={`upi://pay?pa=work.adrishkb@oksbi&pn=Pollstar&am=${finalPrice.toFixed(2)}&cu=INR&tn=Pollstar_${plan?.name?.replace(/\s+/g, '_')}`}
                         className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-purple-600/20 border border-purple-500/30 transition-all active:scale-95"
                       >
                         <Smartphone className="w-5 h-5" />
@@ -802,7 +820,7 @@ function CheckoutContent() {
                 <div className="border-t border-white/5 pt-5 space-y-3.5 text-sm">
                   <div className="flex justify-between text-gray-400">
                     <span>Base Price</span>
-                    <span className="font-semibold text-white">{isTrial ? 'Free ($0.00)' : `${getCurrencySymbol(plan.currency)}${basePrice.toFixed(2)}`}</span>
+                    <span className="font-semibold text-white">{isTrial ? 'Free (₹0.00)' : `${getCurrencySymbol(plan.currency)}${basePrice.toFixed(2)}`}</span>
                   </div>
                   {discountAmount > 0 && !isTrial && (
                     <div className="flex justify-between text-emerald-400 font-semibold">
@@ -823,7 +841,7 @@ function CheckoutContent() {
                     <span className="text-base font-bold">Total Amount Due</span>
                     <div className="text-right">
                       <span className="text-3xl font-black bg-gradient-to-r from-purple-400 to-indigo-300 bg-clip-text text-transparent">
-                        {isTrial ? 'Free Trial ($0.00)' : `${getCurrencySymbol(plan.currency)}${finalPrice.toFixed(2)}`}
+                        {isTrial ? 'Free Trial (₹0.00)' : `${getCurrencySymbol(plan.currency)}${finalPrice.toFixed(2)}`}
                       </span>
                     </div>
                   </div>

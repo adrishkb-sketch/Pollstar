@@ -230,7 +230,7 @@ export default function AdminPortal() {
   
   // New pricing & trial options
   const [planIsFree, setPlanIsFree] = useState(false);
-  const [planCurrency, setPlanCurrency] = useState('USD');
+  const [planCurrency, setPlanCurrency] = useState('INR');
   const [planType, setPlanType] = useState('SUBSCRIPTION');
   const [planPackQuantity, setPlanPackQuantity] = useState('10');
   const [planFreePerks, setPlanFreePerks] = useState('0');
@@ -1200,7 +1200,7 @@ export default function AdminPortal() {
     setPlanPrice('0.0');
     setPlanCycle('MONTHLY');
     setPlanIsFree(false);
-    setPlanCurrency('USD');
+    setPlanCurrency('INR');
     setPlanType('SUBSCRIPTION');
     setPlanPackQuantity('10');
     setPlanFreePerks('0');
@@ -1250,7 +1250,7 @@ export default function AdminPortal() {
     setPlanPrice(plan.price.toString());
     setPlanCycle(plan.billingCycle);
     setPlanIsFree(plan.isFree);
-    setPlanCurrency(plan.currency || 'USD');
+    setPlanCurrency(plan.currency || 'INR');
     setPlanType(plan.planType || 'SUBSCRIPTION');
     setPlanPackQuantity((plan.packQuantity || 10).toString());
     setPlanFreePerks((plan.freePerks || 0).toString());
@@ -2975,10 +2975,11 @@ export default function AdminPortal() {
                       <span className="text-gray-500 text-[9px]">Select default currency for referrals & earnings ledger</span>
                     </div>
                     <select
-                      value={configValues['global_display_currency'] || 'USD'}
+                      value={configValues['global_display_currency'] || 'INR'}
                       onChange={e => setConfigValues({ ...configValues, global_display_currency: e.target.value })}
                       className="w-full bg-[#030712] border border-white/10 rounded-lg py-1.5 px-2 text-[10px] text-white outline-none focus:border-purple-500 font-semibold"
                     >
+                      <option value="INR">INR (₹) - Indian Rupee</option>
                       <option value="USD">USD ($) - US Dollar</option>
                       <option value="INR">INR (₹) - Indian Rupee</option>
                       <option value="EUR">EUR (€) - Euro</option>

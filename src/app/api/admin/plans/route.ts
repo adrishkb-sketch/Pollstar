@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         description: description || null,
         price: planIsFreeStrict ? 0 : parseFloat(price || '0'),
         isFree: planIsFreeStrict,
-        currency: currency || 'USD',
+        currency: currency || 'INR',
         billingCycle: billingCycle || 'MONTHLY',
         planType: planType || 'SUBSCRIPTION',
         packQuantity: packQuantity ? parseInt(packQuantity) : null,
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       data: {
         action: 'CREATE_PLAN',
         adminId: admin.id,
-        details: `Admin created plan: "${name}" (${planType || 'SUBSCRIPTION'}, ${isFree ? 'FREE' : `${currency || 'USD'} ${price}`})`
+        details: `Admin created plan: "${name}" (${planType || 'SUBSCRIPTION'}, ${isFree ? 'FREE' : `${currency || 'INR'} ${price}`})`
       }
     });
 

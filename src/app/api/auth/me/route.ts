@@ -76,7 +76,7 @@ async function getGlobalDisplayCurrency(): Promise<string> {
   const cached = getCache<string>(CACHE_KEY);
   if (cached) return cached;
   const config = await prisma.siteConfig.findUnique({ where: { key: 'global_display_currency' } });
-  const currency = config?.value || 'USD';
+  const currency = config?.value || 'INR';
   setCache(CACHE_KEY, currency, 10 * 60 * 1000);
   return currency;
 }
