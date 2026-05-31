@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import BrandLogo from '@/components/BrandLogo';
+import { useRouter } from 'next/navigation';
 import { 
   Zap, 
   Sparkles, 
@@ -10,115 +10,11 @@ import {
   Check, 
   ChevronLeft, 
   ChevronRight, 
-  Lock
+  Lock,
+  AlertCircle
 } from 'lucide-react';
-
-const FEATURES_INFO = [
-  // 1. Poll Features (19)
-  { key: 'openPublicPolls', label: 'Open Public Polls' },
-  { key: 'realTimeLiveResults', label: 'Real-Time Live Results' },
-  { key: 'liveGeolocationMap', label: 'Live Geolocation Map' },
-  { key: 'liveVoteTicker', label: 'Live Vote Ticker' },
-  { key: 'viralVoteIndicators', label: 'Viral Vote Indicators' },
-  { key: 'rankedChoiceBordaCount', label: 'Ranked Choice / Borda Count' },
-  { key: 'quadraticVoting', label: 'Quadratic Voting' },
-  { key: 'singleChoiceMultiSelect', label: 'Single Choice / Multi-Select' },
-  { key: 'enableDragAndDropPodium', label: 'Drag-and-Drop Ballot Podium' },
-  { key: 'opinionChatbox', label: 'Opinion Chatbox' },
-  { key: 'sentimentReactions', label: 'Sentiment Reactions' },
-  { key: 'voterLeaderboard', label: 'Voter Leaderboard' },
-  { key: 'multipleChartTypes', label: 'Multiple Chart Types' },
-  { key: 'voteTimelineGraph', label: 'Vote Timeline Graph' },
-  { key: 'multiRoundPolls', label: 'Multi-Round Polls' },
-  { key: 'revoteChangeVote', label: 'Revote / Change Vote' },
-  { key: 'knockoutBracket', label: 'Knockout Tournament Bracket' },
-  { key: 'enableScenarioSimulator', label: 'What-If Scenario Simulator' },
-  { key: 'enableAiProjection', label: 'AI Vote Projection & Live Predictions' },
-
-  // 2. Survey Features (24)
-  { key: 'multipleQuestionTypes', label: 'Multiple Question Types' },
-  { key: 'longFormTextResponses', label: 'Long-Form Text Responses' },
-  { key: 'starEmojiRatings', label: 'Star & Emoji Ratings' },
-  { key: 'matrixGridQuestions', label: 'Matrix / Grid Questions' },
-  { key: 'yesnoToggleQuestions', label: 'Yes/No & Toggle Questions' },
-  { key: 'fileUploadQuestions', label: 'File Upload Questions' },
-  { key: 'conditionalLogicBranching', label: 'Conditional Logic Branching' },
-  { key: 'multiPageSurveys', label: 'Multi-Page Surveys' },
-  { key: 'questionRandomizationSurvey', label: 'Question Randomization' },
-  { key: 'responseTimeLimits', label: 'Response Time Limits' },
-  { key: 'requiredVsOptionalQuestions', label: 'Required vs Optional Questions' },
-  { key: 'inputValidationRules', label: 'Input Validation Rules' },
-  { key: 'realTimeResponseDashboard', label: 'Real-Time Response Dashboard' },
-  { key: 'aiSentimentAnalysis', label: 'AI Sentiment Analysis' },
-  { key: 'wordCloudGenerator', label: 'Word Cloud Generator' },
-  { key: 'aiSummaryReport', label: 'AI Summary Report' },
-  { key: 'automatedReminders', label: 'Automated Reminders' },
-  { key: 'completionRateTracking', label: 'Completion Rate Tracking' },
-  { key: 'anonymousResponses', label: 'Anonymous Responses' },
-  { key: 'targetedDistribution', label: 'Targeted Distribution' },
-  { key: 'responseFilteringSegmentation', label: 'Response Filtering & Segmentation' },
-  { key: 'saveResumeLater', label: 'Save & Resume Later (Survey)' },
-  { key: 'enableDropOffTracking', label: 'Abandonment & Drop-off Tracking' },
-  { key: 'enableCrossTabulation', label: 'Demographic Cross-Tabulation' },
-
-  // 3. Exam Features (25)
-  { key: 'timedExams', label: 'Timed Exams' },
-  { key: 'fullScreenLockdown', label: 'Full-Screen Lockdown' },
-  { key: 'tabSwitchDetection', label: 'Tab-Switch Detection' },
-  { key: 'copyPastePrevention', label: 'Copy-Paste Prevention' },
-  { key: 'cheatProbabilityScore', label: 'Cheat Probability Score' },
-  { key: 'perQuestionMarks', label: 'Per-Question Marks' },
-  { key: 'autoGradingEngine', label: 'Auto-Grading Engine' },
-  { key: 'manualGradingInterface', label: 'Manual Grading Interface' },
-  { key: 'pageBreaksSections', label: 'Page Breaks / Sections' },
-  { key: 'dragAndDropQuestionOrderingExam', label: 'Drag-and-Drop Question Ordering' },
-  { key: 'detailedScoreReports', label: 'Detailed Score Reports' },
-  { key: 'classPerformanceAnalytics', label: 'Class Performance Analytics' },
-  { key: 'weaknessAnalysis', label: 'Weakness Analysis' },
-  { key: 'aiConceptExplanations', label: 'AI Concept Explanations' },
-  { key: 'printableResultsPdf', label: 'Printable Results PDF' },
-  { key: 'bulkResultsExport', label: 'Bulk Results Export' },
-  { key: 'emailResultsToStudents', label: 'Email Results to Students' },
-  { key: 'teacherGradebook', label: 'Teacher Gradebook' },
-  { key: 'scheduledStartEnd', label: 'Scheduled Start & End' },
-  { key: 'questionHints', label: 'Question Hints' },
-  { key: 'negativeMarking', label: 'Negative Marking' },
-  { key: 'studentRosterManagement', label: 'Student Roster Management' },
-  { key: 'timePerQuestionAnalytics', label: 'Time-per-Question Analytics' },
-  { key: 'inbuiltScientificCalculator', label: 'Inbuilt Scientific Calculator' },
-  { key: 'saveResumeLaterExam', label: 'Save & Resume Later (Exam)' },
-  { key: 'liveWebcamProctoring', label: 'Live Webcam Proctoring Dashboard' },
-
-  // 4. Exam Question Types (10)
-  { key: 'mcqSingleCorrect', label: 'MCQ (Single Correct)' },
-  { key: 'mcqMultipleCorrect', label: 'MCQ (Multiple Correct)' },
-  { key: 'shortAnswerQuestionsSaq', label: 'Short Answer Questions (SAQ)' },
-  { key: 'longAnswerQuestionsLaq', label: 'Long Answer Questions (LAQ)' },
-  { key: 'trueOrFalse', label: 'True or False' },
-  { key: 'fillInTheBlanks', label: 'Fill in the Blanks' },
-  { key: 'matchTheFollowing', label: 'Match the Following' },
-  { key: 'numericalInput', label: 'Numerical Input' },
-  { key: 'fileUploadAnswers', label: 'File Upload Answers' },
-  { key: 'studentWhiteboardQuestion', label: 'Student Drawing Whiteboard' },
-
-  // 5. Platform Features (16)
-  { key: 'otpVoterVerification', label: 'OTP Voter Verification' },
-  { key: 'closedVoterLists', label: 'Closed Voter Lists' },
-  { key: 'customBranding', label: 'Custom Logo Branding' },
-  { key: 'customBrandingThemes', label: 'Custom Branding & Premium Themes' },
-  { key: 'creatorScribbleCanvas', label: 'Creator Brain Scribble Canvas' },
-  { key: 'premiumDarkMode', label: 'Premium Dark Mode' },
-  { key: 'organizationAccounts', label: 'Organization Accounts' },
-  { key: 'apiWebhooks', label: 'API & Webhooks' },
-  { key: 'deviceFingerprinting', label: 'Device Fingerprinting' },
-  { key: 'exportResults', label: 'Export Results' },
-  { key: 'enableDomainRestriction', label: 'Domain and Email Lock Lists' },
-  { key: 'collaborations', label: 'Real-time Creator Collaboration' },
-  { key: 'enableDirectInbox', label: 'Voter Inbox Direct Messages' },
-  { key: 'removeAdvertisements', label: 'Ad-Free Experience (No Ads)' },
-  { key: 'embedCode', label: 'Embed Voting Widget Option' },
-  { key: 'linkShortener', label: 'Link Shortener Option' }
-];
+import BrandLogo from '@/components/BrandLogo';
+import { formatBillingCycle } from '@/lib/planExpiry';
 
 const getCurrencySymbol = (currencyCode?: string) => {
   if (currencyCode === 'EUR') return '€';
@@ -126,63 +22,48 @@ const getCurrencySymbol = (currencyCode?: string) => {
   return '₹'; // Default to INR
 };
 
-const getHasFeature = (features: any, key: string): boolean => {
-  if (!features) return false;
-  if (features[key] === true) return true;
-  
-  const mappings: Record<string, string[]> = {
-    singleChoice: ['singleChoiceMultiSelect', 'singleChoice'],
-    bordaCount: ['rankedChoiceBordaCount', 'bordaCount'],
-    knockoutBracket: ['knockoutBracket'],
-    multipageSurveys: ['multiPageSurveys', 'multipageSurveys'],
-    sentimentAnalysis: ['aiSentimentAnalysis', 'sentimentAnalysis'],
-    dropOffTracking: ['enableDropOffTracking', 'dropOffTracking'],
-    crossTabulation: ['enableCrossTabulation', 'crossTabulation'],
-    geolocations: ['liveGeolocationMap', 'geolocations'],
-    domainLocking: ['enableDomainRestriction', 'domainLocking'],
-    otpVerification: ['otpVoterVerification', 'otpVerification'],
-    collaborations: ['collaborations'],
-    inboxMessages: ['enableDirectInbox', 'inboxMessages'],
-    dataExport: ['exportResults', 'dataExport'],
-    creatorScribbleCanvas: ['creatorScribbleCanvas'],
-    studentWhiteboardQuestion: ['studentWhiteboardQuestion'],
-    inbuiltScientificCalculator: ['inbuiltScientificCalculator'],
-    saveResumeLater: ['saveResumeLater', 'saveResumeLaterExam'],
-    customBrandingThemes: ['customBrandingThemes', 'customBranding']
-  };
-  
-  const altKeys = mappings[key] || [key];
-  return altKeys.some(altKey => features[altKey] === true);
-};
-
 export default function PublicPlansPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
-  const [entityPlans, setEntityPlans] = useState<any[]>([]);
   const [addonPlans, setAddonPlans] = useState<any[]>([]);
-  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ENTITY' | 'ADDON'>('SUBSCRIPTION');
+  const [activeCategory, setActiveCategory] = useState<'SUBSCRIPTION' | 'ADDON'>('SUBSCRIPTION');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedDurs, setSelectedDurs] = useState<Record<string, string>>({});
+
+  // Mobile Swipe ref
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchPlans = async () => {
-    try {
-      const res = await fetch('/api/plans');
-      if (res.ok) {
-        const data = await res.json();
-        setPlans(data.plans || []);
-        setEntityPlans(data.entityPlans || []);
-        setAddonPlans(data.addonPlans || []);
-      }
-    } catch (err) {
-      setError('Failed to fetch pricing configurations.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchPlans();
+    async function loadData() {
+      try {
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.success) {
+            setUser(meData.user);
+          }
+        }
+
+        const plansRes = await fetch('/api/plans');
+        if (plansRes.ok) {
+          const plansData = await plansRes.json();
+          const rawPlans = plansData.plans || [];
+          const rawAddons = plansData.addonPlans || [];
+          
+          // Sort plans by rank
+          const sortedPlans = [...rawPlans].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+          setPlans(sortedPlans);
+          setAddonPlans(rawAddons.sort((a: any, b: any) => (a.addonRank ?? 0) - (b.addonRank ?? 0)));
+        }
+      } catch (err) {
+        setError('Failed to fetch platform pricing data.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
   }, []);
 
   const handleScrollLeft = () => {
@@ -206,6 +87,8 @@ export default function PublicPlansPage() {
     );
   }
 
+  const currentPlan = user?.plan || { id: '', name: 'Free', price: 0.0, billingCycle: 'MONTHLY' };
+
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col font-outfit">
       {/* Header */}
@@ -215,8 +98,19 @@ export default function PublicPlansPage() {
             <BrandLogo iconSize={20} textSize="text-xl" />
           </Link>
           <div className="flex gap-4">
-            <Link href="/login" className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all">Sign In</Link>
-            <Link href="/signup" className="gradient-btn px-4 py-2 rounded-xl text-xs font-bold text-white transition-all">Get Started</Link>
+            {user ? (
+              <Link 
+                href="/dashboard"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/20 transition-all border border-purple-400/20 active:scale-95"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all">Sign In</Link>
+                <Link href="/signup" className="gradient-btn px-4 py-2 rounded-xl text-xs font-bold text-white transition-all">Get Started</Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -234,23 +128,16 @@ export default function PublicPlansPage() {
             Plans Engineered For <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">Every Scale</span>
           </h1>
           <p className="text-gray-400 text-sm leading-relaxed">
-            From classroom quizzes to nationwide polling and multi-page surveys. Explore all 94 features engineered to maximize response fidelity.
+            From classroom quizzes to nationwide polling and multi-page surveys. Explore all features engineered to maximize response fidelity.
           </p>
         </div>
-
-        {error && (
-          <div className="glass-card border border-red-500/20 bg-red-500/5 rounded-2xl p-4 text-center text-red-400 text-sm">
-            {error}
-          </div>
-        )}
 
         {/* Category Toggles */}
         <div className="flex justify-center pt-2">
           <div className="bg-white/5 border border-white/10 p-1.5 rounded-2xl flex items-center space-x-1 shrink-0 overflow-x-auto">
             {[
-              { key: 'SUBSCRIPTION', label: 'Electoral Subscriptions' },
-              { key: 'ENTITY', label: 'Entity Credit Packs' },
-              { key: 'ADDON', label: 'Premium Add-Ons' }
+              { key: 'SUBSCRIPTION', label: '⚡ Electoral Subscriptions' },
+              { key: 'ADDON', label: '🚀 Audience Add-Ons' }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -268,10 +155,16 @@ export default function PublicPlansPage() {
           </div>
         </div>
 
-        {/* Dynamic sliding cards system for selected category */}
+        {error && (
+          <div className="glass-card border border-red-500/20 bg-red-500/5 rounded-2xl p-4 text-center text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Dynamic sliding cards system */}
         <div className="relative space-y-4">
           <div className="flex justify-between items-center md:hidden">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold">Slide to view options</span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold">Slide to view Plans</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -290,17 +183,28 @@ export default function PublicPlansPage() {
             </div>
           </div>
 
-          {/* Cards container */}
+          {/* Cards container: horizontal scroll snap on mobile, grids on desktop */}
           <div 
             ref={scrollRef}
-            className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3"
+            className="flex overflow-x-auto snap-x snap-mandatory gap-6 scroll-smooth scrollbar-none pb-4 md:overflow-x-visible md:snap-none md:flex-row md:grid md:grid-cols-3 justify-center"
           >
             {activeCategory === 'SUBSCRIPTION' && plans.map((p) => {
+              const isActivePlan = user?.plan?.id === p.id || (p.name === 'Free' && !user?.plan?.id);
+              
               return (
                 <div 
                   key={p.id}
-                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
+                  className={`snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01] ${
+                    isActivePlan 
+                      ? 'border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.1)] bg-gradient-to-b from-purple-950/10 to-transparent' 
+                      : 'border-white/5 hover:border-white/10'
+                  }`}
                 >
+                  {/* Decorative glowing gradient blur */}
+                  {isActivePlan && (
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none" />
+                  )}
+
                   <div className="space-y-6">
                     {/* Header */}
                     <div className="space-y-2">
@@ -311,7 +215,12 @@ export default function PublicPlansPage() {
                         >
                           {p.badgeLabel || p.name}
                         </span>
-                        {p.hasFreeTrial && (
+                        {isActivePlan && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold uppercase tracking-wider block shrink-0 animate-pulse">
+                            Current Plan ({formatBillingCycle(user?.planBillingCycle || 'LIFETIME')})
+                          </span>
+                        )}
+                        {p.hasFreeTrial && !isActivePlan && (
                           <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider block shrink-0 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 animate-pulse">
                             {p.freeTrialDays || 7} Days Trial
                           </span>
@@ -441,7 +350,7 @@ export default function PublicPlansPage() {
                               </span>
                               {hasSlashPrice && (
                                 <span className="text-sm text-red-400/70 font-semibold line-through">
-                                  {getCurrencySymbol(p.currency)}{displayOriginalPrice!.toFixed(2)}
+                                  {getCurrencySymbol(p.currency)}{displayOriginalPrice.toFixed(2)}
                                 </span>
                               )}
                               <span className="text-xs text-gray-500 font-semibold">/{cycleName.replace('_', ' ')}</span>
@@ -460,30 +369,79 @@ export default function PublicPlansPage() {
                       );
                     })()}
 
+                    {/* Quota Details */}
+                    {(() => {
+                      const dursConfig = p.durations ? (p.durations as any) : null;
+                      const enabledDurs = dursConfig 
+                        ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
+                        : [];
+                      
+                      const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
 
-                    {/* Checklists features details */}
-                    <div className="space-y-3">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Features & Gating</span>
-                      <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-purple-500/20">
-                        {FEATURES_INFO.map((feat) => {
-                          const hasFeature = getHasFeature(p.features, feat.key);
-                          return (
-                            <div key={feat.key} className="flex items-start gap-2 text-[10px] leading-relaxed">
-                              {hasFeature ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                              ) : (
-                                <Lock className="w-3.5 h-3.5 text-gray-600 shrink-0 mt-0.5" />
-                              )}
-                              <span className={hasFeature ? 'text-gray-300 font-semibold' : 'text-gray-600 line-through'}>
-                                {feat.label}
-                              </span>
-                            </div>
-                          );
-                        })}
+                      let maxPollsVal = durConfig?.maxPolls !== undefined && durConfig.maxPolls !== '' ? parseInt(durConfig.maxPolls) : (p.maxPolls !== null && p.maxPolls !== undefined ? p.maxPolls : -1);
+                      let maxSurveysVal = durConfig?.maxSurveys !== undefined && durConfig.maxSurveys !== '' ? parseInt(durConfig.maxSurveys) : (p.maxSurveys !== null && p.maxSurveys !== undefined ? p.maxSurveys : -1);
+                      let maxExamsVal = durConfig?.maxExams !== undefined && durConfig.maxExams !== '' ? parseInt(durConfig.maxExams) : (p.maxExams !== null && p.maxExams !== undefined ? p.maxExams : -1);
+                      let maxPartPoll = durConfig?.maxParticipantsPoll !== undefined && durConfig.maxParticipantsPoll !== '' ? parseInt(durConfig.maxParticipantsPoll) : (p.maxParticipantsPoll ?? null);
+                      let maxPartSurvey = durConfig?.maxParticipantsSurvey !== undefined && durConfig.maxParticipantsSurvey !== '' ? parseInt(durConfig.maxParticipantsSurvey) : (p.maxParticipantsSurvey ?? null);
+                      let maxPartExam = durConfig?.maxParticipantsExam !== undefined && durConfig.maxParticipantsExam !== '' ? parseInt(durConfig.maxParticipantsExam) : (p.maxParticipantsExam ?? null);
+
+                      const fmt = (v: number | null) => v === null || v === -1 ? 'Unlimited' : v.toLocaleString();
+
+                      return (
+                        <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                          <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Per-Cycle Creation Limits</div>
+                          <div className="flex items-center justify-between">
+                            <span>🗳 Polls per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxPollsVal)}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>📋 Surveys per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxSurveysVal)}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>📝 Exams per cycle:</span>
+                            <strong className="text-white font-bold">{fmt(maxExamsVal)}</strong>
+                          </div>
+                          {(maxPartPoll || maxPartSurvey || maxPartExam) && (
+                            <>
+                              <div className="border-t border-white/5 pt-1.5 mt-1">
+                                <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Max Participants per Session</div>
+                                {maxPartPoll && <div className="flex items-center justify-between"><span>🗳 Per Poll:</span><strong className="text-indigo-300 font-bold">{fmt(maxPartPoll)}</strong></div>}
+                                {maxPartSurvey && <div className="flex items-center justify-between"><span>📋 Per Survey:</span><strong className="text-violet-300 font-bold">{fmt(maxPartSurvey)}</strong></div>}
+                                {maxPartExam && <div className="flex items-center justify-between"><span>📝 Per Exam:</span><strong className="text-cyan-300 font-bold">{fmt(maxPartExam)}</strong></div>}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Features checklist summary */}
+                    <div className="space-y-2">
+                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">What's Included</span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {[
+                          '✅ All Poll features & analytics',
+                          '✅ All Survey features & analytics',
+                          '✅ All Exam & Gradebook features',
+                          '✅ All Platform & anti-fraud features',
+                          '✅ OTP verification & closed voter lists',
+                          '✅ Custom branding & premium themes',
+                          '✅ Real-time collaboration',
+                          '✅ API & Webhooks access',
+                          '✅ AI projections, sentiment & proctoring',
+                          '✅ Export & embed widget options',
+                        ].map((item, i) => (
+                          <div key={i} className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 py-0.5">
+                            <span>{item}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
 
+                  {/* Actions CTA upgraded to Checkout / Login redirect */}
                   <div className="pt-6 mt-6 border-t border-white/5">
                     {(() => {
                       const dursConfig = p.durations ? (p.durations as any) : null;
@@ -491,25 +449,111 @@ export default function PublicPlansPage() {
                         ? Object.keys(dursConfig).filter((k: string) => dursConfig[k]?.enabled)
                         : [];
                       const activeDur = selectedDurs[p.id] || enabledDurs[0] || 'MONTHLY';
+                      const durConfig = dursConfig?.[activeDur] || null;
                       
                       let displayPrice = p.price;
-                      if (enabledDurs.length > 0 && dursConfig[activeDur]) {
-                        displayPrice = parseFloat(dursConfig[activeDur].price || '0');
+                      if (enabledDurs.length > 0 && durConfig) {
+                        displayPrice = parseFloat(durConfig.price || '0');
                       }
 
-                      const linkUrl = p.hasFreeTrial 
-                        ? `/signup?planId=${p.id}&trial=true`
-                        : `/signup?planId=${p.id}&duration=${activeDur}`;
-                      const buttonLabel = p.hasFreeTrial 
-                        ? `Start ${p.freeTrialDays || 7}-Day Free Trial`
-                        : (displayPrice > 0 ? 'Sign Up & Subscribe' : 'Register Free');
+                      const checkoutUrl = p.hasFreeTrial 
+                        ? `/checkout?planId=${p.id}&trial=true` 
+                        : `/checkout?planId=${p.id}&duration=${activeDur}`;
+                      
+                      const loginUrl = `/login?callbackUrl=${encodeURIComponent(checkoutUrl)}`;
+
+                      if (!user) {
+                        return (
+                          <Link
+                            href={loginUrl}
+                            className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                          >
+                            {p.hasFreeTrial 
+                              ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
+                              : (displayPrice > 0 ? 'Get Started Now' : 'Activate Free Tier')}
+                          </Link>
+                        );
+                      }
+
+                      const userPlanIsFree = !user?.plan || user.plan.name.toLowerCase() === 'free';
+                      const now = new Date();
+                      const planExpired = user?.planExpiresAt && new Date(user.planExpiresAt) < now && !user?.isLifetimePlan;
+                      const planActive = isActivePlan && !planExpired;
+
+                      const isInferior = user?.plan && !userPlanIsFree && (
+                        p.name.toLowerCase() === 'free' ||
+                        (p.rank ?? 0) <= (user.plan.rank ?? 0)
+                      ) && p.id !== user.plan.id;
+
+                      // Active non-expired plan: just show status
+                      if (planActive) {
+                        if (p.isFree || p.name === 'Free') {
+                          return (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-400 text-xs border border-white/5 cursor-not-allowed text-center"
+                            >
+                              ✅ Current Free Plan
+                            </button>
+                          );
+                        } else {
+                          return (
+                            <div className="space-y-2">
+                              <button
+                                type="button"
+                                disabled
+                                className="w-full py-3 rounded-xl font-bold bg-emerald-500/10 text-emerald-300 text-xs border border-emerald-500/20 cursor-default text-center"
+                              >
+                                ✅ Active {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
+                              </button>
+                              {user?.planExpiresAt && !user?.isLifetimePlan && (
+                                <p className="text-[9px] text-gray-600 text-center">
+                                  Renews: <strong className="text-gray-400">{new Date(user.planExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+                      }
+
+                      // Expired plan: show renew button
+                      if (planExpired && isActivePlan) {
+                        return (
+                          <div className="space-y-2">
+                            <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] text-red-400 font-bold text-center">
+                              ⚠️ Plan expired — you&apos;re on the Free tier until renewed
+                            </div>
+                            <Link
+                              href={checkoutUrl}
+                              className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs border border-amber-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                            >
+                              🔄 Renew {formatBillingCycle(user?.planBillingCycle || 'MONTHLY')} Subscription
+                            </Link>
+                          </div>
+                        );
+                      }
+
+                      if (isInferior) {
+                        return (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
+                          >
+                            Downgrade Unavailable
+                          </button>
+                        );
+                      }
 
                       return (
                         <Link
-                          href={linkUrl}
+                          href={checkoutUrl}
                           className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
                         >
-                          {buttonLabel}
+                          {p.hasFreeTrial 
+                            ? `Start ${p.freeTrialDays || 7}-Day Free Trial` 
+                            : (displayPrice > 0 ? `Upgrade (${formatBillingCycle(activeDur)})` : 'Activate Free Tier')}
                         </Link>
                       );
                     })()}
@@ -518,76 +562,16 @@ export default function PublicPlansPage() {
               );
             })}
 
-            {activeCategory === 'ENTITY' && entityPlans.map((p) => {
-              return (
-                <div 
-                  key={p.id}
-                  className="snap-center shrink-0 w-[300px] md:w-auto glass-card rounded-3xl p-6 border border-white/5 hover:border-white/10 flex flex-col justify-between relative overflow-hidden transition-all duration-300 bg-white/[0.01]"
-                >
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2 justify-between items-center mb-1 w-full">
-                        <span 
-                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider block shrink-0"
-                          style={{ color: p.badgeColor, backgroundColor: `${p.badgeColor}15`, border: `1px solid ${p.badgeColor}30` }}
-                        >
-                          {p.badgeLabel || p.planType.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-extrabold text-white font-outfit">{p.name}</h3>
-                      <p className="text-[11px] text-gray-500 leading-relaxed min-h-[48px]">{p.description}</p>
-                    </div>
-
-                    <div className="border-t border-b border-white/5 py-4 space-y-1">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase block">One-Off Price</span>
-                      <span className="text-3xl font-black text-white font-outfit">
-                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="text-[8px] text-gray-500 font-bold uppercase block">Inclusions</span>
-                      <div className="text-[10px] text-gray-300 font-semibold flex items-center gap-1.5 bg-white/2 border border-white/5 p-3 rounded-xl">
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>
-                          {p.planType === 'POLL_PACK' && `Adds ${p.packQuantity} Premium Poll creation credits`}
-                          {p.planType === 'SURVEY_PACK' && `Adds ${p.packQuantity} Premium Survey creation credits`}
-                          {p.planType === 'EXAM_PACK' && `Adds ${p.packQuantity} Premium Exam creation credits`}
-                          {p.planType === 'COMBO_PACK' && `Adds ${p.packQuantity} Combo entity creation credits`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Flat Inclusions/Limits Display */}
-                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
-                      <div className="flex items-center justify-between">
-                        <span>Max Polls Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Surveys Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Max Exams Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 mt-6 border-t border-white/5">
-                    <Link
-                      href={`/signup?planId=${p.id}&isAddon=true`}
-                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                    >
-                      Buy Credit Pack
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-
             {activeCategory === 'ADDON' && addonPlans.map((p) => {
+              const now = new Date();
+              const userCurrentAddonRank: number = user?.activeAddonRank ?? 0;
+              const isAddonInferior = (p.addonRank ?? 0) <= userCurrentAddonRank && userCurrentAddonRank > 0;
+              const hasActiveSub = user?.planId && user?.plan?.name?.toLowerCase() !== 'free' &&
+                (user?.isLifetimePlan || (user?.planExpiresAt && new Date(user.planExpiresAt) > now));
+
+              const checkoutUrl = `/checkout?planId=${p.id}&isAddon=true`;
+              const loginUrl = `/login?callbackUrl=${encodeURIComponent(checkoutUrl)}`;
+
               return (
                 <div 
                   key={p.id}
@@ -609,46 +593,94 @@ export default function PublicPlansPage() {
 
                     <div className="border-t border-b border-white/5 py-4 space-y-1">
                       <span className="text-[9px] text-gray-500 font-bold uppercase block">Add-On Base Price</span>
-                      <span className="text-3xl font-black text-white font-outfit">
-                        {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
-                      </span>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        {p.price === 0 && p.originalPrice && p.originalPrice > 0 ? (
+                          <span className="text-2xl font-black text-emerald-400 font-outfit">FREE Offer!</span>
+                        ) : (
+                          <span className="text-3xl font-black text-white font-outfit">
+                            {getCurrencySymbol(p.currency)}{p.price.toFixed(2)}
+                          </span>
+                        )}
+                        {p.originalPrice && p.originalPrice > p.price && (
+                          <span className="text-sm text-red-400/70 font-semibold line-through">
+                            {getCurrencySymbol(p.currency)}{p.originalPrice.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      {p.offerEndDate && new Date(p.offerEndDate) > new Date() && (
+                        <div className="mt-1.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-400 flex items-center gap-1">
+                          <span>⏳</span>
+                          <span>Offer ends: {new Date(p.offerEndDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <span className="text-[8px] text-gray-500 font-bold uppercase block">Pre-Requisite</span>
                       <div className="text-[10px] text-purple-300 font-semibold bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl leading-relaxed">
-                        ⚠️ **Requires paid subscription**: This package functions as an overlay and can only be active alongside a running paid subscription.
+                        ⚠️ **Requires active subscription**: This package functions as an overlay and can only be active alongside a running paid subscription.
                       </div>
                     </div>
 
-                    {/* Flat Inclusions/Limits Display */}
+                    {/* Participant Boost Display for Add-Ons */}
                     <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-[10px] text-gray-400 space-y-1.5 font-outfit">
+                      <div className="text-[8px] font-extrabold uppercase tracking-widest text-gray-600 mb-2">Audience Boost (Additive)</div>
                       <div className="flex items-center justify-between">
-                        <span>Max Polls Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                        <span>🗳 Voters per Poll:</span>
+                        <strong className="text-indigo-300 font-bold">+{p.maxParticipantsPoll === null || p.maxParticipantsPoll === -1 ? 'Unlimited' : p.maxParticipantsPoll?.toLocaleString()}</strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Max Surveys Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                        <span>📋 Respondents per Survey:</span>
+                        <strong className="text-violet-300 font-bold">+{p.maxParticipantsSurvey === null || p.maxParticipantsSurvey === -1 ? 'Unlimited' : p.maxParticipantsSurvey?.toLocaleString()}</strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Max Exams Allowed:</span>
-                        <strong className="text-white font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                        <span>📝 Examinees per Exam:</span>
+                        <strong className="text-cyan-300 font-bold">+{p.maxParticipantsExam === null || p.maxParticipantsExam === -1 ? 'Unlimited' : p.maxParticipantsExam?.toLocaleString()}</strong>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-6 mt-6 border-t border-white/5">
-                    <Link
-                      href={`/signup?planId=${p.id}&isAddon=true`}
-                      className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
-                    >
-                      Buy Add-On Feature
-                    </Link>
+                    {!user ? (
+                      <Link
+                        href={loginUrl}
+                        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                      >
+                        Get Started Now
+                      </Link>
+                    ) : !hasActiveSub ? (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full py-3 rounded-xl font-bold bg-white/5 text-amber-500/60 text-xs border border-amber-500/20 cursor-not-allowed text-center"
+                        >
+                          🔒 Requires Active Subscription First
+                        </button>
+                        <p className="text-[9px] text-gray-600 text-center">
+                          Subscribe to a paid tier to unlock audience add-ons.
+                        </p>
+                      </div>
+                    ) : isAddonInferior ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3 rounded-xl font-bold bg-white/5 text-gray-500 text-xs border border-white/5 cursor-not-allowed text-center"
+                      >
+                        Downgrade Unavailable
+                      </button>
+                    ) : (
+                      <Link
+                        href={checkoutUrl}
+                        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs border border-purple-500/20 shadow-lg active:scale-95 transition-all text-center block"
+                      >
+                        Upgrade Audience Add-On
+                      </Link>
+                    )}
                   </div>
                 </div>
-                );
-              })}
+              );
+            })}
           </div>
         </div>
       </main>
