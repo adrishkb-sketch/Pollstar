@@ -4185,18 +4185,36 @@ export default function CreatePoll() {
                       </div>
                       
                       {enableProctorCamera && (
-                        <div className="animate-fade-in-up">
-                          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2 font-outfit">
-                            📂 Google Drive Proctoring Backup Folder URL
+                        <div className="animate-fade-in-up space-y-2">
+                          <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider font-outfit">
+                            🔒 Live Exam Proctoring Monitor Link
                           </label>
-                          <input
-                            type="text"
-                            value={proctorDriveFolderUrl}
-                            onChange={(e) => setProctorDriveFolderUrl(e.target.value)}
-                            placeholder="https://drive.google.com/drive/folders/..."
-                            className="w-full bg-[#030712] border border-[#ffffff15] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all font-outfit"
-                          />
-                          <span className="text-[9px] text-gray-500 mt-1 block font-outfit">Webcam snapshots and proctoring logs will be compiled and uploaded here.</span>
+                          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-3">
+                            <p className="text-gray-300 text-xs leading-relaxed font-outfit">
+                              Webcam snaps, screen sharing streams, tab switches, and fullscreen lockdown alerts will be tracked live via this secure supervisor portal:
+                            </p>
+                            {editingPollId ? (
+                              <div className="flex items-center bg-[#030712] border border-[#ffffff15] rounded-xl px-3 py-2 gap-3 truncate text-xs font-mono text-indigo-300">
+                                <span className="truncate select-all">{typeof window !== 'undefined' ? `${window.location.origin}/dashboard/polls/${editingPollId}?tab=proctor` : `/dashboard/polls/${editingPollId}?tab=proctor`}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    const link = `${window.location.origin}/dashboard/polls/${editingPollId}?tab=proctor`;
+                                    navigator.clipboard.writeText(link);
+                                    alert('Live Proctoring Link copied!');
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 text-[10px] font-bold uppercase transition-all shrink-0"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-amber-400/80 text-[11px] font-bold font-outfit">
+                                🔑 A unique proctoring dashboard link will be automatically generated once this exam is launched or saved as a draft.
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

@@ -36,6 +36,12 @@ app.prepare().then(() => {
       console.log(`Socket ${socket.id} left room for poll: ${pollId}`);
     });
 
+    socket.on('student-telemetry', (data) => {
+      if (data && data.pollId) {
+        socket.to(`poll-${data.pollId}`).emit('student-telemetry', data);
+      }
+    });
+
     socket.on('disconnect', () => {
       // Clean up if necessary
     });

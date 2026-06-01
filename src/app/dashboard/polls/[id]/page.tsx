@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
+import { io } from 'socket.io-client';
+import { Video, Monitor } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -110,7 +112,7 @@ function PollInsightsContent({ params }: PageProps) {
   const [isFinalizing, setIsFinalizing] = useState(false);
   
   // Real-time Proctoring mock telemetry
-  const [proctorTelemetry, setProctorTelemetry] = useState<Record<string, { status: 'ACTIVE' | 'OFFLINE', alert: string, lastActive: string }>>({});
+  const [proctorTelemetry, setProctorTelemetry] = useState<Record<string, { status: 'ACTIVE' | 'OFFLINE', alert: string, lastActive: string, webcamFrame?: string, screenFrame?: string, logs?: string[], studentName?: string, identifier?: string }>>({});
 
   // Collaborators States
   const [collaborators, setCollaborators] = useState<any[]>([]);
@@ -172,50 +174,34 @@ function PollInsightsContent({ params }: PageProps) {
   const planFeatures = poll?.creator?.plan?.features || {};
   const isProctoringLocked = !planFeatures.liveWebcamProctoring && poll?.creator?.role !== 'ADMIN';
 
-  // Periodic proctoring mock updates
+  // Real-time Proctoring telemetry from socket
   useEffect(() => {
-    if (activeTab !== 'proctor' || isProctoringLocked || !poll?.allowedVoters) return;
-    
-    // Initialize
-    const initTelemetry: Record<string, any> = {};
-    poll.allowedVoters.forEach((v: any) => {
-      initTelemetry[v.id] = {
-        status: Math.random() > 0.15 ? 'ACTIVE' : 'OFFLINE',
-        alert: '🟢 Focus Active (No anomalies)',
-        lastActive: 'Just now'
-      };
+    if (activeTab !== 'proctor' || isProctoringLocked || !poll) return;
+
+    const socket = io();
+    socket.emit('join-poll', poll.id);
+
+    socket.on('student-telemetry', (data: any) => {
+      if (data && data.studentId) {
+        setProctorTelemetry((prev) => ({
+          ...prev,
+          [data.studentId]: {
+            status: data.status,
+            alert: data.alert,
+            lastActive: data.lastActive || new Date().toLocaleTimeString(),
+            webcamFrame: data.webcamFrame,
+            screenFrame: data.screenFrame,
+            logs: data.logs || [],
+            studentName: data.studentName,
+            identifier: data.identifier
+          }
+        }));
+      }
     });
-    setProctorTelemetry(initTelemetry);
 
-    const interval = setInterval(() => {
-      setProctorTelemetry((prev) => {
-        const next = { ...prev };
-        const keys = Object.keys(next);
-        if (keys.length === 0) return prev;
-        
-        // Randomly select one student to trigger a mock proctor alert
-        const randomKey = keys[Math.floor(Math.random() * keys.length)];
-        const alerts = [
-          '🟢 Focus Active (No anomalies)',
-          '🟢 Focus Active (No anomalies)',
-          '🟢 Focus Active (No anomalies)',
-          '⚠️ Focus Lost (Examinee switched tabs)',
-          '⚠️ Multiple Faces Detected (Check webcam feed)',
-          '⚠️ Face Missing (Candidate out of frame)',
-        ];
-        const randomAlert = alerts[Math.floor(Math.random() * alerts.length)];
-        const isOffline = Math.random() > 0.9;
-        
-        next[randomKey] = {
-          status: isOffline ? 'OFFLINE' : 'ACTIVE',
-          alert: isOffline ? '🔴 Disconnected' : randomAlert,
-          lastActive: isOffline ? '2 minutes ago' : 'Just now'
-        };
-        return next;
-      });
-    }, 4500);
-
-    return () => clearInterval(interval);
+    return () => {
+      socket.disconnect();
+    };
   }, [activeTab, isProctoringLocked, poll]);
 
   // 1. Fetch Poll Details on Mount
@@ -522,7 +508,7 @@ function PollInsightsContent({ params }: PageProps) {
   };
 
   const handleDeletePoll = async () => {
-    if (!confirm(`Are you absolutely sure you want to delete this ${poll?.pollType === 'SURVEY' ? 'survey and all its recorded responses' : 'poll and all its recorded votes'}? This action is permanent.`)) {
+    if (!confirm(`Are you absolutely sure you want to delete this ${poll?.pollType === 'EXAM' ? 'exam and all its recorded papers' : (poll?.pollType === 'SURVEY' ? 'survey and all its recorded responses' : 'poll and all its recorded votes')}? This action is permanent.`)) {
       return;
     }
     try {
@@ -1828,12 +1814,19 @@ function PollInsightsContent({ params }: PageProps) {
             </div>
           ) : (
             activeExaminees.map((v: any) => {
-              const tel = proctorTelemetry[v.id] || { status: 'ACTIVE', alert: '🟢 Focus Active (No anomalies)', lastActive: 'Just now' };
-              const isOffline = tel.status === 'OFFLINE';
-              const hasAlert = tel.alert && tel.alert.includes('⚠️');
+              const telKey = Object.keys(proctorTelemetry).find(key => {
+                const item = proctorTelemetry[key];
+                return key === v.id || 
+                       (item.identifier && item.identifier.toLowerCase() === v.identifier.toLowerCase()) || 
+                       (item.studentName && item.studentName.toLowerCase() === v.confirmer1.toLowerCase());
+              });
+              const tel = telKey ? proctorTelemetry[telKey] : null;
+              const isOffline = !tel || tel.status === 'OFFLINE';
+              const alertMsg = tel ? tel.alert : '🔴 Offline';
+              const hasAlert = alertMsg && (alertMsg.includes('⚠️') || alertMsg.includes('🚨'));
 
               return (
-                <div key={v.id} className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-4 flex flex-col space-y-4 hover:border-white/10 transition-all">
+                <div key={v.id} className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-4 flex flex-col space-y-4 hover:border-indigo-500/30 transition-all shadow-xl">
                   {/* Card Header details */}
                   <div className="flex items-start justify-between">
                     <div>
@@ -1848,55 +1841,57 @@ function PollInsightsContent({ params }: PageProps) {
                     </span>
                   </div>
 
-                  {/* Mock Camera video frame container */}
-                  <div className="relative aspect-video rounded-xl bg-slate-950/80 border border-white/5 overflow-hidden flex items-center justify-center select-none group">
-                    {/* Scanner scanlines */}
-                    {!isOffline && (
-                      <div className="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%),_linear-gradient(90deg,_rgba(255,0,0,0.06),_rgba(0,255,0,0.02),_rgba(0,0,255,0.06))] bg-[size:100%_4px,_6px_100%] opacity-40" />
-                    )}
-                    
-                    {/* Scanning horizontal line */}
-                    {!isOffline && (
-                      <div className="absolute left-0 right-0 h-[2px] bg-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.5)] animate-scan z-10" />
-                    )}
-
-                    {/* Camera Corner Brackets */}
-                    <div className="absolute top-2 left-2 w-3.5 h-3.5 border-t border-l border-white/20" />
-                    <div className="absolute top-2 right-2 w-3.5 h-3.5 border-t border-r border-white/20" />
-                    <div className="absolute bottom-2 left-2 w-3.5 h-3.5 border-b border-l border-white/20" />
-                    <div className="absolute bottom-2 right-2 w-3.5 h-3.5 border-b border-r border-white/20" />
-
-                    {/* Mock webcam stream representation */}
-                    {isOffline ? (
-                      <div className="text-center space-y-1 z-10">
-                        <ShieldAlert className="w-8 h-8 text-red-500/40 mx-auto" />
-                        <span className="text-[10px] text-gray-500 block">FEED OFFLINE</span>
-                      </div>
-                    ) : (
-                      <div className="relative w-full h-full flex items-center justify-center">
-                        {/* Futuristic facial landmark tracking grid */}
-                        <svg className="w-full h-full absolute inset-0 text-indigo-500/20 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                          {/* Face contour guide line */}
-                          <path d="M25,35 Q50,20 75,35 Q85,55 75,75 Q50,90 25,75 Q15,55 25,35 Z" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" />
-                          {/* Eye tracking crosshairs */}
-                          <circle cx="40" cy="45" r="2.5" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                          <circle cx="60" cy="45" r="2.5" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                          <circle cx="40" cy="45" r="0.5" fill="currentColor" />
-                          <circle cx="60" cy="45" r="0.5" fill="currentColor" />
-                          {/* Nose grid */}
-                          <line x1="50" y1="40" x2="50" y2="65" stroke="currentColor" strokeWidth="0.5" />
-                          <line x1="45" y1="65" x2="55" y2="65" stroke="currentColor" strokeWidth="0.5" />
-                          {/* Mouth mesh line */}
-                          <path d="M40,73 Q50,78 60,73" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                        </svg>
-
-                        <div className="text-center z-10 animate-pulse">
-                          <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded uppercase tracking-wider">
-                            AI Tracking Enabled
-                          </span>
+                  {/* Dual Webcam + Screen Live Video Frame Container */}
+                  <div className="grid grid-cols-2 gap-2 select-none">
+                    {/* Webcam frame */}
+                    <div className="relative aspect-video rounded-xl bg-slate-950/80 border border-white/5 overflow-hidden flex items-center justify-center group">
+                      {!isOffline && (
+                        <div className="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%)] opacity-30" />
+                      )}
+                      {isOffline ? (
+                        <div className="text-center space-y-1 z-10">
+                          <Video className="w-5 h-5 text-red-500/40 mx-auto" />
+                          <span className="text-[8px] text-gray-500 block uppercase">No Feed</span>
                         </div>
-                      </div>
-                    )}
+                      ) : tel.webcamFrame ? (
+                        <img
+                          src={tel.webcamFrame}
+                          alt="Student webcam feed"
+                          className="w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                        />
+                      ) : (
+                        <div className="text-center space-y-1 z-10">
+                          <Video className="w-5 h-5 text-indigo-500/40 mx-auto animate-pulse" />
+                          <span className="text-[8px] text-gray-500 block uppercase">Webcam Loading...</span>
+                        </div>
+                      )}
+                      <span className="absolute bottom-1 left-1 bg-black/75 px-1 py-0.2 rounded text-[7px] text-gray-300 font-outfit z-10">Webcam</span>
+                    </div>
+
+                    {/* Screen share frame */}
+                    <div className="relative aspect-video rounded-xl bg-slate-950/80 border border-white/5 overflow-hidden flex items-center justify-center group">
+                      {!isOffline && (
+                        <div className="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%)] opacity-30" />
+                      )}
+                      {isOffline ? (
+                        <div className="text-center space-y-1 z-10">
+                          <Monitor className="w-5 h-5 text-red-500/40 mx-auto" />
+                          <span className="text-[8px] text-gray-500 block uppercase">No Screen</span>
+                        </div>
+                      ) : tel.screenFrame ? (
+                        <img
+                          src={tel.screenFrame}
+                          alt="Student screen share feed"
+                          className="w-full h-full object-cover pointer-events-none"
+                        />
+                      ) : (
+                        <div className="text-center space-y-1 z-10">
+                          <Monitor className="w-5 h-5 text-indigo-500/40 mx-auto animate-pulse" />
+                          <span className="text-[8px] text-gray-500 block uppercase">Screen Loading...</span>
+                        </div>
+                      )}
+                      <span className="absolute bottom-1 left-1 bg-black/75 px-1 py-0.2 rounded text-[7px] text-gray-300 font-outfit z-10">Screen Share</span>
+                    </div>
                   </div>
 
                   {/* Proctor alert details */}
@@ -1907,13 +1902,23 @@ function PollInsightsContent({ params }: PageProps) {
                       ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse' 
                       : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   }`}>
-                    <span className="block truncate">{tel.alert}</span>
+                    <span className="block truncate">{alertMsg}</span>
                   </div>
 
+                  {/* Show student log list if there are proctor logs */}
+                  {!isOffline && tel.logs && tel.logs.length > 0 && (
+                    <div className="p-2 rounded-lg bg-black/40 border border-white/5 max-h-24 overflow-y-auto space-y-1 no-scrollbar">
+                      <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest block border-b border-white/5 pb-0.5">Infraction Logs</span>
+                      {tel.logs.map((log: string, lIdx: number) => (
+                        <span key={lIdx} className="block text-[9px] text-gray-400 font-mono truncate">{log}</span>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Last Active details */}
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pt-1.5 border-t border-white/5">
                     <span>Signal strength: {!isOffline ? '98%' : '0%'}</span>
-                    <span>Last Active: {tel.lastActive}</span>
+                    <span>Last Active: {tel ? tel.lastActive : 'Never'}</span>
                   </div>
                 </div>
               );
@@ -2780,6 +2785,10 @@ function PollInsightsContent({ params }: PageProps) {
                     </tr>
                   ) : (
                     liveVotesList.filter(v => v.flaggedSuspicious).map((v) => {
+                      const answersObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                      const violations = answersObj?.__proctorLogs || [];
+                      const violationCount = violations.length;
+
                       return (
                         <tr key={v.id} className="hover:bg-white/2 transition-colors">
                           <td className="py-4 pr-4">
@@ -2788,13 +2797,25 @@ function PollInsightsContent({ params }: PageProps) {
                               <span className="text-gray-500 text-[10px] font-mono">{v.email || 'Guest Email'}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-center font-mono font-bold text-red-400 bg-red-500/5 border border-red-500/10 rounded-xl">
-                            1+ Blur Event Flagged
+                          <td className="py-4 px-4 text-center">
+                            <span className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold border ${
+                              violationCount > 0 
+                                ? 'bg-red-500/10 text-red-400 border-red-500/25 animate-pulse' 
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                            }`}>
+                              {violationCount} Violations Flagged
+                            </span>
                           </td>
                           <td className="py-4 px-4">
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse">
-                              ⚠️ Tab Switch Triggered
-                            </span>
+                            {violationCount > 0 ? (
+                              <div className="space-y-1 max-w-[220px] max-h-20 overflow-y-auto no-scrollbar font-mono text-[9px] text-red-300">
+                                {violations.map((log: string, lIdx: number) => (
+                                  <span key={lIdx} className="block truncate" title={log}>{log}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-emerald-400 text-[10px] font-semibold">🟢 Fully Focused / Clean Attempt</span>
+                            )}
                           </td>
                           <td className="py-4 px-4 font-mono text-gray-300">{v.ipAddress} <span className="text-gray-500">({v.isp || 'N/A'})</span></td>
                           <td className="py-4 px-4 text-gray-400 font-medium">{v.device || 'Desktop'}</td>
@@ -3933,6 +3954,27 @@ function PollInsightsContent({ params }: PageProps) {
               <Award className="w-5 h-5 text-indigo-400" />
               <span>Exam Performance Summary</span>
             </h3>
+
+            {poll.settings?.enableProctorCamera && (
+              <div className="glass-card rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in-up">
+                <div className="space-y-1">
+                  <h4 className="text-white text-sm font-bold font-outfit flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span>Live Student Webcam & Screen Proctoring Portal</span>
+                  </h4>
+                  <p className="text-gray-400 text-xs font-outfit">
+                    This exam has live webcam proctoring enabled. You can monitor examinees in real-time, view their active cameras, track tab switching, and inspect shared screen feeds.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('proctor')}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-105 active:scale-95 transition-all text-white text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-md shadow-indigo-500/20"
+                >
+                  <MonitorPlay className="w-4 h-4" />
+                  <span>Launch Live Proctoring Console</span>
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: 'Average Score', value: examAnalytics.averageScore },

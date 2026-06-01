@@ -11,6 +11,8 @@ import PollChart from '@/components/PollChart';
 import PollMap from '@/components/PollMap';
 import confetti from 'canvas-confetti';
 import AdvertisementZone from '@/components/AdvertisementZone';
+import { io } from 'socket.io-client';
+import { Monitor, Video } from 'lucide-react';
 
 interface StudentWhiteboardProps {
   questionId: string;
@@ -623,6 +625,104 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [screenError, setScreenError] = useState(false);
+  const [isFullscreenLocked, setIsFullscreenLocked] = useState(true);
+  const [isScreenShared, setIsScreenShared] = useState(true);
+  const [proctorLogs, setProctorLogs] = useState<string[]>([]);
+  const socketRef = useRef<any>(null);
+
+  const addProctorLog = (msg: string) => {
+    setProctorLogs(prev => {
+      const exists = prev.includes(msg);
+      if (exists) return prev;
+      return [...prev, msg];
+    });
+  };
+
+  const playWarningBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.25);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStartExamClick = async () => {
+    if (!poll?.settings?.enableProctorCamera) {
+      setShowIntro(false);
+      return;
+    }
+
+    try {
+      // 1. Request Webcam
+      const webStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240 },
+        audio: !!poll.settings.enableProctorMicrophone
+      });
+      
+      // 2. Request Screen Share
+      let scrStream: MediaStream;
+      try {
+        scrStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: 640, height: 480 }
+        });
+      } catch (err) {
+        webStream.getTracks().forEach(t => t.stop());
+        alert("⚠️ Screen sharing is mandatory to begin the exam. Please allow screen sharing.");
+        setScreenError(true);
+        return;
+      }
+
+      // Bind screen track onended
+      scrStream.getVideoTracks()[0].onended = () => {
+        setIsScreenShared(false);
+        addProctorLog("🚨 Stopped screen sharing");
+      };
+
+      // 3. Request Fullscreen
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (fsErr) {
+        console.error("Fullscreen request failed:", fsErr);
+      }
+
+      // 4. Save streams
+      setCameraStream(webStream);
+      setScreenStream(scrStream);
+      setCameraError(false);
+      setScreenError(false);
+      setIsScreenShared(true);
+      setIsFullscreenLocked(true);
+
+      // 5. Connect Socket
+      const socket = io();
+      socketRef.current = socket;
+      socket.emit('join-poll', pollId);
+
+      // 6. Enter exam
+      setShowIntro(false);
+      
+      const startTime = new Date().toLocaleTimeString();
+      setProctorLogs([`🟢 Exam started with live proctoring at ${startTime}`]);
+
+    } catch (err) {
+      console.error("Media permission failed:", err);
+      alert("⚠️ Webcam access is required to take this exam. Please check your browser settings and grant permissions.");
+      setCameraError(true);
+    }
+  };
 
   // Chat Sidebar states
   const [chatMessages, setChatMessages] = useState<any[]>([
@@ -711,7 +811,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
     const msg = {
       id: Date.now(),
-      author: chatName.trim() || 'Voter',
+      author: chatName.trim() || (poll?.pollType === 'EXAM' ? 'Student' : 'Voter'),
       text: newMessage,
       sentiment,
       time: 'Just now'
@@ -948,23 +1048,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     const triggerAutoSubmit = async () => {
       console.log("Triggering exam auto-submit due to safeguard policy");
 
-      // Play a Web Audio API beep sound if enabled
-      if (poll?.settings?.enableTabDepartureSound) {
-        try {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const oscillator = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz
-          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-          oscillator.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          oscillator.start();
-          oscillator.stop(audioCtx.currentTime + 0.3); // 300ms beep
-        } catch (audioErr) {
-          console.error("Web Audio API beep failure:", audioErr);
-        }
-      }
+      // Play beep sound
+      playWarningBeep();
 
       setVoteLoading(true);
       try {
@@ -989,7 +1074,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            answers: selectedAnswers,
+            answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
             confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
             voterToken: poll.isOpenVoting ? undefined : voterToken,
             email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
@@ -1009,6 +1094,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         setFlaggedSuspicious(data.flaggedSuspicious || false);
         localStorage.removeItem(`poll_start_time_${pollId}`);
         localStorage.removeItem(`pollstar_resume_${pollId}`);
+        
+        // Stop active media streams on submission
+        if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+        if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+        if (socketRef.current) socketRef.current.disconnect();
+
       } catch (err: any) {
         console.error("Auto submit submission error:", err);
         setError(err.message || "Failed to auto-submit exam.");
@@ -1017,37 +1108,44 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       }
     };
 
-    // Grace period: ignore all blur/visibility events for the first 3 seconds
-    // after the effect mounts to prevent spurious submissions during page load
-    // or browser focus transitions when the exam first opens.
     let graceActive = true;
     const gracePeriodTimer = setTimeout(() => { graceActive = false; }, 3000);
 
     const handleVisibilityChange = () => {
-      // Tab switch is always intentional — no debounce needed
-      if (document.visibilityState === 'hidden' && shouldTabLeaveSubmit && !graceActive) {
-        triggerAutoSubmit();
-        alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
+      if (document.visibilityState === 'hidden' && !graceActive) {
+        const time = new Date().toLocaleTimeString();
+        addProctorLog(`⚠️ Tab switched / minimized at ${time}`);
+        playWarningBeep();
+
+        if (shouldTabLeaveSubmit) {
+          triggerAutoSubmit();
+          alert("⚠️ Tab switch detected! Your exam is being automatically submitted due to security policy.");
+        } else {
+          alert("⚠️ Tab switch detected! This violation has been logged to the examiner's console.");
+        }
       }
     };
 
-    // Debounce blur by 2 seconds: transient focus losses (URL bar, devtools,
-    // system dialogs, slight window movement) are cancelled if focus returns quickly.
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleWindowBlur = () => {
-      if (!shouldTabLeaveSubmit || graceActive) return;
-      blurTimer = setTimeout(() => {
-        // Only submit if the window is still blurred (focus hasn't returned)
-        if (!document.hasFocus()) {
-          triggerAutoSubmit();
-          alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
-        }
-      }, 2000);
+      if (graceActive) return;
+      
+      const time = new Date().toLocaleTimeString();
+      addProctorLog(`⚠️ Lost window focus (clicked outside or opened other app) at ${time}`);
+      playWarningBeep();
+
+      if (shouldTabLeaveSubmit) {
+        blurTimer = setTimeout(() => {
+          if (!document.hasFocus()) {
+            triggerAutoSubmit();
+            alert("⚠️ Window focus lost! Your exam is being automatically submitted due to security policy.");
+          }
+        }, 2000);
+      }
     };
 
     const handleWindowFocus = () => {
-      // Cancel pending blur-submit if focus returns within the debounce window
       if (blurTimer !== null) {
         clearTimeout(blurTimer);
         blurTimer = null;
@@ -1058,7 +1156,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       if (shouldLeaveSubmit) {
         const detectedDevice = 'Desktop'; 
         const bodyStr = JSON.stringify({
-          answers: selectedAnswers,
+          answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: 22.5726, 
@@ -1071,11 +1169,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       }
     };
 
-    if (shouldTabLeaveSubmit) {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('blur', handleWindowBlur);
-      window.addEventListener('focus', handleWindowFocus);
-    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
 
     if (shouldLeaveSubmit) {
       window.addEventListener('beforeunload', handleBeforeUnload);
@@ -1089,31 +1185,141 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [timerActive, poll, selectedAnswers, confidenceValues, voterToken, openEmail, pollId]);
+  }, [timerActive, poll, selectedAnswers, confidenceValues, voterToken, openEmail, pollId, proctorLogs, cameraStream, screenStream]);
 
-  // 4. Webcam camera / microphone proctoring tracking
+  // 4. Fullscreen enforcement and exit tracking
   useEffect(() => {
-    const isProctorActive = timerActive && poll?.settings?.enableProctorCamera;
-    let activeStream: MediaStream | null = null;
-    if (isProctorActive) {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: !!poll.settings.enableProctorMicrophone })
-        .then((stream) => {
-          activeStream = stream;
-          setCameraStream(stream);
-          setCameraError(false);
-        })
-        .catch((err) => {
-          console.error("Camera proctoring permission denied:", err);
-          setCameraError(true);
-        });
-    }
+    if (!timerActive || !poll?.settings?.enableProctorCamera || showIntro) return;
 
-    return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach((track) => track.stop());
+    const handleFullscreenChange = () => {
+      const isFullscreen = !!(document.fullscreenElement);
+      setIsFullscreenLocked(isFullscreen);
+      if (!isFullscreen) {
+        const time = new Date().toLocaleTimeString();
+        addProctorLog(`🚨 Exited fullscreen mode at ${time}`);
+        playWarningBeep();
       }
     };
-  }, [timerActive, poll]);
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, [timerActive, poll, showIntro]);
+
+  // 5. Periodic Socket.io Webcam & Screen telemetry frame emitter
+  useEffect(() => {
+    const isProctorActive = !showIntro && timerActive && poll?.settings?.enableProctorCamera;
+    if (!isProctorActive) return;
+
+    const webVideo = document.createElement('video');
+    webVideo.autoplay = true;
+    webVideo.playsInline = true;
+    webVideo.muted = true;
+    if (cameraStream) webVideo.srcObject = cameraStream;
+
+    const scrVideo = document.createElement('video');
+    scrVideo.autoplay = true;
+    scrVideo.playsInline = true;
+    scrVideo.muted = true;
+    if (screenStream) scrVideo.srcObject = screenStream;
+
+    const webCanvas = document.createElement('canvas');
+    webCanvas.width = 160;
+    webCanvas.height = 120;
+    const webCtx = webCanvas.getContext('2d');
+
+    const scrCanvas = document.createElement('canvas');
+    scrCanvas.width = 240;
+    scrCanvas.height = 180;
+    const scrCtx = scrCanvas.getContext('2d');
+
+    const sendTelemetryFrame = () => {
+      let webcamFrame = '';
+      let screenFrame = '';
+
+      if (cameraStream && webCtx && webVideo.readyState >= 2) {
+        try {
+          webCtx.drawImage(webVideo, 0, 0, 160, 120);
+          webcamFrame = webCanvas.toDataURL('image/jpeg', 0.5);
+        } catch (e) {
+          console.error("Webcam capture error:", e);
+        }
+      }
+
+      if (screenStream && scrCtx && scrVideo.readyState >= 2) {
+        try {
+          scrCtx.drawImage(scrVideo, 0, 0, 240, 180);
+          screenFrame = scrCanvas.toDataURL('image/jpeg', 0.4);
+        } catch (e) {
+          console.error("Screen capture error:", e);
+        }
+      }
+
+      if (socketRef.current) {
+        // Broadcast feeds live temporarily (NOT stored in website database permanently)
+        socketRef.current.emit('student-telemetry', {
+          pollId,
+          studentId: activeVoterIdentifier || 'anonymous',
+          studentName: confirmer1 || activeVoterIdentifier || 'Anonymous Student',
+          identifier: voterIdentifier || 'Guest',
+          status: (isFullscreenLocked && isScreenShared && !document.hidden) ? 'ACTIVE' : 'OFFLINE',
+          alert: !isFullscreenLocked ? '🚨 Exited Fullscreen Mode' : (!isScreenShared ? '🚨 Stopped Screen Share' : (document.hidden ? '⚠️ Tab Switched' : '🟢 Focus Active (No anomalies)')),
+          webcamFrame,
+          screenFrame,
+          logs: proctorLogs,
+          lastActive: new Date().toLocaleTimeString()
+        });
+      }
+    };
+
+    sendTelemetryFrame();
+    const telemetryInterval = setInterval(sendTelemetryFrame, 3000);
+
+    return () => {
+      clearInterval(telemetryInterval);
+      webVideo.srcObject = null;
+      scrVideo.srcObject = null;
+    };
+  }, [showIntro, timerActive, cameraStream, screenStream, isFullscreenLocked, isScreenShared, proctorLogs, activeVoterIdentifier, confirmer1, voterIdentifier]);
+
+  // Clean up media streams and socket on component unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+      if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+      if (socketRef.current) socketRef.current.disconnect();
+    };
+  }, [cameraStream, screenStream]);
+
+  // Continuous lock alert warning beep effect
+  useEffect(() => {
+    const isLocked = poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && verifiedVoter && (!isFullscreenLocked || !isScreenShared);
+    if (!isLocked) return;
+
+    const playBeep = () => {
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(650, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.2);
+      } catch (e) {}
+    };
+
+    playBeep();
+    const beepInterval = setInterval(playBeep, 1500);
+
+    return () => clearInterval(beepInterval);
+  }, [showIntro, timerActive, isFullscreenLocked, isScreenShared, votedSuccessfully, verifiedVoter, poll]);
 
   // Callback Ref for the video element to safely bind the stream on mount
   const videoRef = useCallback((node: HTMLVideoElement | null) => {
@@ -1122,23 +1328,35 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }
   }, [cameraStream]);
 
-  // 5. Copy/Paste and ContextMenu blocking for exams
+  // 5. Keyboard and Copy/Paste/Select blocking for exams
   useEffect(() => {
     if (!poll?.settings?.enableCopyPasteBlock) return;
 
     const handleBlock = (e: Event) => {
       e.preventDefault();
+      e.stopPropagation();
     };
 
-    document.addEventListener('copy', handleBlock);
-    document.addEventListener('cut', handleBlock);
-    document.addEventListener('paste', handleBlock);
-    document.addEventListener('contextmenu', handleBlock);
+    const handleKeyDownBlock = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+      if (isMeta && (key === 'c' || key === 'v' || key === 'x' || key === 'a')) {
+        e.preventDefault();
+        e.stopPropagation();
+        alert("🔒 Copy/Paste and selection are strictly disabled for this exam.");
+      }
+    };
+
+    document.addEventListener('copy', handleBlock, true);
+    document.addEventListener('cut', handleBlock, true);
+    document.addEventListener('paste', handleBlock, true);
+    document.addEventListener('contextmenu', handleBlock, true);
+    window.addEventListener('keydown', handleKeyDownBlock, true);
 
     const style = document.createElement('style');
     style.id = 'block-select-style';
     style.innerHTML = `
-      body, html {
+      body, html, *, input, textarea {
         -webkit-user-select: none !important;
         -moz-user-select: none !important;
         -ms-user-select: none !important;
@@ -1148,10 +1366,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     document.head.appendChild(style);
 
     return () => {
-      document.removeEventListener('copy', handleBlock);
-      document.removeEventListener('cut', handleBlock);
-      document.removeEventListener('paste', handleBlock);
-      document.removeEventListener('contextmenu', handleBlock);
+      document.removeEventListener('copy', handleBlock, true);
+      document.removeEventListener('cut', handleBlock, true);
+      document.removeEventListener('paste', handleBlock, true);
+      document.removeEventListener('contextmenu', handleBlock, true);
+      window.removeEventListener('keydown', handleKeyDownBlock, true);
       const styleEl = document.getElementById('block-select-style');
       if (styleEl) styleEl.remove();
     };
@@ -1176,6 +1395,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         }
 
         setPoll(fetchedPoll);
+        if (fetchedPoll.pollType === 'EXAM') {
+          setChatName('Guest Student');
+        }
         if (fetchedPoll.pollType === 'SURVEY') {
           const startPage = fetchedPoll.settings?.enableCrossTabulation ? 0 : 1;
           setCurrentPage(startPage);
@@ -1337,7 +1559,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         const data = await res.json();
 
         if (data.success && data.granted && data.voterToken) {
-          setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot'}...` });
+          setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'EXAM' ? 'exam paper' : (poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot')}...` });
           setTimeout(() => {
             setVoterToken(data.voterToken);
             setVerifiedVoter(true);
@@ -1400,7 +1622,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
       // Handle creator-granted OTP bypass (30s window)
       if (data.isBypassGranted && data.voterToken) {
-        setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot'}...` });
+        setBypassPopup({ visible: true, message: `30 second bypass is enabled for you. Redirecting directly to ${poll?.pollType === 'EXAM' ? 'exam paper' : (poll?.pollType === 'SURVEY' ? 'questionnaire' : 'ballot')}...` });
         setTimeout(() => {
           setVoterToken(data.voterToken);
           setVerifiedVoter(true);
@@ -1824,7 +2046,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: selectedAnswers,
+          answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
           confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
@@ -1843,6 +2065,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       setFlaggedSuspicious(data.flaggedSuspicious || false);
       localStorage.removeItem(`poll_start_time_${pollId}`);
       localStorage.removeItem(`pollstar_resume_${pollId}`);
+
+      // Stop active proctor feeds on submit
+      if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+      if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+      if (socketRef.current) socketRef.current.disconnect();
 
       // Add their geoposition marker if present
       if (data.geo && data.geo.lat !== 0) {
@@ -1979,12 +2206,21 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               </div>
             </div>
 
-            <h1 className="font-outfit text-3xl font-extrabold text-white">{poll.pollType === 'SURVEY' ? 'Survey Has Closed' : 'Voting Has Closed'}</h1>
+            <h1 className="font-outfit text-3xl font-extrabold text-white">
+              {poll.pollType === 'EXAM' 
+                ? 'Examination Has Closed' 
+                : (poll.pollType === 'SURVEY' ? 'Survey Has Closed' : 'Voting Has Closed')
+              }
+            </h1>
             <p className="text-gray-400 text-sm leading-relaxed">
-              {poll.pollType === 'SURVEY' ? (
-                <>The survey <span className="text-white font-bold">"{poll.title}"</span> has officially closed and is no longer accepting responses.</>
+              {poll.pollType === 'EXAM' ? (
+                <>The exam <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting submissions.</>
               ) : (
-                <>The poll <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting ballots.</>
+                poll.pollType === 'SURVEY' ? (
+                  <>The survey <span className="text-white font-bold">"{poll.title}"</span> has officially closed and is no longer accepting responses.</>
+                ) : (
+                  <>The poll <span className="text-white font-bold">"{poll.title}"</span> has officially ended and is no longer accepting ballots.</>
+                )
               )}
             </p>
 
@@ -1997,7 +2233,10 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
             {poll.totalVotes !== undefined && (
               <p className="text-gray-500 text-xs">
-                {poll.pollType === 'SURVEY' ? 'Total responses recorded:' : 'Total ballots recorded:'} <span className="text-white font-bold">{poll.totalVotes}</span>
+                {poll.pollType === 'EXAM' 
+                  ? 'Total examinee papers submitted:' 
+                  : (poll.pollType === 'SURVEY' ? 'Total responses recorded:' : 'Total ballots recorded:')
+                } <span className="text-white font-bold">{poll.totalVotes}</span>
               </p>
             )}
           </div>
@@ -2251,7 +2490,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
               <button
                 type="button"
-                onClick={() => setShowIntro(false)}
+                onClick={handleStartExamClick}
                 className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-xs flex items-center space-x-2 active:scale-95 animate-pulse-slow"
               >
                 <span>
@@ -2338,31 +2577,46 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       )}
 
       {poll?.settings?.enableProctorCamera && verifiedVoter && !votedSuccessfully && (
-        <div className="fixed bottom-24 right-6 z-40 transition-all duration-300">
-          <div className="glass-card rounded-full border border-indigo-500/40 p-1 bg-[#080d1a] shadow-2xl relative overflow-hidden w-28 h-28 flex items-center justify-center group hover:scale-105">
-            {cameraError ? (
-              <div className="text-[8px] text-red-400 font-extrabold text-center px-2 select-none uppercase tracking-wider">
-                ⚠️ Cam Blocked
-              </div>
-            ) : cameraStream ? (
-              <video
-                id="proctor-facecam"
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover rounded-full pointer-events-none scale-x-[-1]"
-              />
-            ) : (
-              <div className="text-[8px] text-indigo-400 font-extrabold text-center select-none uppercase tracking-wider animate-pulse">
-                📷 Loading Cam...
-              </div>
-            )}
-            <div className="absolute bottom-1 bg-black/60 px-2 py-0.5 rounded-full border border-red-500/20">
-              <span className="text-[7px] font-black text-red-400 uppercase tracking-widest flex items-center space-x-1 animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-ping mr-0.5" />
-                Proctored
-              </span>
+        <div className="fixed bottom-24 right-6 z-40 w-52 rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl p-2.5 select-none overflow-hidden animate-fade-in-up backdrop-blur-md space-y-2">
+          <div className="flex items-center justify-between text-[10px] text-gray-400 font-outfit px-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-bold text-red-400 uppercase tracking-widest text-[8px] animate-pulse">Proctored</span>
+            </span>
+            <span className="font-mono text-[9px] text-indigo-400 font-semibold">Live Feed</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video flex items-center justify-center">
+              {cameraStream ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+              ) : (
+                <span className="text-[7px] text-red-400 text-center font-bold px-1">{cameraError ? 'Cam Blocked' : 'Camera...'}</span>
+              )}
+              <span className="absolute bottom-0.5 left-1 bg-black/75 px-1 py-0.2 rounded text-[7px] text-gray-300">Webcam</span>
+            </div>
+            
+            <div className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video flex items-center justify-center">
+              {screenStream ? (
+                <video
+                  ref={(node) => {
+                    if (node && screenStream) node.srcObject = screenStream;
+                  }}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-[7px] text-red-400 text-center font-bold px-1">No Screen</span>
+              )}
+              <span className="absolute bottom-0.5 left-1 bg-black/75 px-1 py-0.2 rounded text-[7px] text-gray-300">Screen</span>
             </div>
           </div>
         </div>
@@ -2571,7 +2825,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                 ) : otpCooldown > 0 ? (
                   <span>Resend OTP in {otpCooldown}s</span>
                 ) : (poll.description && /\[priority:\s*LOW\]/i.test(poll.description)) ? (
-                  <span>{poll.pollType === 'SURVEY' ? 'Confirm Profile & Access Survey' : 'Confirm Profile & Access Ballot'}</span>
+                  <span>{poll.pollType === 'EXAM' ? 'Confirm Profile & Start Exam' : (poll.pollType === 'SURVEY' ? 'Confirm Profile & Access Survey' : 'Confirm Profile & Access Ballot')}</span>
                 ) : otpSentOnce ? (
                   <span>Resend OTP Code</span>
                 ) : (
@@ -2688,12 +2942,14 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           <div className="border-b border-white/5 pb-4">
             <h3 className="font-outfit text-xl font-bold text-white flex items-center space-x-2">
               <VoteIcon className="w-5 h-5 text-indigo-400" />
-              <span>{poll.pollType === 'SURVEY' ? 'Survey Questionnaire' : 'Official Voting Ballot'}</span>
+              <span>{poll.pollType === 'EXAM' ? 'Official Exam Paper' : (poll.pollType === 'SURVEY' ? 'Survey Questionnaire' : 'Official Voting Ballot')}</span>
             </h3>
             <p className="text-gray-400 text-xs mt-1">
-              {poll.pollType === 'SURVEY'
-                ? 'Answer each section honestly. Your responses help us understand different perspectives.'
-                : 'Please review candidate selections and cast your secure vote below.'}
+              {poll.pollType === 'EXAM'
+                ? 'Read each question carefully and select the most accurate answers.'
+                : (poll.pollType === 'SURVEY'
+                    ? 'Answer each section honestly. Your responses help us understand different perspectives.'
+                    : 'Please review candidate selections and cast your secure vote below.')}
             </p>
           </div>
 
@@ -2710,7 +2966,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             {poll.isOpenVoting && poll.settings?.limitOneVotePerUser && (
               <div>
                 <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider mb-2">
-                  {poll.pollType === 'SURVEY' ? 'Confirm Your Email' : 'Confirm Your Email Address'}
+                  {poll.pollType === 'EXAM' ? 'Confirm Your Student Email' : (poll.pollType === 'SURVEY' ? 'Confirm Your Email' : 'Confirm Your Email Address')}
                 </label>
                 <input
                   type="email"
@@ -2721,9 +2977,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                   className="w-full glass-input text-sm"
                 />
                 <span className="text-[10px] text-gray-500 mt-2 block">
-                  {poll.pollType === 'SURVEY' 
-                    ? 'Email verification is required to enforce unique submission limits.' 
-                    : 'Email verification is compulsory to enforce unique voting limits.'
+                  {poll.pollType === 'EXAM' 
+                    ? 'Email verification is required to enforce unique exam attempts.' 
+                    : (poll.pollType === 'SURVEY' 
+                        ? 'Email verification is required to enforce unique submission limits.' 
+                        : 'Email verification is compulsory to enforce unique voting limits.')
                   }
                 </span>
               </div>
@@ -3238,7 +3496,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                                 q.options.find((o: any) => o.id === ans.winner)?.text || 'BYE'
                               }
                             </h4>
-                            <p className="text-gray-400 text-[10px]">Your final tournament bracket choice is locked. You can submit your ballot below.</p>
+                            <p className="text-gray-400 text-[10px]">Your final tournament bracket choice is locked. You can submit your {poll.pollType === 'EXAM' ? 'exam' : (poll.pollType === 'SURVEY' ? 'survey' : 'ballot')} below.</p>
                           </div>
                         )}
                       </div>
@@ -3782,7 +4040,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <div className="flex items-center space-x-2">
                 <MessageSquare className="w-4 h-4 text-indigo-400" />
-                <span className="font-outfit text-xs font-bold text-white">Message Poll Owner</span>
+                <span className="font-outfit text-xs font-bold text-white">{poll?.pollType === 'EXAM' ? 'Message Examiner' : (poll?.pollType === 'SURVEY' ? 'Message Survey Creator' : 'Message Poll Owner')}</span>
               </div>
               <button
                 onClick={() => setShowOwnerChat(false)}
@@ -3796,7 +4054,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             {!activeVoterIdentifier ? (
               <div className="flex-1 flex flex-col justify-center items-center text-center p-4 space-y-3">
                 <span className="text-[11px] text-gray-400 leading-relaxed">
-                  To start messaging the poll owner, please enter your email so they can reply to you.
+                  To start messaging the {poll?.pollType === 'EXAM' ? 'examiner' : (poll?.pollType === 'SURVEY' ? 'survey creator' : 'poll owner')}, please enter your email so they can reply to you.
                 </span>
                 <input
                   type="email"
@@ -3824,7 +4082,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                 <div className="flex-1 overflow-y-auto py-3 space-y-2.5 pr-1 no-scrollbar">
                   {ownerChatMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-center text-gray-500 text-[10px] leading-relaxed p-4">
-                      No messages yet. Send a message to the owner/creator of this poll! They will receive it on their dashboard.
+                      No messages yet. Send a message to the {poll?.pollType === 'EXAM' ? 'examiner' : (poll?.pollType === 'SURVEY' ? 'creator of this survey' : 'owner of this poll')}! They will receive it on their dashboard.
                     </div>
                   ) : (
                     ownerChatMessages.map((msg, idx) => {
@@ -3876,7 +4134,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         <button
           onClick={() => setShowOwnerChat(!showOwnerChat)}
           className="w-12 h-12 rounded-full gradient-btn border border-indigo-400/20 shadow-2xl flex items-center justify-center text-white hover:scale-105 transition-all duration-300"
-          title="Message Poll Owner"
+          title={poll?.pollType === 'EXAM' ? 'Message Examiner' : (poll?.pollType === 'SURVEY' ? 'Message Survey Creator' : 'Message Poll Owner')}
         >
           <MessageCircle className="w-6 h-6" />
         </button>
@@ -3900,6 +4158,67 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               Scientific Calculator
             </span>
           </button>
+        </div>
+      )}
+
+      {/* Strict Proctoring Lockdown Overlay */}
+      {poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && verifiedVoter && (!isFullscreenLocked || !isScreenShared) && (
+        <div className="fixed inset-0 z-50 bg-[#030712]/98 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+          <div className="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.15)] animate-pulse">
+            <ShieldAlert className="w-10 h-10 animate-bounce" />
+          </div>
+          <h2 className="font-outfit text-2xl font-black text-white uppercase tracking-wider mb-2">
+            🚨 Guard Lockdown Protocol Active 🚨
+          </h2>
+          <p className="text-gray-400 text-sm max-w-md mx-auto mb-6 leading-relaxed font-outfit">
+            {!isFullscreenLocked 
+              ? "You have exited Fullscreen mode! Leaving fullscreen is a major exam violation and has been logged." 
+              : "You have stopped screen sharing! Screen sharing is mandatory to take this exam."
+            }
+            <br/>
+            Please click the button below immediately to restore your session and bypass lockdown.
+          </p>
+          
+          {!isFullscreenLocked ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                    setIsFullscreenLocked(true);
+                  }
+                } catch (err) {
+                  alert("Failed to enter fullscreen. Please maximize your window.");
+                }
+              }}
+              className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-indigo-600 hover:scale-105 active:scale-95 transition-all text-white text-xs shadow-lg shadow-red-500/20"
+            >
+              Re-enter Fullscreen Mode
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const scrStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { width: 640, height: 480 }
+                  });
+                  scrStream.getVideoTracks()[0].onended = () => {
+                    setIsScreenShared(false);
+                    addProctorLog("🚨 Stopped screen sharing");
+                  };
+                  setScreenStream(scrStream);
+                  setIsScreenShared(true);
+                } catch (err) {
+                  alert("You must allow screen sharing to resume your exam.");
+                }
+              }}
+              className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-indigo-600 hover:scale-105 active:scale-95 transition-all text-white text-xs shadow-lg shadow-red-500/20"
+            >
+              Restore Screen Sharing
+            </button>
+          )}
         </div>
       )}
     </div>
