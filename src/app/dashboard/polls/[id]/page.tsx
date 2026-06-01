@@ -4282,12 +4282,12 @@ function PollInsightsContent({ params }: PageProps) {
           return { q, distribution, responseRate, totalForQ };
         });
 
-        // Device breakdown from IP data
+        // Device breakdown from recorded device field
         const deviceCounts = { mobile: 0, desktop: 0, tablet: 0 };
         votes.forEach((v: any) => {
-          const ua = v.userAgent || '';
-          if (/tablet|ipad/i.test(ua)) deviceCounts.tablet++;
-          else if (/mobile|android|iphone/i.test(ua)) deviceCounts.mobile++;
+          const dev = String(v.device || 'Desktop').toLowerCase();
+          if (dev.includes('tablet')) deviceCounts.tablet++;
+          else if (dev.includes('mobile')) deviceCounts.mobile++;
           else deviceCounts.desktop++;
         });
         const totalDevices = deviceCounts.mobile + deviceCounts.desktop + deviceCounts.tablet || 1;
