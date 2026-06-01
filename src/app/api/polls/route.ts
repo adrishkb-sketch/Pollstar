@@ -273,7 +273,7 @@ export async function POST(req: Request) {
             : (targetType === 'POLL' ? (plan?.maxPolls ?? -1) : targetType === 'SURVEY' ? (plan?.maxSurveys ?? -1) : (plan?.maxExams ?? -1));
 
           // Override with duration-specific limits if available
-          if (plan && plan.durations && !isFreePlan) {
+          if (plan && plan.durations) {
             const durs = plan.durations as any;
             const cycle = userWithPlan.planBillingCycle || 'MONTHLY';
             if (durs[cycle] && durs[cycle].enabled) {

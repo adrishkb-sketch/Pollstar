@@ -263,11 +263,11 @@ export default function AdminPortal() {
   const [planOriginalPrice, setPlanOriginalPrice] = useState('0.0');
   const [planOfferEndDate, setPlanOfferEndDate] = useState('');
   const [planDurations, setPlanDurations] = useState<any>({
-    MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0' },
-    QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-    YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0' },
-    TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0' },
-    LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0' }
+    MONTHLY: { enabled: true, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+    QUARTERLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+    YEARLY: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+    TWO_YEARS: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' },
+    LIFETIME: { enabled: false, price: '0.0', originalPrice: '0.0', maxPolls: '-1', maxSurveys: '-1', maxExams: '-1', maxParticipantsPoll: '100', maxParticipantsSurvey: '100', maxParticipantsExam: '100' }
   });
 
   // Manual Administrative Plan switch states
@@ -1343,9 +1343,8 @@ export default function AdminPortal() {
         if (finalDurations[dur]) {
           finalDurations[dur] = {
             ...finalDurations[dur],
-            maxPolls: planMaxPolls,
-            maxSurveys: planMaxSurveys,
-            maxExams: planMaxExams,
+            // Per-duration quotas come from the matrix state directly;
+            // participant limits remain shared (set in the bottom quota section)
             maxParticipantsPoll: planMaxParticipantsPoll,
             maxParticipantsSurvey: planMaxParticipantsSurvey,
             maxParticipantsExam: planMaxParticipantsExam,
@@ -2472,18 +2471,44 @@ export default function AdminPortal() {
                             </strong>
                           </div>
                         )}
-                        <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1">
-                          <span>Max Polls Allowed:</span>
-                          <strong className="text-gray-300 font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Max Surveys Allowed:</span>
-                          <strong className="text-gray-300 font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Max Exams Allowed:</span>
-                          <strong className="text-gray-300 font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
-                        </div>
+                        {/* Creation Quotas: per-duration for SUBSCRIPTION, flat for others */}
+                        {p.planType === 'SUBSCRIPTION' && p.durations ? (() => {
+                          const durs = p.durations as any;
+                          const fmt = (v: any) => (v === undefined || v === '' || parseInt(v) === -1) ? '∞' : v;
+                          const enabledDurs = Object.keys(durs).filter(k => durs[k]?.enabled);
+                          if (enabledDurs.length === 0) return null;
+                          return (
+                            <div className="border-t border-white/5 pt-1.5 mt-1 space-y-0.5">
+                              <span className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70 block">📊 Quotas per Duration</span>
+                              {enabledDurs.map(dur => {
+                                const cfg = durs[dur];
+                                return (
+                                  <div key={dur} className="text-[9px] flex items-start justify-between gap-1">
+                                    <span className="text-gray-500 shrink-0 font-bold uppercase">{dur.replace('_',' ')}:</span>
+                                    <span className="text-gray-300 font-semibold text-right">
+                                      {fmt(cfg.maxPolls)}P / {fmt(cfg.maxSurveys)}S / {fmt(cfg.maxExams)}E
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })() : (
+                          <>
+                            <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1">
+                              <span>Max Polls Allowed:</span>
+                              <strong className="text-gray-300 font-bold">{p.maxPolls === null || p.maxPolls === -1 ? 'Unlimited' : p.maxPolls}</strong>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Max Surveys Allowed:</span>
+                              <strong className="text-gray-300 font-bold">{p.maxSurveys === null || p.maxSurveys === -1 ? 'Unlimited' : p.maxSurveys}</strong>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Max Exams Allowed:</span>
+                              <strong className="text-gray-300 font-bold">{p.maxExams === null || p.maxExams === -1 ? 'Unlimited' : p.maxExams}</strong>
+                            </div>
+                          </>
+                        )}
                         <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1">
                           <span>Voters per Poll:</span>
                           <strong className="text-indigo-300 font-bold">{p.maxParticipantsPoll === null || p.maxParticipantsPoll === -1 ? 'Unlimited' : p.maxParticipantsPoll}</strong>
@@ -5239,6 +5264,56 @@ export default function AdminPortal() {
                                 />
                               </div>
 
+                              {/* Per-duration Creation Quotas */}
+                              <div className="pt-1.5 border-t border-white/5 space-y-1.5">
+                                <span className="text-[8px] text-amber-400 font-bold uppercase block tracking-wider">📊 Creation Quotas</span>
+                                <div className="space-y-1">
+                                  <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Polls</span>
+                                  <input
+                                    type="number"
+                                    placeholder="-1 unlimited"
+                                    value={config.maxPolls ?? '-1'}
+                                    onChange={e => {
+                                      setPlanDurations({
+                                        ...planDurations,
+                                        [dur]: { ...config, maxPolls: e.target.value }
+                                      });
+                                    }}
+                                    className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Surveys</span>
+                                  <input
+                                    type="number"
+                                    placeholder="-1 unlimited"
+                                    value={config.maxSurveys ?? '-1'}
+                                    onChange={e => {
+                                      setPlanDurations({
+                                        ...planDurations,
+                                        [dur]: { ...config, maxSurveys: e.target.value }
+                                      });
+                                    }}
+                                    className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[8px] text-gray-500 font-bold uppercase block">Max Exams</span>
+                                  <input
+                                    type="number"
+                                    placeholder="-1 unlimited"
+                                    value={config.maxExams ?? '-1'}
+                                    onChange={e => {
+                                      setPlanDurations({
+                                        ...planDurations,
+                                        [dur]: { ...config, maxExams: e.target.value }
+                                      });
+                                    }}
+                                    className="w-full bg-white/3 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                              </div>
+
                               {(() => {
                                 const pPrice = parseFloat(config.price || '0');
                                 const pOriginalPrice = parseFloat(config.originalPrice || '0');
@@ -5482,41 +5557,7 @@ export default function AdminPortal() {
                     {planType === 'SUBSCRIPTION' ? '📊 Item Creation Quotas' : '👥 Audience Boost Quotas'}
                   </label>
                   {planType === 'SUBSCRIPTION' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Polls Creatable</label>
-                        <input
-                          type="number"
-                          value={planMaxPolls}
-                          onChange={e => setPlanMaxPolls(e.target.value)}
-                          placeholder="-1 for unlimited"
-                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Surveys Creatable</label>
-                        <input
-                          type="number"
-                          value={planMaxSurveys}
-                          onChange={e => setPlanMaxSurveys(e.target.value)}
-                          placeholder="-1 for unlimited"
-                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Max Exams Creatable</label>
-                        <input
-                          type="number"
-                          value={planMaxExams}
-                          onChange={e => setPlanMaxExams(e.target.value)}
-                          placeholder="-1 for unlimited"
-                          className="w-full glass-input rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                        <span className="text-[9px] text-gray-500 mt-1 block">-1 = unlimited</span>
-                      </div>
-                    </div>
+                    <p className="text-[9px] text-amber-400/70 font-semibold">📊 Creation quotas (Polls / Surveys / Exams) are set per-duration in the Durations Pricing Matrix above.</p>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>

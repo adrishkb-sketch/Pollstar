@@ -78,7 +78,7 @@ export async function GET() {
     let subLimitExams: number = isFreePlan ? (plan?.maxExams ?? 3) : (plan?.maxExams ?? -1);
 
     // Override with duration-specific limits if available
-    if (plan && plan.durations && !isFreePlan) {
+    if (plan && plan.durations) {
       const durs = plan.durations as any;
       const cycle = user.planBillingCycle || 'MONTHLY';
       if (durs[cycle] && durs[cycle].enabled) {

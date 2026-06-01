@@ -287,7 +287,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         let subLimitExams: number = isFreePlan ? (plan?.maxExams ?? 3) : (plan?.maxExams ?? -1);
 
         // Override with duration-specific limits if available
-        if (plan && plan.durations && !isFreePlan) {
+        if (plan && plan.durations) {
           const durs = plan.durations as any;
           const cycle = targetUser.planBillingCycle || 'MONTHLY';
           if (durs[cycle] && durs[cycle].enabled) {
