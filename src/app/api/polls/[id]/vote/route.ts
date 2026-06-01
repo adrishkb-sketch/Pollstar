@@ -347,8 +347,18 @@ export async function POST(
       voterEmail: voterEmail || undefined,
     });
 
-    // 4. Restrictions checking & Flagging Suspicious
     let flaggedSuspicious = false;
+    if (poll.pollType === 'EXAM') {
+      try {
+        const parsedAnswersObj = typeof answers === 'string' ? JSON.parse(answers) : answers;
+        const proctorLogs = parsedAnswersObj?.__proctorLogs || answers?.__proctorLogs;
+        if (Array.isArray(proctorLogs)) {
+          flaggedSuspicious = proctorLogs.some((log: string) => log.includes('🚨') || log.includes('⚠️'));
+        }
+      } catch (e) {
+        console.error("Failed to parse proctor logs:", e);
+      }
+    }
 
     // 4. Restrictions checking
     // Check Limit 1: Duplicate email/user
@@ -688,7 +698,7 @@ export async function POST(
             __examScore: poll.pollType === 'EXAM' ? { earned: earnedExamMarks, total: totalExamMarks } : null,
             __markingStatus: poll.pollType === 'EXAM' ? markingStatus : null,
           }),
-          flaggedSuspicious: false,
+          flaggedSuspicious: flaggedSuspicious,
           timeSpent: typeof timeSpent === 'number' ? timeSpent : null,
           latitude: parseCoord(latitude) ?? (vercelLat ? parseFloat(vercelLat) : (geoData.lat !== 0 ? geoData.lat : null)),
           longitude: parseCoord(longitude) ?? (vercelLon ? parseFloat(vercelLon) : (geoData.lon !== 0 ? geoData.lon : null)),

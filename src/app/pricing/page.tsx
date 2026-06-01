@@ -138,6 +138,10 @@ export default function PublicPricingPage() {
           <p className="text-gray-400 text-sm leading-relaxed">
             Choose standard Electoral Subscriptions or powerful Audience Add-On upgrades. Clean transparent pricing with robust audit logging.
           </p>
+          
+          <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 text-xs text-indigo-300 max-w-xl mx-auto leading-relaxed shadow-lg shadow-indigo-500/5 animate-fade-in-up">
+            💡 <strong>Paid Plan Guarantee:</strong> Subscribing to <strong>any</strong> paid subscription plan instantly unlocks <strong>100% of all premium features</strong> (including live webcam proctoring, conditional branching logic, custom branding, and scientific calculator). The free plan has some feature restrictions, but any plan upgrade removes them entirely!
+          </div>
         </div>
 
         {/* Categories Selector */}

@@ -1829,7 +1829,7 @@ function PollInsightsContent({ params }: PageProps) {
           <div className="glass-card rounded-xl p-4 border border-white/5 bg-slate-950/40 text-center space-y-1">
             <span className="text-[9px] uppercase font-bold text-gray-500 block">🚨 Active Warnings</span>
             <span className="text-lg font-black text-amber-500 block font-mono">
-              {Object.values(proctorTelemetry).filter(t => t.alert && t.alert.includes('⚠️')).length}
+              {Object.values(proctorTelemetry).filter(t => t.alert && (t.alert.includes('⚠️') || t.alert.includes('🚨'))).length}
             </span>
           </div>
         </div>
@@ -2567,7 +2567,7 @@ function PollInsightsContent({ params }: PageProps) {
                                 {isFlagged ? (
                                   <>
                                     <ShieldAlert className="w-3.5 h-3.5" />
-                                    <span>Suspicious Tab Switched</span>
+                                    <span>Suspicious Attempt</span>
                                   </>
                                 ) : (
                                   <>
@@ -2576,7 +2576,38 @@ function PollInsightsContent({ params }: PageProps) {
                                   </>
                                 )}
                               </span>
-                            ) : '-'}
+                            ) : (() => {
+                              const telKey = Object.keys(proctorTelemetry).find(key => {
+                                const item = proctorTelemetry[key];
+                                return key === ex.id || 
+                                       (item.identifier && ex.identifier && item.identifier.toLowerCase() === ex.identifier.toLowerCase()) || 
+                                       (item.studentName && ex.name && item.studentName.toLowerCase() === ex.name.toLowerCase());
+                              });
+                              const tel = telKey ? proctorTelemetry[telKey] : null;
+                              const hasLiveAlert = tel && tel.alert && (tel.alert.includes('⚠️') || tel.alert.includes('🚨'));
+
+                              return tel ? (
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center w-fit gap-1 ${
+                                  hasLiveAlert 
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' 
+                                    : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                }`}>
+                                  {hasLiveAlert ? (
+                                    <>
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                      <span>Live: {tel.alert.replace('🚨', '').replace('⚠️', '').trim()}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                      <span>Live: Focused</span>
+                                    </>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              );
+                            })()}
                           </td>
                           <td className="py-4 px-4 font-mono text-gray-300">{timeSpentStr}</td>
                           <td className="py-4 px-4 font-mono font-bold text-indigo-300">{scoreStr}</td>
@@ -2775,113 +2806,173 @@ function PollInsightsContent({ params }: PageProps) {
         )}
 
         {/* Proctoring Cheating logs tab */}
-        {gradesSubTab === 'proctor-logs' && (
-          <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
-            <div className="flex justify-between items-center border-b border-white/5 pb-4">
-              <div>
-                <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-                  <span>Proctor Integrity Monitoring Console</span>
-                </h3>
-                <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
-                  Real-time anti-cheat logs detecting focus blurs, page switches, and devtools departures.
-                </p>
+        {gradesSubTab === 'proctor-logs' && (() => {
+          const activeTelemetryKeys = Object.keys(proctorTelemetry);
+          const activeViolations: any[] = [];
+          
+          activeTelemetryKeys.forEach((key) => {
+            const tel = proctorTelemetry[key];
+            const hasAlert = tel.alert && (tel.alert.includes('⚠️') || tel.alert.includes('🚨'));
+            if (hasAlert || (tel.logs && tel.logs.length > 0)) {
+              activeViolations.push({
+                id: `live-${key}`,
+                isLive: true,
+                userIdentifier: tel.identifier || 'Guest Student',
+                email: tel.studentName || 'Guest Email',
+                violationCount: tel.logs ? tel.logs.length : 1,
+                alertText: tel.alert,
+                logs: tel.logs || [],
+                lastActive: tel.lastActive,
+                device: 'Desktop (Live)',
+                ipAddress: 'Active Workspace',
+                isp: 'WebSocket'
+              });
+            }
+          });
+
+          const submittedViolations = liveVotesList.filter(v => v.flaggedSuspicious).map((v) => {
+            let violations: any[] = [];
+            try {
+              const answersObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+              violations = answersObj?.__proctorLogs || [];
+            } catch (e) {}
+
+            return {
+              id: v.id,
+              isLive: false,
+              userIdentifier: v.userIdentifier || 'Anonymous Student',
+              email: v.email || 'Guest Email',
+              violationCount: violations.length,
+              alertText: '⚠️ Submitted with Infractions',
+              logs: violations,
+              lastActive: new Date(v.createdAt).toLocaleTimeString(),
+              device: v.device || 'Desktop',
+              ipAddress: v.ipAddress || 'Recorded IP',
+              isp: v.isp || 'N/A',
+              rawVote: v
+            };
+          });
+
+          const allViolations = [...activeViolations, ...submittedViolations];
+
+          return (
+            <div className="glass-card rounded-2xl border border-white/5 bg-[#080d1a] p-6 space-y-6">
+              <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                <div>
+                  <h3 className="font-outfit text-base font-bold text-white flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
+                    <span>Proctor Integrity Monitoring Console</span>
+                  </h3>
+                  <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">
+                    Real-time anti-cheat logs detecting focus blurs, page switches, and devtools departures.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Active Monitoring</span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Active Monitoring</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-white/5 text-gray-500 font-bold uppercase tracking-wider">
-                    <th className="pb-3 pr-4">Examinee Details</th>
-                    <th className="pb-3 px-4 text-center">Focus Violations</th>
-                    <th className="pb-3 px-4">Integrity State</th>
-                    <th className="pb-3 px-4">IP Subnet & ISP</th>
-                    <th className="pb-3 px-4">Browser & Device</th>
-                    <th className="pb-3 pl-4 text-right">Review Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {liveVotesList.filter(v => v.flaggedSuspicious).length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-500 font-medium text-xs italic">
-                        ✅ No proctoring violations or suspicious activities flagged for this examination.
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 text-gray-500 font-bold uppercase tracking-wider">
+                      <th className="pb-3 pr-4">Examinee Details</th>
+                      <th className="pb-3 px-4 text-center">Focus Violations</th>
+                      <th className="pb-3 px-4">Integrity State / Active Telemetry</th>
+                      <th className="pb-3 px-4">IP Subnet & ISP</th>
+                      <th className="pb-3 px-4">Browser & Device</th>
+                      <th className="pb-3 pl-4 text-right">Review Action</th>
                     </tr>
-                  ) : (
-                    liveVotesList.filter(v => v.flaggedSuspicious).map((v) => {
-                      const answersObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
-                      const violations = answersObj?.__proctorLogs || [];
-                      const violationCount = violations.length;
-
-                      return (
-                        <tr key={v.id} className="hover:bg-white/2 transition-colors">
-                          <td className="py-4 pr-4">
-                            <div className="flex flex-col space-y-0.5">
-                              <span className="font-bold text-white text-sm">{v.userIdentifier || 'Anonymous Student'}</span>
-                              <span className="text-gray-500 text-[10px] font-mono">{v.email || 'Guest Email'}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <span className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold border ${
-                              violationCount > 0 
-                                ? 'bg-red-500/10 text-red-400 border-red-500/25 animate-pulse' 
-                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                            }`}>
-                              {violationCount} Violations Flagged
-                            </span>
-                          </td>
-                          <td className="py-4 px-4">
-                            {violationCount > 0 ? (
-                              <div className="space-y-1 max-w-[220px] max-h-20 overflow-y-auto no-scrollbar font-mono text-[9px] text-red-300">
-                                {violations.map((log: string, lIdx: number) => (
-                                  <span key={lIdx} className="block truncate" title={log}>{log}</span>
-                                ))}
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {allViolations.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-gray-500 font-medium text-xs italic">
+                          ✅ No proctoring violations or suspicious activities flagged for this examination.
+                        </td>
+                      </tr>
+                    ) : (
+                      allViolations.map((v) => {
+                        return (
+                          <tr key={v.id} className="hover:bg-white/2 transition-colors">
+                            <td className="py-4 pr-4">
+                              <div className="flex flex-col space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-white text-sm">{v.userIdentifier}</span>
+                                  {v.isLive && (
+                                    <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase animate-pulse">Live</span>
+                                  )}
+                                </div>
+                                <span className="text-gray-500 text-[10px] font-mono">{v.email}</span>
                               </div>
-                            ) : (
-                              <span className="text-emerald-400 text-[10px] font-semibold">🟢 Fully Focused / Clean Attempt</span>
-                            )}
-                          </td>
-                          <td className="py-4 px-4 font-mono text-gray-300">{v.ipAddress} <span className="text-gray-500">({v.isp || 'N/A'})</span></td>
-                          <td className="py-4 px-4 text-gray-400 font-medium">{v.device || 'Desktop'}</td>
-                          <td className="py-4 pl-4 text-right">
-                            <button
-                              onClick={() => {
-                                setGradeInspectorVote(v);
-                                try {
-                                  const parsed = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
-                                  const breakdown = parsed?.__examBreakdown || {};
-                                  const marksInit: Record<string, number> = {};
-                                  const feedbackInit: Record<string, string> = {};
-                                  Object.keys(breakdown).forEach(qId => {
-                                    marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
-                                    feedbackInit[qId] = breakdown[qId].feedback || '';
-                                  });
-                                  setManualMarks(marksInit);
-                                  setManualFeedback(feedbackInit);
-                                } catch (e) {
-                                  console.error(e);
-                                }
-                              }}
-                              className="px-3 py-1.5 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-600 hover:text-white transition-all font-bold text-[11px]"
-                            >
-                              Inspect Failure
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold border ${
+                                v.violationCount > 0 
+                                  ? 'bg-red-500/10 text-red-400 border-red-500/25 animate-pulse' 
+                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                              }`}>
+                                {v.violationCount} Violations {v.isLive ? 'Detected' : 'Flagged'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              {v.violationCount > 0 ? (
+                                <div className="space-y-1 max-w-[220px] max-h-20 overflow-y-auto no-scrollbar font-mono text-[9px] text-red-300">
+                                  {v.logs.map((log: string, lIdx: number) => (
+                                    <span key={lIdx} className="block truncate" title={log}>{log}</span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-emerald-400 text-[10px] font-semibold">🟢 Fully Focused / Clean Attempt</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 font-mono text-gray-300">{v.ipAddress} <span className="text-gray-500">({v.isp})</span></td>
+                            <td className="py-4 px-4 text-gray-400 font-medium">{v.device}</td>
+                            <td className="py-4 pl-4 text-right">
+                              {v.isLive ? (
+                                <button
+                                  onClick={() => setActiveTab('proctor')}
+                                  className="px-3 py-1.5 rounded-xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all font-bold text-[11px] shadow-sm animate-pulse-slow"
+                                >
+                                  Monitor Stream
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setGradeInspectorVote(v.rawVote);
+                                    try {
+                                      const parsed = typeof v.rawVote.answers === 'string' ? JSON.parse(v.rawVote.answers) : v.rawVote.answers;
+                                      const breakdown = parsed?.__examBreakdown || {};
+                                      const marksInit: Record<string, number> = {};
+                                      const feedbackInit: Record<string, string> = {};
+                                      Object.keys(breakdown).forEach(qId => {
+                                        marksInit[qId] = breakdown[qId].marksAwarded || 0.0;
+                                        feedbackInit[qId] = breakdown[qId].feedback || '';
+                                      });
+                                      setManualMarks(marksInit);
+                                      setManualFeedback(feedbackInit);
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-600 hover:text-white transition-all font-bold text-[11px]"
+                                >
+                                  Inspect Failure
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* AI GRADING INSPECTOR MODAL */}
         {gradeInspectorVote && (

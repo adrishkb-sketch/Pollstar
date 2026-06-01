@@ -6,26 +6,92 @@ export interface PlanFeatures {
 
 /**
  * Checks if a user has access to a specific feature key.
- *
- * NOTE: All features are currently unlocked for all plan tiers.
- * Plans differentiate only on item quotas (maxPolls/Surveys/Exams) and
- * participant quotas (maxParticipants*). Feature-key gating infrastructure
- * is preserved here so it can be re-enabled in the future without a large refactor.
  */
 export async function checkFeatureAccess(
-  _userId: string,
-  _featureKey: string,
+  userId: string,
+  featureKey: string,
 ): Promise<{ allowed: boolean; reason?: string }> {
-  return { allowed: true };
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { plan: true },
+    });
+
+    if (!user) {
+      return { allowed: false, reason: 'User not found.' };
+    }
+
+    if (user.role === 'ADMIN') {
+      return { allowed: true };
+    }
+
+    const plan = user.plan;
+    const isFree = !plan || plan.isFree || plan.name.toLowerCase() === 'free';
+
+    // If paid subscription is active, unlock ALL possible premium features!
+    if (!isFree) {
+      return { allowed: true };
+    }
+
+    // Free plan restrictions mapping
+    const freePlanAllowedKeys = new Set([
+      'openPublicPolls',
+      'realTimeLiveResults',
+      'singleChoiceMultiSelect',
+      'multipleQuestionTypes',
+      'anonymousResponses',
+      'mcqSingleCorrect',
+      'trueOrFalse',
+      'premiumDarkMode',
+    ]);
+
+    if (freePlanAllowedKeys.has(featureKey)) {
+      return { allowed: true };
+    }
+
+    return { 
+      allowed: false, 
+      reason: `The premium feature "${featureKey}" is locked on the Free tier. Upgrade your subscription to gain access to all premium features instantly.` 
+    };
+  } catch (e) {
+    console.error(e);
+    return { allowed: true }; // Safe fallback
+  }
 }
 
 /**
  * Checks if a creator can use a specific poll subtype.
- * Currently always returns true — all subtypes available on all plans.
  */
 export async function checkPollSubtypeAccess(
-  _userId: string,
-  _subtype: 'mcq' | 'ranked' | 'multi' | 'knockout',
+  userId: string,
+  subtype: 'mcq' | 'ranked' | 'multi' | 'knockout',
 ): Promise<boolean> {
-  return true;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { plan: true },
+    });
+
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+
+    const plan = user.plan;
+    const isFree = !plan || plan.isFree || plan.name.toLowerCase() === 'free';
+
+    // If paid subscription is active, unlock ALL subtypes!
+    if (!isFree) {
+      return true;
+    }
+
+    // Free plan allows MCQ and True/False (represented by mcq/multi)
+    if (subtype === 'mcq' || subtype === 'multi') {
+      return true;
+    }
+
+    return false; // Ranked choice and Knockout tournaments are locked on free
+  } catch (e) {
+    console.error(e);
+    return true; // Safe fallback
+  }
 }
+

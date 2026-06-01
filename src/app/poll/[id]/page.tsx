@@ -684,6 +684,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const handleStartExamClick = async () => {
     if (!poll?.settings?.enableProctorCamera) {
       setShowIntro(false);
+      localStorage.setItem(`exam_in_progress_${pollId}`, 'true');
       return;
     }
 
@@ -744,6 +745,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
       // 6. Enter exam
       setShowIntro(false);
+      localStorage.setItem(`exam_in_progress_${pollId}`, 'true');
       
       const startTime = new Date().toLocaleTimeString();
       const initialLog = fallbackActive 
@@ -1005,6 +1007,113 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Keep answers and proctorLogs synchronized to localStorage so we can auto-submit them if the user refreshes/reloads
+  useEffect(() => {
+    if (pollId && Object.keys(selectedAnswers).length > 0) {
+      localStorage.setItem(`selected_answers_${pollId}`, JSON.stringify(selectedAnswers));
+    }
+  }, [selectedAnswers, pollId]);
+
+  useEffect(() => {
+    if (pollId && proctorLogs.length > 0) {
+      localStorage.setItem(`proctor_logs_${pollId}`, JSON.stringify(proctorLogs));
+    }
+  }, [proctorLogs, pollId]);
+
+  // Page Refresh Detection & Lockout for secure exams
+  useEffect(() => {
+    if (!poll || poll.pollType !== 'EXAM') return;
+
+    const storageKey = `exam_in_progress_${pollId}`;
+    const inProgress = localStorage.getItem(storageKey);
+
+    if (inProgress === 'true') {
+      // The user refreshed the page while the exam was in progress!
+      setVotedSuccessfully(true);
+
+      const autoSubmitDueToRefresh = async () => {
+        try {
+          const storedLogsStr = localStorage.getItem(`proctor_logs_${pollId}`) || '[]';
+          let storedLogs: string[] = [];
+          try {
+            storedLogs = JSON.parse(storedLogsStr);
+          } catch (_) {}
+
+          const time = new Date().toLocaleTimeString();
+          const refreshLog = `🚨 Page refresh / reload detected (attempt to restart blocked) at ${time}`;
+          const updatedLogs = [...storedLogs, refreshLog];
+
+          localStorage.setItem(`proctor_logs_${pollId}`, JSON.stringify(updatedLogs));
+
+          let detectedDevice = 'Desktop';
+          const rawUA = navigator?.userAgent || '';
+          const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
+          const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
+          const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
+          const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
+          const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
+          const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
+
+          if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
+            detectedDevice = 'Mobile';
+          } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
+            detectedDevice = 'Tablet';
+          } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
+            detectedDevice = 'Tablet';
+          }
+
+          const savedAnswersStr = localStorage.getItem(`selected_answers_${pollId}`) || '{}';
+          let savedAnswers: any = {};
+          try {
+            savedAnswers = JSON.parse(savedAnswersStr);
+          } catch (_) {}
+
+          // Also save in DB
+          const res = await fetch(`/api/polls/${pollId}/vote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              answers: { ...savedAnswers, __proctorLogs: updatedLogs },
+              voterToken: poll.isOpenVoting ? undefined : voterToken,
+              email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
+              latitude: null,
+              longitude: null,
+              device: detectedDevice,
+              isAutoSubmitted: true,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setFlaggedSuspicious(data.flaggedSuspicious || false);
+          }
+
+          // Emit alert socket event so teacher gets notified immediately
+          const socket = io();
+          socket.emit('join-poll', pollId);
+          socket.emit('student-telemetry', {
+            pollId,
+            studentId: activeVoterIdentifier || examineeSessionId || 'anonymous',
+            studentName: confirmer1 || activeVoterIdentifier || (examineeSessionId ? `Examinee #${examineeSessionId.slice(-4)}` : 'Anonymous Student'),
+            identifier: voterIdentifier || (examineeSessionId ? `Guest #${examineeSessionId.slice(-4)}` : 'Guest'),
+            status: 'OFFLINE',
+            alert: '🚨 Page refreshed (Attempt to restart blocked)',
+            webcamFrame: '',
+            screenFrame: '',
+            logs: updatedLogs,
+            lastActive: new Date().toLocaleTimeString()
+          });
+          setTimeout(() => socket.disconnect(), 1000);
+
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      autoSubmitDueToRefresh();
+    }
+  }, [poll, pollId, voterToken, openEmail, activeVoterIdentifier, confirmer1, voterIdentifier, examineeSessionId]);
+
   // 1. Session Active detection & persistent start timestamp binding
   useEffect(() => {
     const isVotingActive = (!loading && poll) && (
@@ -1128,6 +1237,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         setFlaggedSuspicious(data.flaggedSuspicious || false);
         localStorage.removeItem(`poll_start_time_${pollId}`);
         localStorage.removeItem(`pollstar_resume_${pollId}`);
+        localStorage.removeItem(`exam_in_progress_${pollId}`);
+        localStorage.removeItem(`selected_answers_${pollId}`);
+        localStorage.removeItem(`proctor_logs_${pollId}`);
         
         // Stop active media streams on submission
         if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
@@ -1253,13 +1365,19 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     webVideo.autoplay = true;
     webVideo.playsInline = true;
     webVideo.muted = true;
-    if (cameraStream) webVideo.srcObject = cameraStream;
+    if (cameraStream) {
+      webVideo.srcObject = cameraStream;
+      webVideo.play().catch(e => console.warn("Failed webVideo play:", e));
+    }
 
     const scrVideo = document.createElement('video');
     scrVideo.autoplay = true;
     scrVideo.playsInline = true;
     scrVideo.muted = true;
-    if (screenStream) scrVideo.srcObject = screenStream;
+    if (screenStream) {
+      scrVideo.srcObject = screenStream;
+      scrVideo.play().catch(e => console.warn("Failed scrVideo play:", e));
+    }
 
     const webCanvas = document.createElement('canvas');
     webCanvas.width = 160;
@@ -2190,6 +2308,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       setFlaggedSuspicious(data.flaggedSuspicious || false);
       localStorage.removeItem(`poll_start_time_${pollId}`);
       localStorage.removeItem(`pollstar_resume_${pollId}`);
+      localStorage.removeItem(`exam_in_progress_${pollId}`);
+      localStorage.removeItem(`selected_answers_${pollId}`);
+      localStorage.removeItem(`proctor_logs_${pollId}`);
 
       // Stop active proctor feeds on submit
       if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());

@@ -291,6 +291,10 @@ export default function PlansPage() {
           </div>
         </div>
 
+        <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 text-xs text-indigo-300 max-w-3xl leading-relaxed shadow-lg shadow-indigo-500/5 animate-fade-in-up">
+          💡 <strong>Paid Plan Guarantee:</strong> Subscribing to <strong>any</strong> paid subscription plan instantly unlocks <strong>100% of all premium features</strong> (including live webcam proctoring, conditional branching logic, custom branding, and scientific calculator). The free plan has some feature restrictions, but any plan upgrade removes them entirely!
+        </div>
+
         {error && (
           <div className="glass-card border border-red-500/20 bg-red-500/5 rounded-2xl p-4 text-center text-red-400 text-sm">
             {error}
