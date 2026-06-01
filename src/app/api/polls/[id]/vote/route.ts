@@ -23,7 +23,7 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
   }
 
   // Define standard English stop words
-  const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", "ourselves", "yourselves", "themselves"]);
+  const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", "ourselves", "yourselves", "themselves", "which", "who", "whom", "whose", "this", "that", "these", "those", "what", "using", "use", "used"]);
 
   // Extract content-bearing words (tokens)
   const tokensUser = cleanUser.split(/\s+/).filter(w => w.length > 0);
@@ -48,7 +48,15 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
     return { score: 1.0, feedback: "Correct! Your answer perfectly incorporates the model response." };
   }
 
-  // 2. Keyword overlap score
+  // Helper function to calculate soft matching for a word against a list of content words
+  const checkSoftMatch = (word: string, list: string[]): boolean => {
+    return list.some(uWord => 
+      uWord === word || uWord.startsWith(word) || word.startsWith(uWord) || 
+      (uWord.length > 4 && word.length > 4 && (uWord.includes(word.substring(0, 4)) || word.includes(uWord.substring(0, 4))))
+    );
+  };
+
+  // 2. Base Unigram score (vocabulary coverage)
   const setUser = new Set(contentUser);
   let matchedKeywordsCount = 0;
 
@@ -56,32 +64,82 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
     if (setUser.has(word)) {
       matchedKeywordsCount++;
     } else {
-      // Support soft spelling/suffix matches (e.g. "poll" matches "polls" or "voting" matches "vote")
-      const softMatch = contentUser.some(uWord => 
-        uWord.startsWith(word) || word.startsWith(uWord) || 
-        (uWord.length > 4 && word.length > 4 && (uWord.includes(word.substring(0, 4)) || word.includes(uWord.substring(0, 4))))
-      );
-      if (softMatch) {
+      if (checkSoftMatch(word, contentUser)) {
         matchedKeywordsCount += 0.8;
       }
     }
   });
 
-  const keywordCoverage = matchedKeywordsCount / contentCorrect.length;
-  const finalScore = Math.min(1.0, Math.max(0.0, keywordCoverage));
+  const unigramScore = Math.min(1.0, Math.max(0.0, matchedKeywordsCount / contentCorrect.length));
+
+  // 3. Clause-based semantic association score
+  // Split both into clauses using conjunctions and punctuation
+  const clauseSeparators = /\b(?:and|but|while|though|although|whereas|if|unless|because|since|so|yet|or|nor|as well as)\b|[,;\.\-\(\)]/gi;
+  
+  const correctClauses = correctAns.split(clauseSeparators).map(c => c.trim().toLowerCase().replace(/[^\w\s]/g, '')).filter(c => c.length > 0);
+  const userClauses = userAns.split(clauseSeparators).map(c => c.trim().toLowerCase().replace(/[^\w\s]/g, '')).filter(c => c.length > 0);
+
+  let clauseScore = unigramScore; // Fallback if no valid clauses are parsed
+
+  if (correctClauses.length > 0 && userClauses.length > 0) {
+    let totalClauseScoreSum = 0;
+    
+    correctClauses.forEach(cClause => {
+      const cTokens = cClause.split(/\s+/).filter(w => !stopWords.has(w) && w.length > 1);
+      if (cTokens.length === 0) {
+        totalClauseScoreSum += 1.0; // Empty/stopword clause gets default match
+        return;
+      }
+
+      // Find the best matching user clause
+      let maxMatchForThisClause = 0;
+      userClauses.forEach(uClause => {
+        const uTokens = uClause.split(/\s+/).filter(w => !stopWords.has(w) && w.length > 1);
+        if (uTokens.length === 0) return;
+
+        let matchCount = 0;
+        cTokens.forEach(cWord => {
+          if (uTokens.includes(cWord)) {
+            matchCount++;
+          } else if (checkSoftMatch(cWord, uTokens)) {
+            matchCount += 0.8;
+          }
+        });
+        
+        const score = matchCount / cTokens.length;
+        if (score > maxMatchForThisClause) {
+          maxMatchForThisClause = score;
+        }
+      });
+
+      totalClauseScoreSum += maxMatchForThisClause;
+    });
+
+    clauseScore = Math.min(1.0, totalClauseScoreSum / correctClauses.length);
+  }
+
+  // 4. Combined Similarity & Swapping Penalty
+  let finalScore = (unigramScore * 0.4) + (clauseScore * 0.6);
+
+  // If vocabulary presence is high but the association structure is severely broken (indicating a word-swap or scrambled meaning)
+  if (unigramScore - clauseScore > 0.25) {
+    finalScore = finalScore * 0.5; // Apply a 50% penalty for swapped context
+  }
+
+  finalScore = Math.min(1.0, Math.max(0.0, finalScore));
 
   // Determine key missing terms for constructive feedback
-  const missingKeywords = contentCorrect.filter(word => !setUser.has(word)).slice(0, 3);
+  const missingKeywords = contentCorrect.filter(word => !setUser.has(word) && !checkSoftMatch(word, contentUser)).slice(0, 3);
 
   let feedback = "";
   if (finalScore >= 0.85) {
     feedback = "Excellent response! You demonstrated complete understanding and matched almost all model keywords.";
   } else if (finalScore >= 0.6) {
-    feedback = `Good answer. You captured the key concepts, but missed some depth. ${
+    feedback = `Good answer. You captured the key concepts, but missed some depth or syntactic association. ${
       missingKeywords.length > 0 ? `Consider incorporating terms like: "${missingKeywords.join('", "')}".` : ""
     }`;
   } else if (finalScore >= 0.3) {
-    feedback = `Partial credit. You mentioned some related terms but missed the core concept. ${
+    feedback = `Partial credit. You mentioned some related terms but missed the core concept or mixed up the word associations. ${
       missingKeywords.length > 0 ? `To improve, you should explain details involving: "${missingKeywords.join('", "')}".` : ""
     }`;
   } else {

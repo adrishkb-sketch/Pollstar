@@ -1741,6 +1741,32 @@ function PollInsightsContent({ params }: PageProps) {
     const proctorLink = typeof window !== 'undefined' ? `${window.location.origin}/dashboard/polls/${poll.id}?tab=proctor` : '';
     const activeExaminees = poll.allowedVoters || [];
 
+    // Build unified examinees list to show both pre-registered and active guest/open examinees
+    const activeTelemetryKeys = Object.keys(proctorTelemetry);
+    const unifiedExaminees = [...activeExaminees.map((v: any) => ({
+      id: v.id,
+      identifier: v.identifier,
+      confirmer1: v.confirmer1,
+      isRegistered: true
+    }))];
+
+    activeTelemetryKeys.forEach((key) => {
+      const tel = proctorTelemetry[key];
+      const alreadyIncluded = unifiedExaminees.some(v => 
+        v.id === key || 
+        (v.identifier && tel.identifier && v.identifier.toLowerCase() === tel.identifier.toLowerCase()) ||
+        (v.confirmer1 && tel.studentName && v.confirmer1.toLowerCase() === tel.studentName.toLowerCase())
+      );
+      if (!alreadyIncluded) {
+        unifiedExaminees.push({
+          id: key,
+          identifier: tel.identifier || 'Guest',
+          confirmer1: tel.studentName || 'Anonymous Student',
+          isRegistered: false
+        });
+      }
+    });
+
     const handleCopyProctorLink = () => {
       navigator.clipboard.writeText(proctorLink);
       alert('Supervisor Proctoring Link copied to clipboard!');
@@ -1784,7 +1810,9 @@ function PollInsightsContent({ params }: PageProps) {
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="glass-card rounded-xl p-4 border border-white/5 bg-slate-950/40 text-center space-y-1">
             <span className="text-[9px] uppercase font-bold text-gray-500 block">Total Roster</span>
-            <span className="text-lg font-black text-white block font-mono">{activeExaminees.length}</span>
+            <span className="text-lg font-black text-white block font-mono">
+              {poll.isOpenVoting ? 'Open Exam' : activeExaminees.length}
+            </span>
           </div>
           <div className="glass-card rounded-xl p-4 border border-white/5 bg-slate-950/40 text-center space-y-1">
             <span className="text-[9px] uppercase font-bold text-gray-500 block">🟢 Active Feeds</span>
@@ -1808,17 +1836,17 @@ function PollInsightsContent({ params }: PageProps) {
 
         {/* Live Webcam Stream Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {activeExaminees.length === 0 ? (
-            <div className="col-span-full py-16 text-center text-gray-500 glass-card rounded-2xl border border-white/5">
-              Roster is empty. Configure Step 4 closed roster first to track proctor streams.
+          {unifiedExaminees.length === 0 ? (
+            <div className="col-span-full py-16 text-center text-gray-500 glass-card rounded-2xl border border-white/5 font-outfit">
+              No active examinees detected. Share the student exam link to monitor live streams here in real-time.
             </div>
           ) : (
-            activeExaminees.map((v: any) => {
+            unifiedExaminees.map((v: any) => {
               const telKey = Object.keys(proctorTelemetry).find(key => {
                 const item = proctorTelemetry[key];
                 return key === v.id || 
-                       (item.identifier && item.identifier.toLowerCase() === v.identifier.toLowerCase()) || 
-                       (item.studentName && item.studentName.toLowerCase() === v.confirmer1.toLowerCase());
+                       (item.identifier && v.identifier && item.identifier.toLowerCase() === v.identifier.toLowerCase()) || 
+                       (item.studentName && v.confirmer1 && item.studentName.toLowerCase() === v.confirmer1.toLowerCase());
               });
               const tel = telKey ? proctorTelemetry[telKey] : null;
               const isOffline = !tel || tel.status === 'OFFLINE';
@@ -2443,7 +2471,9 @@ function PollInsightsContent({ params }: PageProps) {
                   {filteredExaminees.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-gray-500">
-                        No candidates match your active search and filter constraints.
+                        {poll.isOpenVoting 
+                          ? "This is an Open Exam. Student logs and roster records will appear here as soon as candidates submit their attempts." 
+                          : "No candidates match your active search and filter constraints."}
                       </td>
                     </tr>
                   ) : (

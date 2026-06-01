@@ -642,6 +642,20 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const isMobilePlatform = typeof navigator !== 'undefined' ? (/iphone|ipod/i.test(navigator.platform || '') || ((navigator as any).userAgentData?.mobile === true)) : false;
   const isTabletPlatform = typeof navigator !== 'undefined' ? (/ipad/i.test(navigator.platform || '')) : false;
 
+  const [examineeSessionId, setExamineeSessionId] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const key = `exam_session_id_${pollId}`;
+      let id = sessionStorage.getItem(key);
+      if (!id) {
+        id = 'exam_' + Math.random().toString(36).substring(2, 11);
+        sessionStorage.setItem(key, id);
+      }
+      setExamineeSessionId(id);
+    }
+  }, [pollId]);
+
   const addProctorLog = (msg: string) => {
     setProctorLogs(prev => {
       const exists = prev.includes(msg);
@@ -1368,9 +1382,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         // Broadcast feeds live temporarily (NOT stored in website database permanently)
         socketRef.current.emit('student-telemetry', {
           pollId,
-          studentId: activeVoterIdentifier || 'anonymous',
-          studentName: confirmer1 || activeVoterIdentifier || 'Anonymous Student',
-          identifier: voterIdentifier || 'Guest',
+          studentId: activeVoterIdentifier || examineeSessionId || 'anonymous',
+          studentName: confirmer1 || activeVoterIdentifier || (examineeSessionId ? `Examinee #${examineeSessionId.slice(-4)}` : 'Anonymous Student'),
+          identifier: voterIdentifier || (examineeSessionId ? `Guest #${examineeSessionId.slice(-4)}` : 'Guest'),
           status: (isFullscreenLocked && (isScreenShared || isScreenShareFallback) && !document.hidden) ? 'ACTIVE' : 'OFFLINE',
           alert: !isFullscreenLocked 
             ? '🚨 Exited Fullscreen Mode' 
@@ -1395,7 +1409,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       webVideo.srcObject = null;
       scrVideo.srcObject = null;
     };
-  }, [showIntro, timerActive, cameraStream, screenStream, isFullscreenLocked, isScreenShared, isScreenShareFallback, proctorLogs, activeVoterIdentifier, confirmer1, voterIdentifier, selectedAnswers, timeLeft, poll]);
+  }, [showIntro, timerActive, cameraStream, screenStream, isFullscreenLocked, isScreenShared, isScreenShareFallback, proctorLogs, activeVoterIdentifier, confirmer1, voterIdentifier, selectedAnswers, timeLeft, poll, examineeSessionId]);
 
   // Clean up media streams and socket on component unmount
   useEffect(() => {
@@ -1408,7 +1422,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
   // Continuous lock alert warning beep effect
   useEffect(() => {
-    const isLocked = poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && verifiedVoter && (!isFullscreenLocked || (!isScreenShared && !isScreenShareFallback));
+    const isLocked = poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && (poll.isOpenVoting || verifiedVoter) && (!isFullscreenLocked || (!isScreenShared && !isScreenShareFallback));
     if (!isLocked) return;
 
     const playBeep = () => {
@@ -2687,7 +2701,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         </div>
       )}
 
-      {poll?.settings?.enableProctorCamera && verifiedVoter && !votedSuccessfully && (
+      {poll?.settings?.enableProctorCamera && (poll.isOpenVoting || verifiedVoter) && !votedSuccessfully && (
         <div className="fixed bottom-24 right-6 z-40 w-52 rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl p-2.5 select-none overflow-hidden animate-fade-in-up backdrop-blur-md space-y-2">
           <div className="flex items-center justify-between text-[10px] text-gray-400 font-outfit px-1">
             <span className="flex items-center gap-1.5">
@@ -4273,7 +4287,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       )}
 
       {/* Strict Proctoring Lockdown Overlay */}
-      {poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && verifiedVoter && (!isFullscreenLocked || (!isScreenShared && !isScreenShareFallback)) && (
+      {poll?.settings?.enableProctorCamera && !showIntro && !votedSuccessfully && (poll.isOpenVoting || verifiedVoter) && (!isFullscreenLocked || (!isScreenShared && !isScreenShareFallback)) && (
         <div className="fixed inset-0 z-50 bg-[#030712]/98 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
           <div className="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.15)] animate-pulse">
             <ShieldAlert className="w-10 h-10 animate-bounce" />
