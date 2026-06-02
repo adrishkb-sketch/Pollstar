@@ -503,6 +503,39 @@ export default function Dashboard() {
     }
   };
 
+  const handleUpdateCollaboratorRole = async (targetUserId: string, role: string) => {
+    if (!settingsPoll) return;
+    if (role === 'OWNER') {
+      if (!confirm('Are you absolutely sure you want to transfer ownership of this poll? This action cannot be undone, and you will be demoted to an Editor.')) {
+        return;
+      }
+    }
+    try {
+      const res = await fetch(`/api/polls/${settingsPoll.id}/collaborators`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUserId, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update role');
+      }
+      alert(role === 'OWNER' ? 'Ownership successfully transferred! Redirecting...' : 'Collaborator role updated successfully!');
+      if (role === 'OWNER') {
+        window.location.reload();
+      } else {
+        // Refresh the list of collaborators
+        const freshRes = await fetch(`/api/polls/${settingsPoll.id}/collaborators`);
+        const freshData = await freshRes.json();
+        if (freshRes.ok) {
+          setCollaborators(freshData.collaborators || []);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (error === 'Platform is currently undergoing scheduled maintenance.') {
     return (
       <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
@@ -1611,7 +1644,7 @@ export default function Dashboard() {
                   ) : (
                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                       {collaborators.map((c) => (
-                        <div key={c.user.id} className="flex items-center justify-between p-3 rounded-xl bg-white/3 border border-white/5 hover:border-white/8 transition-all">
+                        <div key={c.user.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-white/3 border border-white/5 hover:border-white/8 transition-all gap-3">
                           <div className="flex flex-col gap-0.5 truncate">
                             <span className="text-xs font-bold text-white truncate">{c.user.email}</span>
                             <span className="flex items-center gap-1">
@@ -1621,19 +1654,40 @@ export default function Dashboard() {
                               </span>
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCollaborator(c.user.id)}
-                            disabled={removingCollaboratorId === c.user.id}
-                            className="p-2 rounded-lg border border-red-500/10 hover:border-red-500/20 bg-red-500/5 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-all disabled:opacity-50"
-                            title="Remove collaborator"
-                          >
-                            {removingCollaboratorId === c.user.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            <select
+                              value={c.role || 'CO_EDITOR'}
+                              onChange={(e) => handleUpdateCollaboratorRole(c.user.id, e.target.value)}
+                              className="bg-[#030712] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:outline-none focus:border-purple-500 font-semibold"
+                            >
+                              <option value="CO_EDITOR">Editor</option>
+                              <option value="VIEWER">Viewer</option>
+                            </select>
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCollaboratorRole(c.user.id, 'OWNER')}
+                              className="px-2 py-1.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 text-[9px] font-bold uppercase transition-all"
+                              title="Transfer Ownership"
+                            >
+                              🔑 Transfer
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCollaborator(c.user.id)}
+                              disabled={removingCollaboratorId === c.user.id}
+                              className="p-2 rounded-lg border border-red-500/10 hover:border-red-500/20 bg-red-500/5 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-all disabled:opacity-50"
+                              title="Remove collaborator"
+                            >
+                              {removingCollaboratorId === c.user.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

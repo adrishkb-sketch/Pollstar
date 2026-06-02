@@ -284,11 +284,11 @@ export async function POST(
     const vercelDevice = req.headers.get('x-vercel-device-type') || '';
     const secChUaMobile = req.headers.get('sec-ch-ua-mobile') || '';
     const rawUA = ua.ua || req.headers.get('user-agent') || '';
-    let resolvedDevice = 'Desktop';
-    if (device === 'Tablet' || ua.device.type === 'tablet' || vercelDevice === 'tablet' || /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) )) {
-       resolvedDevice = 'Tablet';
-    } else if (device === 'Mobile' || ua.device.type === 'mobile' || vercelDevice === 'mobile' || secChUaMobile === '?1' || /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) )) {
-       resolvedDevice = 'Mobile';
+    let resolvedDevice = device || 'Desktop';
+    if (resolvedDevice.toLowerCase().includes('tablet') || ua.device.type === 'tablet' || vercelDevice === 'tablet' || /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) )) {
+       if (!resolvedDevice.toLowerCase().includes('tablet')) resolvedDevice = 'Tablet';
+    } else if (resolvedDevice.toLowerCase().includes('mobile') || ua.device.type === 'mobile' || vercelDevice === 'mobile' || secChUaMobile === '?1' || /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) )) {
+       if (!resolvedDevice.toLowerCase().includes('mobile')) resolvedDevice = 'Mobile';
     }
 
     // 2. High-Fidelity Geolocation using Client high-accuracy GPS, Vercel edge headers, and backup Geo-IP

@@ -499,6 +499,135 @@ function ScientificCalculator({ onClose }: { onClose: () => void }) {
   );
 }
 
+async function getDetailedDeviceInformation(): Promise<{ type: 'Mobile' | 'Tablet' | 'Desktop'; details: string }> {
+  if (typeof window === 'undefined') {
+    return { type: 'Desktop', details: 'Unknown Device' };
+  }
+
+  const rawUA = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  let detectedType: 'Mobile' | 'Tablet' | 'Desktop' = 'Desktop';
+  let details = '';
+
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const screenW = window.screen?.width || window.innerWidth || 1024;
+  const screenH = window.screen?.height || window.innerHeight || 768;
+
+  let hintsData: any = null;
+  if ((navigator as any).userAgentData?.getHighEntropyValues) {
+    try {
+      hintsData = await (navigator as any).userAgentData.getHighEntropyValues([
+        'model',
+        'platform',
+        'platformVersion',
+        'architecture'
+      ]);
+    } catch (_) {}
+  }
+
+  let os = 'Unknown OS';
+  if (/iPhone|iPad|iPod/i.test(rawUA)) {
+    os = 'iOS';
+  } else if (/Android/i.test(rawUA)) {
+    os = 'Android';
+  } else if (/Macintosh|MacIntel/i.test(rawUA) || /Mac OS X/i.test(rawUA)) {
+    os = 'macOS';
+  } else if (/Windows/i.test(rawUA)) {
+    os = 'Windows';
+  } else if (/Linux/i.test(rawUA)) {
+    os = 'Linux';
+  }
+
+  if (hintsData) {
+    const brand = (navigator as any).userAgentData?.brands?.[0]?.brand || '';
+    const platformName = hintsData.platform || '';
+    const model = hintsData.model || '';
+    const platformVersion = hintsData.platformVersion || '';
+    
+    if ((navigator as any).userAgentData.mobile) {
+      const minDimension = Math.min(screenW, screenH);
+      if (minDimension >= 600 || /tablet/i.test(model)) {
+        detectedType = 'Tablet';
+      } else {
+        detectedType = 'Mobile';
+      }
+    } else {
+      detectedType = 'Desktop';
+    }
+
+    details = `${platformName} ${platformVersion ? 'v' + platformVersion : ''} (${model || 'Generic device'}${brand ? '; Browser: ' + brand : ''})`;
+  } else {
+    const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA);
+    const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || (/Android/i.test(rawUA) && !/Mobile/i.test(rawUA));
+    
+    const isIPadOS = (platform === 'MacIntel' || /Macintosh/i.test(rawUA)) && isTouch && Math.min(screenW, screenH) >= 600;
+
+    if (isMobileUA || (isTouch && Math.max(screenW, screenH) < 600)) {
+      detectedType = 'Mobile';
+    } else if (isTabletUA || isIPadOS || (isTouch && Math.min(screenW, screenH) >= 600 && Math.max(screenW, screenH) <= 1366)) {
+      detectedType = 'Tablet';
+    } else {
+      detectedType = 'Desktop';
+    }
+
+    if (detectedType === 'Mobile') {
+      if (/iPhone/i.test(rawUA)) {
+        details = 'Apple iPhone (iOS)';
+      } else if (/iPod/i.test(rawUA)) {
+        details = 'Apple iPod Touch (iOS)';
+      } else if (/Android/i.test(rawUA)) {
+        const match = rawUA.match(/Android\s+([^\s;]+)/);
+        const modelMatch = rawUA.match(/;\s+([^;)]+)\s+Build\//);
+        details = `Android ${match ? 'v' + match[1] : ''} (${modelMatch ? modelMatch[1].trim() : 'Generic Mobile Device'})`;
+      } else {
+        details = 'Generic Mobile Device';
+      }
+    } else if (detectedType === 'Tablet') {
+      if (isIPadOS || /iPad/i.test(rawUA)) {
+        details = 'Apple iPad (iPadOS)';
+      } else if (/Android/i.test(rawUA)) {
+        const match = rawUA.match(/Android\s+([^\s;]+)/);
+        const modelMatch = rawUA.match(/;\s+([^;)]+)\s+Build\//);
+        details = `Android Tablet ${match ? 'v' + match[1] : ''} (${modelMatch ? modelMatch[1].trim() : 'Generic Tablet'})`;
+      } else {
+        details = 'Generic Tablet Device';
+      }
+    } else {
+      if (os === 'macOS') {
+        let chipInfo = '';
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as any;
+          if (gl) {
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+              const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_VENDOR_GL) || '';
+              if (/Apple/i.test(renderer)) {
+                chipInfo = 'Apple Silicon';
+              }
+            }
+          }
+        } catch (_) {}
+        details = `Apple Mac (${chipInfo ? chipInfo + '; ' : ''}macOS)`;
+      } else if (os === 'Windows') {
+        const match = rawUA.match(/Windows NT\s+([^\s;)]+)/);
+        let winVersion = match ? match[1] : '';
+        if (winVersion === '10.0') winVersion = '10/11';
+        else if (winVersion === '6.3') winVersion = '8.1';
+        else if (winVersion === '6.2') winVersion = '8';
+        else if (winVersion === '6.1') winVersion = '7';
+        details = `Windows Desktop (OS v${winVersion})`;
+      } else if (os === 'Linux') {
+        details = 'Linux Desktop';
+      } else {
+        details = 'Desktop PC';
+      }
+    }
+  }
+
+  return { type: detectedType, details };
+}
+
 export default function VoterPortal({ params }: { params: Promise<{ id: string }> }) {
   const { id: pollId } = use(params);
 
@@ -558,6 +687,14 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [poll, setPoll] = useState<any>(null);
+
+  const [deviceDetails, setDeviceDetails] = useState<string>('Desktop');
+
+  useEffect(() => {
+    getDetailedDeviceInformation().then((info) => {
+      setDeviceDetails(`${info.type} (${info.details})`);
+    });
+  }, []);
 
   // Survey Pagination & Flow States
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -689,15 +826,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const handleForceCancelExam = async () => {
     setVoteLoading(true);
     try {
-      let detectedDevice = 'Desktop';
-      if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
-        detectedDevice = 'Mobile';
-      } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
-        detectedDevice = 'Tablet';
-      } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
-        detectedDevice = 'Tablet';
-      }
-
       const time = new Date().toLocaleTimeString();
       const updatedLogs = [...proctorLogsRef.current, `🚨 EXAMINATION TERMINATED BY EXAMINER at ${time}`];
 
@@ -720,7 +848,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           email: poll?.isOpenVoting && poll?.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: null,
           longitude: null,
-          device: detectedDevice,
+          device: deviceDetails,
           isAutoSubmitted: true,
         }),
       });
@@ -1158,23 +1286,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
           localStorage.setItem(`proctor_logs_${pollId}`, JSON.stringify(updatedLogs));
 
-          let detectedDevice = 'Desktop';
-          const rawUA = navigator?.userAgent || '';
-          const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
-          const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
-          const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
-          const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
-          const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
-          const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
-
-          if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
-            detectedDevice = 'Mobile';
-          } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
-            detectedDevice = 'Tablet';
-          } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
-            detectedDevice = 'Tablet';
-          }
-
           const savedAnswersStr = localStorage.getItem(`selected_answers_${pollId}`) || '{}';
           let savedAnswers: any = {};
           try {
@@ -1191,7 +1302,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
               latitude: null,
               longitude: null,
-              device: detectedDevice,
+              device: deviceDetails,
               isAutoSubmitted: true,
             }),
           });
@@ -1316,23 +1427,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
       setVoteLoading(true);
       try {
-        let detectedDevice = 'Desktop';
-        const rawUA = navigator?.userAgent || '';
-        const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
-        const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
-        const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
-        const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
-        const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
-        const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
-
-        if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
-          detectedDevice = 'Mobile';
-        } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
-          detectedDevice = 'Tablet';
-        } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
-          detectedDevice = 'Tablet';
-        }
-
         const res = await fetch(`/api/polls/${pollId}/vote`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1350,7 +1444,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
             latitude: null,
             longitude: null,
-            device: detectedDevice,
+            device: deviceDetails,
             isAutoSubmitted: true,
           }),
         });
@@ -1427,7 +1521,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
     const handleBeforeUnload = () => {
       if (shouldLeaveSubmit) {
-        const detectedDevice = 'Desktop'; 
         const bodyStr = JSON.stringify({
           answers: { 
             ...selectedAnswersRef.current, 
@@ -1441,7 +1534,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: 22.5726, 
           longitude: 88.3639,
-          device: detectedDevice,
+          device: deviceDetails,
           isAutoSubmitted: true,
         });
         
@@ -1632,7 +1725,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           // Display active selection overview
           scrCtx.fillStyle = '#e2e8f0';
           scrCtx.font = '7px sans-serif';
-          scrCtx.fillText(`Device platform: ${isMobileUA || isMobilePlatform || (isTouch && screenW <= 480) ? 'Mobile' : (isTabletUA || isTabletPlatform ? 'Tablet' : 'Desktop')}`, 15, 116);
+          scrCtx.fillText(`Device platform: ${deviceDetails.slice(0, 36)}`, 15, 116);
           scrCtx.fillText(`Focus State: ${document.hidden ? '⚠️ Tab Minimised' : '🟢 Active Workspace'}`, 15, 128);
 
           // 8. Draw Progress Bar
@@ -2443,25 +2536,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }
 
     try {
-      let detectedDevice = 'Desktop';
-      const rawUA = navigator?.userAgent || '';
-      const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
-      const isMobileUA = /Mobi|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone/i.test(rawUA) || ( /Android/i.test(rawUA) && /Mobile/i.test(rawUA) );
-      const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 1));
-      const screenW = typeof window !== 'undefined' ? (window.screen.width || window.innerWidth) : 1024;
-      const isMobilePlatform = /iphone|ipod/i.test(navigator?.platform || '') || ((navigator as any)?.userAgentData?.mobile === true);
-      const isTabletPlatform = /ipad/i.test(navigator?.platform || '');
-
-      if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
-        detectedDevice = 'Mobile';
-      } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
-        detectedDevice = 'Tablet';
-      } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
-         // Special handling for iPad Safari reporting as MacIntel
-        detectedDevice = 'Tablet';
-      } else {
-        detectedDevice = 'Desktop';
-      }
       const res = await fetch(`/api/polls/${pollId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2479,7 +2553,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: userCoords?.latitude || null,
           longitude: userCoords?.longitude || null,
-          device: detectedDevice,
+          device: deviceDetails,
         }),
       });
       const data = await res.json();
