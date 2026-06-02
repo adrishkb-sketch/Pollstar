@@ -1500,6 +1500,15 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     webVideo.autoplay = true;
     webVideo.playsInline = true;
     webVideo.muted = true;
+    webVideo.style.position = 'fixed';
+    webVideo.style.top = '-9999px';
+    webVideo.style.left = '-9999px';
+    webVideo.style.width = '1px';
+    webVideo.style.height = '1px';
+    webVideo.style.opacity = '0';
+    webVideo.style.pointerEvents = 'none';
+    document.body.appendChild(webVideo);
+
     if (cameraStream) {
       webVideo.srcObject = cameraStream;
       webVideo.play().catch(e => console.warn("Failed webVideo play:", e));
@@ -1509,6 +1518,15 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     scrVideo.autoplay = true;
     scrVideo.playsInline = true;
     scrVideo.muted = true;
+    scrVideo.style.position = 'fixed';
+    scrVideo.style.top = '-9999px';
+    scrVideo.style.left = '-9999px';
+    scrVideo.style.width = '1px';
+    scrVideo.style.height = '1px';
+    scrVideo.style.opacity = '0';
+    scrVideo.style.pointerEvents = 'none';
+    document.body.appendChild(scrVideo);
+
     if (screenStream) {
       scrVideo.srcObject = screenStream;
       scrVideo.play().catch(e => console.warn("Failed scrVideo play:", e));
@@ -1532,7 +1550,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       const activeWebVideo = localWebcamVideoRef.current || webVideo;
       const activeScrVideo = localScreenVideoRef.current || scrVideo;
 
-      if (cameraStream && webCtx && activeWebVideo && (activeWebVideo.readyState >= 1 || activeWebVideo.videoWidth > 0)) {
+      if (cameraStream && webCtx && activeWebVideo) {
         try {
           webCtx.drawImage(activeWebVideo, 0, 0, 160, 120);
           webcamFrame = webCanvas.toDataURL('image/jpeg', 0.5);
@@ -1541,14 +1559,16 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         }
       }
 
-      if (screenStream && scrCtx && activeScrVideo && (activeScrVideo.readyState >= 1 || activeScrVideo.videoWidth > 0) && !isScreenShareFallbackRef.current) {
+      if (screenStream && scrCtx && activeScrVideo && !isScreenShareFallbackRef.current) {
         try {
           scrCtx.drawImage(activeScrVideo, 0, 0, 240, 180);
           screenFrame = scrCanvas.toDataURL('image/jpeg', 0.4);
         } catch (e) {
-          console.error("Screen capture error:", e);
+          console.warn("Screen capture draw error, trying fallback rendering:", e);
         }
-      } else if (scrCtx) {
+      }
+
+      if (!screenFrame && scrCtx) {
         try {
           // Programmatically construct a beautiful high-fidelity simulated screenshot!
           // 1. Paint dark slate background
@@ -1586,7 +1606,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
           // 7. Draw active question details
           const totalQ = poll?.questions?.length || 0;
-          // Calculate answered count
           const answered = poll?.questions?.filter((q: any) => {
             const ans = selectedAnswersRef.current[q.id];
             if (ans === undefined || ans === null || ans === '') return false;
@@ -1637,7 +1656,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
       if (webcamFrame) {
         latestWebcamFrameRef.current = webcamFrame;
-        // Limit to 200 frames to prevent JSON storage overflow (up to 10 mins of full active proctoring)
         if (recordedWebcamFramesRef.current.length < 200) {
           recordedWebcamFramesRef.current.push(webcamFrame);
         }
@@ -1650,7 +1668,6 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       }
 
       if (socketRef.current) {
-        // Broadcast feeds live temporarily (NOT stored in website database permanently)
         socketRef.current.emit('student-telemetry', {
           pollId,
           studentId: activeVoterIdentifierRef.current || examineeSessionIdRef.current || 'anonymous',
@@ -1681,6 +1698,10 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       clearInterval(telemetryInterval);
       webVideo.srcObject = null;
       scrVideo.srcObject = null;
+      try {
+        document.body.removeChild(webVideo);
+        document.body.removeChild(scrVideo);
+      } catch (_) {}
     };
   }, [showIntro, timerActive, cameraStream, screenStream]);
 

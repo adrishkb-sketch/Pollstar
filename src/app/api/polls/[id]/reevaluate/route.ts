@@ -165,6 +165,91 @@ function computeSemanticSimilarity(
   // 4. Combined Similarity & Swapping Penalty
   let finalScore = (unigramScore * 0.4) + (clauseScore * 0.6);
 
+  // Dynamic Cross-Pairing Swap & Contradiction Detector
+  const basicStopWords = new Set<string>([
+    "the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", 
+    "with", "about", "against", "between", "into", "through", "during", "before", "after", 
+    "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", 
+    "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", 
+    "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", 
+    "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", 
+    "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", 
+    "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", 
+    "ourselves", "yourselves", "themselves", "which", "who", "whom", "whose", "this", "that", 
+    "these", "those", "what", "using", "use", "used"
+  ]);
+
+  const parseClausesBasic = (text: string): string[][] => {
+    const separators = /\b(?:and|but|while|thought|although|whereas|if|unless|because|since|so|yet|or|nor|as well as)\b|[,;\.\-\(\)]/gi;
+    return text.split(separators)
+      .map(c => c.trim().toLowerCase().replace(/[^\w\s]/g, ''))
+      .map(c => c.split(/\s+/).filter(w => w.length > 1 && !basicStopWords.has(w)))
+      .filter(arr => arr.length > 0);
+  };
+
+  const modelBasicClauses = parseClausesBasic(correctAns);
+  const userBasicClauses = parseClausesBasic(userAns);
+
+  const wordExistsInClause = (word: string, clause: string[]): boolean => {
+    return clause.some(uWord => 
+      uWord === word || uWord.startsWith(word) || word.startsWith(uWord) ||
+      (uWord.length > 4 && word.length > 4 && (uWord.includes(word.substring(0, 4)) || word.includes(uWord.substring(0, 4))))
+    );
+  };
+
+  const areInSameBasicClause = (clauses: string[][], w1: string, w2: string): boolean => {
+    return clauses.some(clause => 
+      wordExistsInClause(w1, clause) && wordExistsInClause(w2, clause)
+    );
+  };
+
+  let swapDetected = false;
+  if (modelBasicClauses.length > 1 && userBasicClauses.length > 1) {
+    for (let i = 0; i < modelBasicClauses.length; i++) {
+      const clauseI = modelBasicClauses[i];
+      for (let wI1 = 0; wI1 < clauseI.length; wI1++) {
+        for (let wI2 = wI1 + 1; wI2 < clauseI.length; wI2++) {
+          const w1 = clauseI[wI1];
+          const w2 = clauseI[wI2];
+
+          for (let j = i + 1; j < modelBasicClauses.length; j++) {
+            const clauseJ = modelBasicClauses[j];
+            for (let wJ1 = 0; wJ1 < clauseJ.length; wJ1++) {
+              for (let wJ2 = wJ1 + 1; wJ2 < clauseJ.length; wJ2++) {
+                const w3 = clauseJ[wJ1];
+                const w4 = clauseJ[wJ2];
+
+                // Ensure all 4 words are distinct
+                if (w1 !== w3 && w1 !== w4 && w2 !== w3 && w2 !== w4) {
+                  const originalP1MatchedInUser = areInSameBasicClause(userBasicClauses, w1, w2);
+                  const originalP2MatchedInUser = areInSameBasicClause(userBasicClauses, w3, w4);
+
+                  const swapP1MatchedInUser = areInSameBasicClause(userBasicClauses, w1, w4);
+                  const swapP2MatchedInUser = areInSameBasicClause(userBasicClauses, w3, w2);
+
+                  if (swapP1MatchedInUser && swapP2MatchedInUser && !originalP1MatchedInUser && !originalP2MatchedInUser) {
+                    swapDetected = true;
+                    break;
+                  }
+                }
+              }
+              if (swapDetected) break;
+            }
+            if (swapDetected) break;
+          }
+          if (swapDetected) break;
+        }
+        if (swapDetected) break;
+      }
+      if (swapDetected) break;
+    }
+  }
+
+  if (swapDetected) {
+    finalScore = 0.0;
+  }
+
+
   // If vocabulary presence is high but the association structure is severely broken (indicating a word-swap or scrambled meaning)
   if (unigramScore - clauseScore > 0.25) {
     finalScore = finalScore * 0.5; // Apply a 50% penalty for swapped context

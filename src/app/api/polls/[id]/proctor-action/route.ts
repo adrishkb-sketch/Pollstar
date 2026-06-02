@@ -77,6 +77,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           // Delete screenshots to clear student privacy records immediately
           delete answersObj.__webcamFrame;
           delete answersObj.__screenFrame;
+          delete answersObj.__webcamFrames;
+          delete answersObj.__screenFrames;
+
+          // Mark candidate as officially approved
+          answersObj.__examApproved = true;
 
           // Clear proctor logs or mark focus warnings as cleared
           if (Array.isArray(answersObj.__proctorLogs)) {

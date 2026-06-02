@@ -2630,6 +2630,22 @@ function PollInsightsContent({ params }: PageProps) {
                                 );
                               }
 
+                              const isExamApproved = ex.vote ? (() => {
+                                try {
+                                  const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+                                  return !!parsed?.__examApproved;
+                                } catch (_) { return false; }
+                              })() : false;
+
+                              if (isExamApproved) {
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    ✅ Approved
+                                  </span>
+                                );
+                              }
+
+
                               if (ex.voted || tel) {
                                 return (
                                   <button
