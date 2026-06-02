@@ -80,6 +80,35 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
     }
 
+    // Background Dynamic Auto-Pruning: Auto-clear heavy base64 image data from attempts older than 6 hours
+    // to preserve 99.9% database space automatically while keeping the alphanumeric infraction logs.
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const oldVotes = poll.votes.filter(v => new Date(v.createdAt) < sixHoursAgo);
+    for (const v of oldVotes) {
+      try {
+        const answersObj = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+        if (
+          answersObj &&
+          (answersObj.__webcamFrame || answersObj.__screenFrame || answersObj.__webcamFrames || answersObj.__screenFrames)
+        ) {
+          delete answersObj.__webcamFrame;
+          delete answersObj.__screenFrame;
+          delete answersObj.__webcamFrames;
+          delete answersObj.__screenFrames;
+
+          await prisma.vote.update({
+            where: { id: v.id },
+            data: { answers: answersObj }
+          });
+
+          // Sync the loaded array entry for the current API response
+          v.answers = answersObj;
+        }
+      } catch (err) {
+        console.error('Failed to auto-prune historical proctor frames for vote:', v.id, err);
+      }
+    }
+
     // Auto-upgrade previously created surveys from POLL -> SURVEY
     if (poll.pollType === 'POLL') {
       const hasSurveyQuestions = poll.questions.some(q => 
