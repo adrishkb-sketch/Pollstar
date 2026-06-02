@@ -644,6 +644,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const latestScreenFrameRef = useRef<string>('');
   const localWebcamVideoRef = useRef<HTMLVideoElement | null>(null);
   const localScreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recordedWebcamFramesRef = useRef<string[]>([]);
+  const recordedScreenFramesRef = useRef<string[]>([]);
 
   const isFullscreenLockedRef = useRef(isFullscreenLocked);
   const isScreenSharedRef = useRef(isScreenShared);
@@ -711,6 +713,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             __markingStatus: 'CANCELLED',
             __webcamFrame: latestWebcamFrameRef.current,
             __screenFrame: latestScreenFrameRef.current,
+            __webcamFrames: recordedWebcamFramesRef.current,
+            __screenFrames: recordedScreenFramesRef.current,
           },
           voterToken: poll?.isOpenVoting ? undefined : voterToken,
           email: poll?.isOpenVoting && poll?.settings?.limitOneVotePerUser ? openEmail : undefined,
@@ -1338,6 +1342,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               __proctorLogs: proctorLogsRef.current,
               __webcamFrame: latestWebcamFrameRef.current,
               __screenFrame: latestScreenFrameRef.current,
+              __webcamFrames: recordedWebcamFramesRef.current,
+              __screenFrames: recordedScreenFramesRef.current,
             },
             confidenceValues: Object.keys(confidenceValuesRef.current).length > 0 ? confidenceValuesRef.current : undefined,
             voterToken: poll.isOpenVoting ? undefined : voterToken,
@@ -1428,6 +1434,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             __proctorLogs: proctorLogsRef.current,
             __webcamFrame: latestWebcamFrameRef.current,
             __screenFrame: latestScreenFrameRef.current,
+            __webcamFrames: recordedWebcamFramesRef.current,
+            __screenFrames: recordedScreenFramesRef.current,
           },
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
@@ -1627,8 +1635,19 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         }
       }
 
-      if (webcamFrame) latestWebcamFrameRef.current = webcamFrame;
-      if (screenFrame) latestScreenFrameRef.current = screenFrame;
+      if (webcamFrame) {
+        latestWebcamFrameRef.current = webcamFrame;
+        // Limit to 200 frames to prevent JSON storage overflow (up to 10 mins of full active proctoring)
+        if (recordedWebcamFramesRef.current.length < 200) {
+          recordedWebcamFramesRef.current.push(webcamFrame);
+        }
+      }
+      if (screenFrame) {
+        latestScreenFrameRef.current = screenFrame;
+        if (recordedScreenFramesRef.current.length < 200) {
+          recordedScreenFramesRef.current.push(screenFrame);
+        }
+      }
 
       if (socketRef.current) {
         // Broadcast feeds live temporarily (NOT stored in website database permanently)
@@ -1647,6 +1666,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                     : (isScreenShareFallbackRef.current ? '🟢 Focus Active (Simulated Screen)' : '🟢 Focus Active (No anomalies)'))),
           webcamFrame,
           screenFrame,
+          webcamFrames: recordedWebcamFramesRef.current,
+          screenFrames: recordedScreenFramesRef.current,
           logs: proctorLogsRef.current,
           lastActive: new Date().toLocaleTimeString()
         });
@@ -2429,6 +2450,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             __proctorLogs: proctorLogs,
             __webcamFrame: latestWebcamFrameRef.current,
             __screenFrame: latestScreenFrameRef.current,
+            __webcamFrames: recordedWebcamFramesRef.current,
+            __screenFrames: recordedScreenFramesRef.current,
           },
           confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
           voterToken: poll.isOpenVoting ? undefined : voterToken,

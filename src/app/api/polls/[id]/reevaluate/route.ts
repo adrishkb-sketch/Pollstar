@@ -28,7 +28,11 @@ async function getAuthUser() {
   });
 }
 
-function computeSemanticSimilarity(userAns: string, correctAns: string): { score: number; feedback: string } {
+function computeSemanticSimilarity(
+  userAns: string, 
+  correctAns: string, 
+  questionText: string = ''
+): { score: number; feedback: string } {
   const cleanUser = userAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
   const cleanCorrect = correctAns.trim().toLowerCase().replace(/[^\w\s]/g, '');
 
@@ -40,8 +44,30 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
     return { score: 1.0, feedback: "Perfect match! Your answer matches the model answer exactly." };
   }
 
-  // Define standard English stop words
-  const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", "ourselves", "yourselves", "themselves", "which", "who", "whom", "whose", "this", "that", "these", "those", "what", "using", "use", "used"]);
+  // Expanded stop words including prompt/general question filler words
+  const stopWords = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "of", "to", "for", "in", "on", "at", "by", 
+    "with", "about", "against", "between", "into", "through", "during", "before", "after", 
+    "above", "below", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", 
+    "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", 
+    "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", 
+    "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", 
+    "now", "it", "its", "they", "them", "their", "he", "him", "his", "she", "her", "we", "us", 
+    "our", "you", "your", "yours", "i", "me", "my", "myself", "himself", "herself", "itself", 
+    "ourselves", "yourselves", "themselves", "which", "who", "whom", "whose", "this", "that", 
+    "these", "those", "what", "using", "use", "used",
+    // General question/marking filler words
+    "country", "state", "city", "name", "value", "type", "answer", "question", "exam", "test",
+    "here", "there", "correct", "incorrect", "model", "write", "provide", "enter", "select"
+  ]);
+
+  // If question text is provided, add all unique words from the question to the stopWords set
+  if (questionText) {
+    const qWords = questionText.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
+    qWords.forEach(w => {
+      if (w.length > 2) stopWords.add(w);
+    });
+  }
 
   // Extract content-bearing words (tokens)
   const tokensUser = cleanUser.split(/\s+/).filter(w => w.length > 0);
@@ -57,11 +83,11 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
       score: isMatched ? 1.0 : 0.0,
       feedback: isMatched 
         ? "Correct conceptual answer identified in submission." 
-        : `Answer does not match reference model response: "${correctAns}".`
+        : `Answer does not match reference model response.`
     };
   }
 
-  // 1. Direct inclusion test
+  // 1. Direct inclusion test of the full cleaned answer
   if (cleanUser.includes(cleanCorrect)) {
     return { score: 1.0, feedback: "Correct! Your answer perfectly incorporates the model response." };
   }
@@ -142,6 +168,14 @@ function computeSemanticSimilarity(userAns: string, correctAns: string): { score
   // If vocabulary presence is high but the association structure is severely broken (indicating a word-swap or scrambled meaning)
   if (unigramScore - clauseScore > 0.25) {
     finalScore = finalScore * 0.5; // Apply a 50% penalty for swapped context
+  }
+
+  // CRITICAL SECURITY / CORRECTNESS LOCK:
+  // If the core content keywords in the model answer are completely missing or matched below the semantic threshold (25%),
+  // we lock the final score to 0.0 marks. This ensures that regardless of the question topic, candidates must demonstrate
+  // genuine concept match and cannot exploit structural question repetition words to gain partial marks.
+  if (unigramScore < 0.25) {
+    finalScore = 0.0;
   }
 
   finalScore = Math.min(1.0, Math.max(0.0, finalScore));
@@ -314,7 +348,7 @@ export async function POST(
         } else if (q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') {
           const correctAnsStr = q.correctAnswer || '';
           if (userAns !== undefined && userAns !== null && correctAnsStr.trim() !== '') {
-            const sim = computeSemanticSimilarity(String(userAns), correctAnsStr);
+            const sim = computeSemanticSimilarity(String(userAns), correctAnsStr, q.questionText || '');
             const newMarks = Math.round(sim.score * maxMarks * 2) / 2;
             breakdown[q.id] = { ...(qb || {}), answer: userAns, marksAwarded: newMarks, maxMarks, feedback: sim.feedback, isAIGraded: true, isGraded: true };
             answersChanged = true;

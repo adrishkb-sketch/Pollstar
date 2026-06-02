@@ -112,7 +112,7 @@ function PollInsightsContent({ params }: PageProps) {
   const [isFinalizing, setIsFinalizing] = useState(false);
   
   // Real-time Proctoring mock telemetry
-  const [proctorTelemetry, setProctorTelemetry] = useState<Record<string, { status: 'ACTIVE' | 'OFFLINE', alert: string, lastActive: string, webcamFrame?: string, screenFrame?: string, logs?: string[], studentName?: string, identifier?: string }>>({});
+  const [proctorTelemetry, setProctorTelemetry] = useState<Record<string, { status: 'ACTIVE' | 'OFFLINE', alert: string, lastActive: string, webcamFrame?: string, screenFrame?: string, webcamFrames?: string[], screenFrames?: string[], logs?: string[], studentName?: string, identifier?: string }>>({});
 
   // Collaborators States
   const [collaborators, setCollaborators] = useState<any[]>([]);
@@ -195,6 +195,8 @@ function PollInsightsContent({ params }: PageProps) {
               lastActive: data.lastActive || new Date().toLocaleTimeString(),
               webcamFrame: data.webcamFrame || existing?.webcamFrame,
               screenFrame: data.screenFrame || existing?.screenFrame,
+              webcamFrames: data.webcamFrames || existing?.webcamFrames,
+              screenFrames: data.screenFrames || existing?.screenFrames,
               logs: data.logs || [],
               studentName: data.studentName,
               identifier: data.identifier
@@ -212,6 +214,13 @@ function PollInsightsContent({ params }: PageProps) {
   // Real-time proctor review states
   const [reviewingExaminee, setReviewingExaminee] = useState<any | null>(null);
   const [proctorActionLoading, setProctorActionLoading] = useState(false);
+  const [selectedWebcamIndex, setSelectedWebcamIndex] = useState<number>(0);
+  const [selectedScreenIndex, setSelectedScreenIndex] = useState<number>(0);
+
+  useEffect(() => {
+    setSelectedWebcamIndex(0);
+    setSelectedScreenIndex(0);
+  }, [reviewingExaminee]);
 
   const fetchPoll = async () => {
     try {
@@ -3815,19 +3824,7 @@ function PollInsightsContent({ params }: PageProps) {
             )}
           </button>
         )}
-        {poll?.pollType === 'EXAM' && poll.settings?.enableProctorCamera && (
-          <button
-            onClick={() => setActiveTab('proctor')}
-            className={`pb-4 text-sm font-bold transition-all relative flex items-center space-x-1.5 ${
-              activeTab === 'proctor' ? 'text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <span>🛡️ Webcam Proctoring</span>
-            {activeTab === 'proctor' && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-full" />
-            )}
-          </button>
-        )}
+        {/* Webcam proctoring live tracker link completely removed as webcam frames are stored and reviewed in candidate details */}
         <button
           onClick={() => setActiveTab('collaborators')}
           className={`pb-4 text-sm font-bold transition-all relative flex items-center space-x-1.5 ${
@@ -4011,8 +4008,7 @@ function PollInsightsContent({ params }: PageProps) {
         renderGradesPanel()
       ) : activeTab === 'collaborators' ? (
         renderCollaboratorsPanel()
-      ) : activeTab === 'proctor' ? (
-        renderProctorPanel()
+        /* Proctor live console render removed as we review proctor history directly in marking portal candidate feeds */
       ) : activeTab === 'edit' ? (
         renderEditPanel()
       ) : (
@@ -4105,26 +4101,7 @@ function PollInsightsContent({ params }: PageProps) {
               <span>Exam Performance Summary</span>
             </h3>
 
-            {poll.settings?.enableProctorCamera && (
-              <div className="glass-card rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in-up">
-                <div className="space-y-1">
-                  <h4 className="text-white text-sm font-bold font-outfit flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 animate-pulse" />
-                    <span>Live Student Webcam & Screen Proctoring Portal</span>
-                  </h4>
-                  <p className="text-gray-400 text-xs font-outfit">
-                    This exam has live webcam proctoring enabled. You can monitor examinees in real-time, view their active cameras, track tab switching, and inspect shared screen feeds.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setActiveTab('proctor')}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-105 active:scale-95 transition-all text-white text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-md shadow-indigo-500/20"
-                >
-                  <MonitorPlay className="w-4 h-4" />
-                  <span>Launch Live Proctoring Console</span>
-                </button>
-              </div>
-            )}
+            {/* Live proctoring console launching box removed from exam analytics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: 'Average Score', value: examAnalytics.averageScore },
@@ -5758,6 +5735,8 @@ function PollInsightsContent({ params }: PageProps) {
         let parsedAnswers: any = null;
         let dbWebcam = '';
         let dbScreen = '';
+        let dbWebcamFrames: string[] = [];
+        let dbScreenFrames: string[] = [];
         let proctorLogsList: string[] = [];
 
         if (ex.vote) {
@@ -5765,14 +5744,16 @@ function PollInsightsContent({ params }: PageProps) {
             parsedAnswers = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
             dbWebcam = parsedAnswers?.__webcamFrame || '';
             dbScreen = parsedAnswers?.__screenFrame || '';
+            dbWebcamFrames = parsedAnswers?.__webcamFrames || (dbWebcam ? [dbWebcam] : []);
+            dbScreenFrames = parsedAnswers?.__screenFrames || (dbScreen ? [dbScreen] : []);
             proctorLogsList = parsedAnswers?.__proctorLogs || [];
           } catch (_) {}
         } else if (tel) {
           proctorLogsList = tel.logs || [];
         }
 
-        const webcamSrc = tel?.webcamFrame || dbWebcam;
-        const screenSrc = tel?.screenFrame || dbScreen;
+        const webcamFramesList = tel?.webcamFrames || dbWebcamFrames || (tel?.webcamFrame ? [tel.webcamFrame] : []);
+        const screenFramesList = tel?.screenFrames || dbScreenFrames || (tel?.screenFrame ? [tel.screenFrame] : []);
         const isLive = !!tel && !ex.voted;
 
         return (
@@ -5809,47 +5790,99 @@ function PollInsightsContent({ params }: PageProps) {
                   <h4 className="font-outfit text-xs font-bold text-gray-400 uppercase tracking-widest">Recorded Image Feeds</h4>
                   
                   {/* Webcam */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Candidate Webcam Shot</span>
-                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center">
-                      {webcamSrc ? (
-                        <img 
-                          src={webcamSrc} 
-                          alt="Webcam stream capture" 
-                          className="w-full h-full object-cover" 
-                        />
+                  <div className="space-y-2">
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                      Candidate Webcam Shots ({webcamFramesList.length})
+                    </span>
+                    
+                    {/* Main Large Webcam Preview */}
+                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center shadow-lg">
+                      {webcamFramesList.length > 0 ? (
+                        <>
+                          <img 
+                            src={webcamFramesList[selectedWebcamIndex] || webcamFramesList[0]} 
+                            alt="Webcam stream capture" 
+                            className="w-full h-full object-cover" 
+                          />
+                          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
+                            Webcam Frame #{Math.min(selectedWebcamIndex + 1, webcamFramesList.length)} of {webcamFramesList.length}
+                          </span>
+                        </>
                       ) : (
                         <div className="text-center space-y-2 p-4">
                           <Video className="w-8 h-8 text-gray-600 mx-auto" />
                           <span className="text-[10px] text-gray-500 block">No webcam proctor feed recorded</span>
                         </div>
                       )}
-                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
-                        Webcam Frame
-                      </span>
                     </div>
+
+                    {/* Horizontal Scrollable Thumbnails */}
+                    {webcamFramesList.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar scroll-smooth">
+                        {webcamFramesList.map((frame: string, index: number) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedWebcamIndex(index)}
+                            className={`relative min-w-[70px] max-w-[70px] aspect-[4/3] rounded-lg bg-slate-950 border overflow-hidden shrink-0 transition-all ${
+                              selectedWebcamIndex === index ? 'border-indigo-500 scale-95 ring-2 ring-indigo-500/20' : 'border-white/5 hover:border-white/20'
+                            }`}
+                          >
+                            <img src={frame} alt={`Thumb ${index}`} className="w-full h-full object-cover animate-fade-in" />
+                            <span className="absolute bottom-0.5 right-0.5 bg-black/75 px-0.5 rounded text-[5px] text-gray-300 font-mono">
+                              #{index + 1}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Screen Capture */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Candidate Screen Capture</span>
-                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center">
-                      {screenSrc ? (
-                        <img 
-                          src={screenSrc} 
-                          alt="Screen stream capture" 
-                          className="w-full h-full object-cover" 
-                        />
+                  <div className="space-y-2">
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                      Candidate Screen Captures ({screenFramesList.length})
+                    </span>
+                    
+                    {/* Main Large Screen Preview */}
+                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center shadow-lg">
+                      {screenFramesList.length > 0 ? (
+                        <>
+                          <img 
+                            src={screenFramesList[selectedScreenIndex] || screenFramesList[0]} 
+                            alt="Screen stream capture" 
+                            className="w-full h-full object-cover" 
+                          />
+                          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
+                            Screen Frame #{Math.min(selectedScreenIndex + 1, screenFramesList.length)} of {screenFramesList.length}
+                          </span>
+                        </>
                       ) : (
                         <div className="text-center space-y-2 p-4">
                           <Monitor className="w-8 h-8 text-gray-600 mx-auto" />
                           <span className="text-[10px] text-gray-500 block">No screen proctor feed recorded</span>
                         </div>
                       )}
-                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
-                        Shared Screen / simulated Frame
-                      </span>
                     </div>
+
+                    {/* Horizontal Scrollable Thumbnails */}
+                    {screenFramesList.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar scroll-smooth">
+                        {screenFramesList.map((frame: string, index: number) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedScreenIndex(index)}
+                            className={`relative min-w-[70px] max-w-[70px] aspect-[4/3] rounded-lg bg-slate-950 border overflow-hidden shrink-0 transition-all ${
+                              selectedScreenIndex === index ? 'border-indigo-500 scale-95 ring-2 ring-indigo-500/20' : 'border-white/5 hover:border-white/20'
+                            }`}
+                          >
+                            <img src={frame} alt={`Thumb ${index}`} className="w-full h-full object-cover animate-fade-in" />
+                            <span className="absolute bottom-0.5 right-0.5 bg-black/75 px-0.5 rounded text-[5px] text-gray-300 font-mono">
+                              #{index + 1}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
