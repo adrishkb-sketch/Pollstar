@@ -1082,6 +1082,87 @@ function PollInsightsContent({ params }: PageProps) {
       }
     });
 
+    // 1. Calculate Candidate Integrity counts
+    let integritySecure = 0;
+    let integritySuspicious = 0;
+    let integrityCancelled = 0;
+
+    votedExaminees.forEach(e => {
+      try {
+        const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+        const isCancelled = answersObj?.__examCancelled === true || answersObj?.__markingStatus === 'CANCELLED';
+        const isSuspicious = e.vote.flaggedSuspicious === true;
+        if (isCancelled) {
+          integrityCancelled++;
+        } else if (isSuspicious) {
+          integritySuspicious++;
+        } else {
+          integritySecure++;
+        }
+      } catch (_) {
+        if (e.vote.flaggedSuspicious) {
+          integritySuspicious++;
+        } else {
+          integritySecure++;
+        }
+      }
+    });
+
+    // 2. Calculate Academic Performance Bands
+    let gradeDistinction = 0;
+    let gradeFirst = 0;
+    let gradeSecond = 0;
+    let gradeFail = 0;
+
+    votedExaminees.forEach(e => {
+      try {
+        const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+        const examScore = answersObj?.__examScore;
+        if (examScore && examScore.total > 0) {
+          const p = (examScore.earned / examScore.total) * 100;
+          if (p >= 85) gradeDistinction++;
+          else if (p >= 70) gradeFirst++;
+          else if (p >= 50) gradeSecond++;
+          else gradeFail++;
+        }
+      } catch (_) {}
+    });
+
+    // 3. Dynamic cohort-wise turnout & average performance metrics
+    const departmentCohortMap: Record<string, { totalEarned: number; totalMax: number; votedCount: number; totalCount: number }> = {};
+
+    examinees.forEach(e => {
+      const dept = e.department || 'General';
+      if (!departmentCohortMap[dept]) {
+        departmentCohortMap[dept] = { totalEarned: 0, totalMax: 0, votedCount: 0, totalCount: 0 };
+      }
+      departmentCohortMap[dept].totalCount++;
+      
+      if (e.voted && e.vote) {
+        departmentCohortMap[dept].votedCount++;
+        try {
+          const answersObj = typeof e.vote.answers === 'string' ? JSON.parse(e.vote.answers) : e.vote.answers;
+          const examScore = answersObj?.__examScore;
+          if (examScore && examScore.total > 0) {
+            departmentCohortMap[dept].totalEarned += examScore.earned || 0;
+            departmentCohortMap[dept].totalMax += examScore.total;
+          }
+        } catch (_) {}
+      }
+    });
+
+    const departmentCohorts = Object.entries(departmentCohortMap).map(([name, m]) => {
+      const avgPct = m.totalMax > 0 ? (m.totalEarned / m.totalMax) * 100 : 0;
+      const turnoutPct = m.totalCount > 0 ? (m.votedCount / m.totalCount) * 100 : 0;
+      return {
+        name,
+        averageScorePercent: Math.round(avgPct * 10) / 10,
+        turnoutPercent: Math.round(turnoutPct * 10) / 10,
+        totalCount: m.totalCount,
+        votedCount: m.votedCount,
+      };
+    });
+
     return {
       averageScore: Math.round(avgScore * 10) / 10,
       medianScore: Math.round(medianScore * 10) / 10,
@@ -1096,6 +1177,18 @@ function PollInsightsContent({ params }: PageProps) {
       topicGapAnalysis,
       timeSpentPerQuestion,
       atRiskStudents,
+      integrity: {
+        secure: integritySecure,
+        suspicious: integritySuspicious,
+        cancelled: integrityCancelled,
+      },
+      grades: {
+        distinction: gradeDistinction,
+        firstDiv: gradeFirst,
+        secondDiv: gradeSecond,
+        fail: gradeFail,
+      },
+      cohorts: departmentCohorts,
     };
   };
 
@@ -3909,6 +4002,419 @@ function PollInsightsContent({ params }: PageProps) {
               </div>
             </div>
 
+            {/* Descriptive Performance Visualizations Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Score Distribution Histogram */}
+              <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative bg-slate-950/20">
+                <div className="flex items-center space-x-2 mb-1">
+                  <BarChart3 className="w-4 h-4 text-indigo-400" />
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Score Distribution Histogram</h4>
+                </div>
+                <p className="text-gray-500 text-[10px] mb-4">Percentage score range frequency across examinees.</p>
+                <div className="flex-1 flex flex-col justify-end h-44 pb-2">
+                  {(() => {
+                    const ranges = [
+                      { name: '0–20%', value: 0 },
+                      { name: '21–40%', value: 0 },
+                      { name: '41–60%', value: 0 },
+                      { name: '61–80%', value: 0 },
+                      { name: '81–100%', value: 0 },
+                    ];
+                    liveVotesList.forEach(v => {
+                      try {
+                        const a = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
+                        const s = a?.__examScore;
+                        if (s && s.total > 0) {
+                          const p = (s.earned / s.total) * 100;
+                          if (p <= 20) ranges[0].value++;
+                          else if (p <= 40) ranges[1].value++;
+                          else if (p <= 60) ranges[2].value++;
+                          else if (p <= 80) ranges[3].value++;
+                          else ranges[4].value++;
+                        }
+                      } catch (e) {}
+                    });
+                    const max = Math.max(...ranges.map(r => r.value), 1);
+                    return (
+                      <div className="flex items-end justify-between h-full gap-3">
+                        {ranges.map((r, i) => (
+                          <div key={r.name} className="flex flex-col items-center flex-1 gap-2 group cursor-pointer">
+                            <span className="text-[10px] text-white font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -translate-y-1">{r.value}</span>
+                            <div 
+                              className="w-full rounded-t-lg bg-gradient-to-t from-indigo-600 to-purple-500 hover:from-indigo-500 hover:to-pink-500 transition-all duration-500 shadow-[0_0_10px_rgba(99,102,241,0.2)] hover:shadow-[0_0_15px_rgba(236,72,153,0.4)]" 
+                              style={{ height: `${Math.max(6, (r.value / max) * 100)}%` }} 
+                            />
+                            <span className="text-[9px] text-gray-400 font-medium text-center leading-tight mt-1">{r.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Question Accuracy Rates */}
+              <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative bg-slate-950/20">
+                <div className="flex items-center space-x-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-purple-400" />
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Question Accuracy Rates</h4>
+                </div>
+                <p className="text-gray-500 text-[10px] mb-4">Average correct percentage per question.</p>
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3.5 pr-1">
+                  {examAnalytics.simulatedQuestionDifficulty.length === 0 ? (
+                    <div className="text-gray-500 text-xs text-center py-12">No questions loaded for this exam.</div>
+                  ) : examAnalytics.simulatedQuestionDifficulty.map((item, idx) => (
+                    <div key={item.id} className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] font-bold">
+                        <span className="text-gray-300 truncate max-w-[180px]">Q{idx + 1}: {item.text}</span>
+                        <span className="text-indigo-400 ml-2 shrink-0">{item.accuracy}% · {item.difficulty}</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-1000" 
+                          style={{ width: `${item.accuracy}%` }} 
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Candidate Integrity Status Pie Chart */}
+              <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative bg-slate-950/20 justify-between">
+                <div className="flex items-center space-x-2 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Candidate Integrity Distribution</h4>
+                </div>
+                <p className="text-gray-500 text-[10px] mb-2">Integrity status of all completed submissions.</p>
+                <div className="flex-1">
+                  {(() => {
+                    const { secure, suspicious, cancelled } = examAnalytics.integrity;
+                    const total = secure + suspicious + cancelled;
+                    
+                    if (total === 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-xs py-12">
+                          No examinee submissions recorded yet.
+                        </div>
+                      );
+                    }
+
+                    const pctSecure = (secure / total) * 100;
+                    const pctSuspicious = (suspicious / total) * 100;
+                    const pctCancelled = (cancelled / total) * 100;
+
+                    const r = 35;
+                    const circ = 2 * Math.PI * r;
+                    
+                    const secLength = (secure / total) * circ;
+                    const suspLength = (suspicious / total) * circ;
+                    const cancLength = (cancelled / total) * circ;
+
+                    const secOffset = 0;
+                    const suspOffset = -secLength;
+                    const cancOffset = -(secLength + suspLength);
+
+                    return (
+                      <div className="flex items-center justify-between h-full gap-4 pt-2">
+                        <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
+                          <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                            {secure > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#secureGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${secLength} ${circ}`} 
+                                strokeDashoffset={secOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            {suspicious > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#suspGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${suspLength} ${circ}`} 
+                                strokeDashoffset={suspOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            {cancelled > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#cancGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${cancLength} ${circ}`} 
+                                strokeDashoffset={cancOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            <defs>
+                              <linearGradient id="secureGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#10b981" />
+                                <stop offset="100%" stopColor="#059669" />
+                              </linearGradient>
+                              <linearGradient id="suspGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#f59e0b" />
+                                <stop offset="100%" stopColor="#d97706" />
+                              </linearGradient>
+                              <linearGradient id="cancGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#ef4444" />
+                                <stop offset="100%" stopColor="#dc2626" />
+                              </linearGradient>
+                            </defs>
+                          </svg>
+                          <div className="absolute flex flex-col items-center justify-center text-center">
+                            <span className="text-gray-400 font-semibold uppercase tracking-widest text-[8px]">Integrity</span>
+                            <span className="text-lg font-black text-white font-outfit">{Math.round(pctSecure)}%</span>
+                            <span className="text-gray-500 text-[8px]">Secure</span>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 space-y-2">
+                          {[
+                            { label: 'Secure/Clear', count: secure, pct: pctSecure, colorClass: 'bg-emerald-500' },
+                            { label: 'Suspicious', count: suspicious, pct: pctSuspicious, colorClass: 'bg-amber-500' },
+                            { label: 'Cancelled', count: cancelled, pct: pctCancelled, colorClass: 'bg-rose-500' },
+                          ].map(item => (
+                            <div key={item.label} className="flex flex-col">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-2 h-2 rounded-full ${item.colorClass}`} />
+                                  <span className="truncate max-w-[80px]">{item.label}</span>
+                                </div>
+                                <span className="text-white font-mono">{item.count} ({Math.round(item.pct)}%)</span>
+                              </div>
+                              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mt-1">
+                                <div className={`${item.colorClass} h-full rounded-full`} style={{ width: `${item.pct}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Academic Grade Distribution Donut Chart */}
+              <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative bg-slate-950/20 justify-between">
+                <div className="flex items-center space-x-2 mb-1">
+                  <Award className="w-4 h-4 text-cyan-400" />
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Academic Grade Breakdown</h4>
+                </div>
+                <p className="text-gray-500 text-[10px] mb-2">Distribution of candidates based on academic divisions.</p>
+                <div className="flex-1">
+                  {(() => {
+                    const { distinction, firstDiv, secondDiv, fail } = examAnalytics.grades;
+                    const total = distinction + firstDiv + secondDiv + fail;
+
+                    if (total === 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-xs py-12">
+                          No graded submissions recorded yet.
+                        </div>
+                      );
+                    }
+
+                    const pctDist = (distinction / total) * 100;
+                    const pctFirst = (firstDiv / total) * 100;
+                    const pctSecond = (secondDiv / total) * 100;
+                    const pctFail = (fail / total) * 100;
+
+                    const r = 35;
+                    const circ = 2 * Math.PI * r;
+
+                    const distLen = (distinction / total) * circ;
+                    const firstLen = (firstDiv / total) * circ;
+                    const secLen = (secondDiv / total) * circ;
+                    const failLen = (fail / total) * circ;
+
+                    const distOffset = 0;
+                    const firstOffset = -distLen;
+                    const secOffset = -(distLen + firstLen);
+                    const failOffset = -(distLen + firstLen + secLen);
+
+                    return (
+                      <div className="flex items-center justify-between h-full gap-4 pt-2">
+                        <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
+                          <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                            {distinction > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#distGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${distLen} ${circ}`} 
+                                strokeDashoffset={distOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            {firstDiv > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#firstGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${firstLen} ${circ}`} 
+                                strokeDashoffset={firstOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            {secondDiv > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#secGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${secLen} ${circ}`} 
+                                strokeDashoffset={secOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            {fail > 0 && (
+                              <circle 
+                                cx="50" cy="50" r={r} 
+                                fill="transparent" 
+                                stroke="url(#failGrad)" 
+                                strokeWidth="12" 
+                                strokeDasharray={`${failLen} ${circ}`} 
+                                strokeDashoffset={failOffset}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            )}
+                            <defs>
+                              <linearGradient id="distGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#06b6d4" />
+                                <stop offset="100%" stopColor="#0891b2" />
+                              </linearGradient>
+                              <linearGradient id="firstGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#6366f1" />
+                                <stop offset="100%" stopColor="#4f46e5" />
+                              </linearGradient>
+                              <linearGradient id="secGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#f59e0b" />
+                                <stop offset="100%" stopColor="#d97706" />
+                              </linearGradient>
+                              <linearGradient id="failGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#f43f5e" />
+                                <stop offset="100%" stopColor="#e11d48" />
+                              </linearGradient>
+                            </defs>
+                          </svg>
+                          <div className="absolute flex flex-col items-center justify-center text-center">
+                            <span className="text-gray-400 font-semibold uppercase tracking-widest text-[8px]">Graded</span>
+                            <span className="text-lg font-black text-white font-outfit">{total}</span>
+                            <span className="text-gray-500 text-[8px]">Examinees</span>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 space-y-1.5">
+                          {[
+                            { label: 'Distinction (≥85%)', count: distinction, pct: pctDist, colorClass: 'bg-cyan-400' },
+                            { label: '1st Division (70-84%)', count: firstDiv, pct: pctFirst, colorClass: 'bg-indigo-400' },
+                            { label: '2nd Division (50-69%)', count: secondDiv, pct: pctSecond, colorClass: 'bg-amber-400' },
+                            { label: 'Fail (<50%)', count: fail, pct: pctFail, colorClass: 'bg-rose-400' },
+                          ].map(item => (
+                            <div key={item.label} className="flex flex-col">
+                              <div className="flex items-center justify-between text-[9px] font-bold text-gray-300">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${item.colorClass}`} />
+                                  <span className="truncate max-w-[85px]">{item.label}</span>
+                                </div>
+                                <span className="text-white font-mono">{item.count}</span>
+                              </div>
+                              <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden mt-0.5">
+                                <div className={`${item.colorClass} h-full rounded-full`} style={{ width: `${item.pct}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Cohort Performance Histogram */}
+            <div className="glass-card border border-white/5 p-6 rounded-2xl bg-slate-950/20 space-y-4">
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4 text-emerald-400" />
+                <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">Cohort Performance &amp; Turnout Histogram</h4>
+              </div>
+              <p className="text-gray-500 text-[10px] -mt-2">Performance breakdown and participation rates segmented by student department cohorts.</p>
+              
+              {(() => {
+                const cohorts = examAnalytics.cohorts || [];
+                if (cohorts.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center text-gray-500 text-xs py-8">
+                      No cohort metadata found. Add allowed examinees to track cohorts.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+                    {cohorts.map(c => (
+                      <div key={c.name} className="space-y-2 border border-white/5 bg-slate-900/40 p-4 rounded-xl">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-white font-extrabold font-outfit uppercase tracking-wide">{c.name} <span className="text-[10px] text-gray-500 font-normal">({c.votedCount}/{c.totalCount} active)</span></span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-indigo-400 font-semibold font-mono">Avg: {c.averageScorePercent}%</span>
+                            <span className="text-[10px] text-emerald-400 font-semibold font-mono">Turnout: {c.turnoutPercent}%</span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2 pt-1">
+                          {/* Average Score Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] text-gray-400 font-bold uppercase tracking-wider">
+                              <span>Average Grade Percentage</span>
+                              <span>{c.averageScorePercent}%</span>
+                            </div>
+                            <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-full rounded-full transition-all duration-700" 
+                                style={{ width: `${c.averageScorePercent}%` }} 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Turnout Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] text-gray-400 font-bold uppercase tracking-wider">
+                              <span>Turnout Rate</span>
+                              <span>{c.turnoutPercent}%</span>
+                            </div>
+                            <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-700" 
+                                style={{ width: `${c.turnoutPercent}%` }} 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Candidate Access Ledger */}
             <div className="space-y-3">
               <h4 className="font-outfit text-sm font-bold text-white uppercase tracking-wider">Candidate Access &amp; Submission Ledger</h4>
@@ -3953,69 +4459,6 @@ function PollInsightsContent({ params }: PageProps) {
                 <Brain className="w-5 h-5 text-amber-400 animate-pulse" />
                 <span>Advanced AI Diagnostics Hub</span>
               </h3>
-
-              {/* Histogram + Accuracy Charts */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative">
-                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Score Distribution Histogram</h4>
-                  <p className="text-gray-500 text-[10px] mt-0.5 mb-4">Categorized score range distribution.</p>
-                  <div className="flex-1">
-                    {(() => {
-                      const ranges = [
-                        { name: '0–20%', value: 0 },
-                        { name: '21–40%', value: 0 },
-                        { name: '41–60%', value: 0 },
-                        { name: '61–80%', value: 0 },
-                        { name: '81–100%', value: 0 },
-                      ];
-                      liveVotesList.forEach(v => {
-                        try {
-                          const a = typeof v.answers === 'string' ? JSON.parse(v.answers) : v.answers;
-                          const s = a?.__examScore;
-                          if (s && s.total > 0) {
-                            const p = (s.earned / s.total) * 100;
-                            if (p <= 20) ranges[0].value++;
-                            else if (p <= 40) ranges[1].value++;
-                            else if (p <= 60) ranges[2].value++;
-                            else if (p <= 80) ranges[3].value++;
-                            else ranges[4].value++;
-                          }
-                        } catch (e) {}
-                      });
-                      const max = Math.max(...ranges.map(r => r.value), 1);
-                      return (
-                        <div className="flex items-end justify-between h-full gap-2 pb-6">
-                          {ranges.map((r, i) => (
-                            <div key={r.name} className="flex flex-col items-center flex-1 gap-1">
-                              <span className="text-[9px] text-white font-mono">{r.value}</span>
-                              <div className="w-full rounded-t-md bg-indigo-500/80 transition-all duration-700" style={{ height: `${Math.max(4, (r.value / max) * 100)}%` }} />
-                              <span className="text-[9px] text-gray-500 text-center leading-tight">{r.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                <div className="glass-card border border-white/5 p-6 rounded-2xl h-80 flex flex-col relative">
-                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">Question Accuracy Rates</h4>
-                  <p className="text-gray-500 text-[10px] mt-0.5 mb-4">Average accuracy per question.</p>
-                  <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
-                    {examAnalytics.simulatedQuestionDifficulty.map((item, idx) => (
-                      <div key={item.id} className="space-y-0.5">
-                        <div className="flex justify-between text-[9px] font-bold">
-                          <span className="text-gray-300 truncate max-w-[160px]">Q{idx + 1}: {item.text}</span>
-                          <span className="text-indigo-400 ml-2 shrink-0">{item.accuracy}% · {item.difficulty}</span>
-                        </div>
-                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-purple-500 h-full rounded-full transition-all duration-700" style={{ width: `${item.accuracy}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
               {/* Difficulty + Discrimination Index */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4251,66 +4694,224 @@ function PollInsightsContent({ params }: PageProps) {
             {/* Demographics: Device + Time of Day */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Device Distribution */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
-                <h4 className="font-outfit text-sm font-bold text-white">📱 Device Demographics</h4>
-                {[
-                  { label: '🖥️ Desktop', count: deviceCounts.desktop, color: 'bg-emerald-500' },
-                  { label: '📱 Mobile', count: deviceCounts.mobile, color: 'bg-indigo-500' },
-                  { label: '📟 Tablet', count: deviceCounts.tablet, color: 'bg-purple-500' },
-                ].map((dev) => (
-                  <div key={dev.label} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-300 font-semibold">{dev.label}</span>
-                      <span className="text-gray-400">{Math.round((dev.count / totalDevices) * 100)}% <span className="text-gray-600">({dev.count})</span></span>
+              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4 flex flex-col justify-between">
+                <h4 className="font-outfit text-sm font-bold text-white flex items-center gap-1.5">
+                  <Monitor className="w-4 h-4 text-emerald-400" />
+                  <span>Device Demographics</span>
+                </h4>
+                {(() => {
+                  const r = 35;
+                  const circ = 2 * Math.PI * r;
+                  
+                  const devDesk = deviceCounts.desktop;
+                  const devMob = deviceCounts.mobile;
+                  const devTab = deviceCounts.tablet;
+                  
+                  const total = devDesk + devMob + devTab;
+                  
+                  if (total === 0) return <div className="text-gray-500 text-xs py-8 text-center text-gray-500">No devices recorded.</div>;
+                  
+                  const pctDesk = (devDesk / total) * 100;
+                  const pctMob = (devMob / total) * 100;
+                  const pctTab = (devTab / total) * 100;
+                  
+                  const deskLen = (devDesk / total) * circ;
+                  const mobLen = (devMob / total) * circ;
+                  const tabLen = (devTab / total) * circ;
+                  
+                  const deskOffset = 0;
+                  const mobOffset = -deskLen;
+                  const tabOffset = -(deskLen + mobLen);
+                  
+                  return (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                          <circle cx="50" cy="50" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                          {devDesk > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#devDeskGrad)" strokeWidth="12" strokeDasharray={`${deskLen} ${circ}`} strokeDashoffset={deskOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          {devMob > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#devMobGrad)" strokeWidth="12" strokeDasharray={`${mobLen} ${circ}`} strokeDashoffset={mobOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          {devTab > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#devTabGrad)" strokeWidth="12" strokeDasharray={`${tabLen} ${circ}`} strokeDashoffset={tabOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          <defs>
+                            <linearGradient id="devDeskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#10b981" />
+                              <stop offset="100%" stopColor="#059669" />
+                            </linearGradient>
+                            <linearGradient id="devMobGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#6366f1" />
+                              <stop offset="100%" stopColor="#4f46e5" />
+                            </linearGradient>
+                            <linearGradient id="devTabGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#a855f7" />
+                              <stop offset="100%" stopColor="#9333ea" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <div className="absolute flex flex-col items-center justify-center text-center">
+                          <span className="text-[7px] text-gray-400 font-bold uppercase tracking-wider">Devices</span>
+                          <span className="text-sm font-black text-white font-outfit">{total}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 space-y-2">
+                        {[
+                          { label: '🖥️ Desktop', count: devDesk, pct: pctDesk, colorClass: 'bg-emerald-500' },
+                          { label: '📱 Mobile', count: devMob, pct: pctMob, colorClass: 'bg-indigo-500' },
+                          { label: '📟 Tablet', count: devTab, pct: pctTab, colorClass: 'bg-purple-500' },
+                        ].map(item => (
+                          <div key={item.label} className="flex flex-col">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${item.colorClass}`} />
+                                <span className="truncate max-w-[80px]">{item.label}</span>
+                              </div>
+                              <span className="text-white font-mono">{Math.round(item.pct)}% <span className="text-gray-500 text-[8px]">({item.count})</span></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${dev.color} transition-all duration-700`} style={{ width: `${Math.round((dev.count / totalDevices) * 100)}%` }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })()}
               </div>
 
               {/* Time of Day Distribution */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
-                <h4 className="font-outfit text-sm font-bold text-white">🕐 Response Time Distribution</h4>
-                {timeBucketLabels.map((label, i) => (
-                  <div key={label} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-300 font-semibold">{label}</span>
-                      <span className="text-gray-400">{timeBuckets[i]} <span className="text-gray-600">response{timeBuckets[i] !== 1 ? 's' : ''}</span></span>
+              <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4 flex flex-col justify-between">
+                <h4 className="font-outfit text-sm font-bold text-white flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-purple-400" />
+                  <span>Response Time Distribution</span>
+                </h4>
+                {(() => {
+                  const r = 35;
+                  const circ = 2 * Math.PI * r;
+                  const total = timeBuckets.reduce((a, b) => a + b, 0);
+                  
+                  if (total === 0) return <div className="text-gray-500 text-xs py-8 text-center text-gray-500">No times recorded.</div>;
+                  
+                  const morningLen = (timeBuckets[0] / total) * circ;
+                  const afternoonLen = (timeBuckets[1] / total) * circ;
+                  const eveningLen = (timeBuckets[2] / total) * circ;
+                  const nightLen = (timeBuckets[3] / total) * circ;
+                  
+                  const morningOffset = 0;
+                  const afternoonOffset = -morningLen;
+                  const eveningOffset = -(morningLen + afternoonLen);
+                  const nightOffset = -(morningLen + afternoonLen + eveningLen);
+                  
+                  return (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                          <circle cx="50" cy="50" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                          {timeBuckets[0] > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#mornGrad)" strokeWidth="12" strokeDasharray={`${morningLen} ${circ}`} strokeDashoffset={morningOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          {timeBuckets[1] > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#afterGrad)" strokeWidth="12" strokeDasharray={`${afternoonLen} ${circ}`} strokeDashoffset={afternoonOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          {timeBuckets[2] > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#eveGrad)" strokeWidth="12" strokeDasharray={`${eveningLen} ${circ}`} strokeDashoffset={eveningOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          {timeBuckets[3] > 0 && (
+                            <circle cx="50" cy="50" r={r} fill="transparent" stroke="url(#nightGrad)" strokeWidth="12" strokeDasharray={`${nightLen} ${circ}`} strokeDashoffset={nightOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                          )}
+                          <defs>
+                            <linearGradient id="mornGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#fb7185" />
+                              <stop offset="100%" stopColor="#f43f5e" />
+                            </linearGradient>
+                            <linearGradient id="afterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#38bdf8" />
+                              <stop offset="100%" stopColor="#0284c7" />
+                            </linearGradient>
+                            <linearGradient id="eveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#fb923c" />
+                              <stop offset="100%" stopColor="#ea580c" />
+                            </linearGradient>
+                            <linearGradient id="nightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#c084fc" />
+                              <stop offset="100%" stopColor="#7e22ce" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <div className="absolute flex flex-col items-center justify-center text-center">
+                          <span className="text-[7px] text-gray-400 font-bold uppercase tracking-wider">Times</span>
+                          <span className="text-sm font-black text-white font-outfit">{total}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 space-y-1.5">
+                        {timeBucketLabels.map((label, i) => {
+                          const pct = total > 0 ? (timeBuckets[i] / total) * 100 : 0;
+                          const colorClasses = ['bg-rose-400', 'bg-sky-400', 'bg-orange-400', 'bg-purple-400'];
+                          return (
+                            <div key={label} className="flex flex-col">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${colorClasses[i]}`} />
+                                  <span className="truncate max-w-[80px]">{label}</span>
+                                </div>
+                                <span className="text-white font-mono">{Math.round(pct)}% <span className="text-gray-500 text-[8px]">({timeBuckets[i]})</span></span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-700"
-                        style={{ width: `${Math.round((timeBuckets[i] / maxTimeBucket) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })()}
               </div>
             </div>
 
             {/* Page Completion Funnel */}
             {maxPage > 1 && (
               <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
-                <h4 className="font-outfit text-sm font-bold text-white">📉 Page Completion Funnel</h4>
-                <div className="space-y-3">
-                  {pageCompletionRates.map((pr) => (
-                    <div key={pr.page} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-300 font-semibold">Page {pr.page}</span>
-                        <span className={`font-bold ${pr.rate >= 80 ? 'text-emerald-400' : pr.rate >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>{pr.rate}%</span>
-                      </div>
-                      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-700 ${pr.rate >= 80 ? 'bg-emerald-500' : pr.rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                          style={{ width: `${pr.rate}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center space-x-2">
+                  <Layers className="w-4 h-4 text-purple-400" />
+                  <h4 className="font-outfit text-sm font-bold text-white">Page Completion Funnel</h4>
                 </div>
-                <p className="text-[10px] text-gray-500">Shows the % of respondents who answered at least one question on each survey page.</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
+                  {pageCompletionRates.map((pr) => {
+                    const r = 24;
+                    const circ = 2 * Math.PI * r;
+                    const len = (pr.rate / 100) * circ;
+                    const offset = circ - len;
+                    
+                    return (
+                      <div key={pr.page} className="flex items-center gap-4 bg-white/2 p-3 rounded-xl border border-white/5">
+                        <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
+                          <svg viewBox="0 0 60 60" className="w-full h-full transform -rotate-90">
+                            <circle cx="30" cy="30" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                            <circle 
+                              cx="30" cy="30" r={r} 
+                              fill="transparent" 
+                              stroke={pr.rate >= 80 ? '#10b981' : pr.rate >= 50 ? '#f59e0b' : '#ef4444'} 
+                              strokeWidth="6" 
+                              strokeDasharray={circ} 
+                              strokeDashoffset={offset} 
+                              strokeLinecap="round"
+                              className="transition-all duration-1000" 
+                            />
+                          </svg>
+                          <span className="absolute text-[10px] font-black text-white font-mono">{pr.rate}%</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-bold text-white block">Page {pr.page}</span>
+                          <span className="text-[9px] text-gray-500 font-semibold block uppercase tracking-wide">
+                            {pr.rate >= 80 ? '🟢 Stable' : pr.rate >= 50 ? '🟡 Warning' : '🔴 High Dropoff'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-500">Shows the percentage of respondents who successfully completed at least one question on each survey page.</p>
               </div>
             )}
 
@@ -4704,60 +5305,95 @@ function PollInsightsContent({ params }: PageProps) {
             <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">{poll.pollType === 'SURVEY' ? 'Response Velocity Momentum' : 'Voting Velocity Momentum'}</h4>
             <span className="text-[10px] font-bold text-purple-400">Past 6 Hours</span>
           </div>
-          <div className="flex items-end justify-between h-16 pt-2">
+          <div className="flex items-end justify-between h-20 pt-2 gap-2">
             {velocityData.map((d, idx) => {
               const maxCount = Math.max(...velocityData.map(v => v.count)) || 1;
               const heightPercent = Math.max(10, Math.round((d.count / maxCount) * 100));
 
               return (
-                <div key={idx} className="flex flex-col items-center flex-1 space-y-1">
+                <div key={idx} className="flex flex-col items-center flex-1 space-y-1 group cursor-pointer">
+                  <span className="text-[8px] text-white font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -translate-y-0.5">{d.count}</span>
                   <div 
-                    className="w-4 bg-gradient-to-t from-purple-600 to-indigo-500 rounded-t-sm transition-all duration-500" 
-                    style={{ height: `${heightPercent * 0.4}px` }}
-                    title={`${d.count} votes cast`}
+                    className="w-full bg-gradient-to-t from-purple-600 to-indigo-500 rounded-t-md transition-all duration-500 hover:from-purple-500 hover:to-pink-500 shadow-[0_0_8px_rgba(99,102,241,0.25)] hover:shadow-[0_0_12px_rgba(236,72,153,0.4)]" 
+                    style={{ height: `${heightPercent * 0.5}px` }}
                   />
-                  <span className="text-[8px] text-gray-500 scale-90 truncate max-w-[40px]">{d.hour}</span>
+                  <span className="text-[8px] text-gray-500 scale-90 truncate max-w-[45px] font-medium leading-none pt-1">{d.hour}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Insight Card 3: Platform Device Partitioning */}
-        <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
+        {/* Insight Card 3: Platform Device Partitioning Donut Chart */}
+        <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4 flex flex-col justify-between">
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
             <h4 className="font-outfit text-xs font-bold text-white uppercase tracking-wider">Device Source Distribution</h4>
             <span className="text-[10px] font-bold text-emerald-400">Verified Platform</span>
           </div>
-          <div className="space-y-3.5 pt-1">
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] font-bold">
-                <span className="text-gray-400">🖥️ Desktop Client</span>
-                <span className="text-white">{devices.desktopPercent}%</span>
+          
+          {(() => {
+            const r = 24;
+            const circ = 2 * Math.PI * r;
+            const total = devices.desktopPercent + devices.mobilePercent + devices.tabletPercent || 100;
+            
+            const deskLen = (devices.desktopPercent / total) * circ;
+            const mobLen = (devices.mobilePercent / total) * circ;
+            const tabLen = (devices.tabletPercent / total) * circ;
+            
+            const deskOffset = 0;
+            const mobOffset = -deskLen;
+            const tabOffset = -(deskLen + mobLen);
+            
+            return (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 60 60" className="w-full h-full transform -rotate-90">
+                    <circle cx="30" cy="30" r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                    {devices.desktopPercent > 0 && (
+                      <circle cx="30" cy="30" r={r} fill="transparent" stroke="url(#devDeskGradStd)" strokeWidth="8" strokeDasharray={`${deskLen} ${circ}`} strokeDashoffset={deskOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                    )}
+                    {devices.mobilePercent > 0 && (
+                      <circle cx="30" cy="30" r={r} fill="transparent" stroke="url(#devMobGradStd)" strokeWidth="8" strokeDasharray={`${mobLen} ${circ}`} strokeDashoffset={mobOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                    )}
+                    {devices.tabletPercent > 0 && (
+                      <circle cx="30" cy="30" r={r} fill="transparent" stroke="url(#devTabGradStd)" strokeWidth="8" strokeDasharray={`${tabLen} ${circ}`} strokeDashoffset={tabOffset} strokeLinecap="round" className="transition-all duration-1000" />
+                    )}
+                    <defs>
+                      <linearGradient id="devDeskGradStd" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#10b981" />
+                        <stop offset="100%" stopColor="#059669" />
+                      </linearGradient>
+                      <linearGradient id="devMobGradStd" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="100%" stopColor="#4f46e5" />
+                      </linearGradient>
+                      <linearGradient id="devTabGradStd" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#a855f7" />
+                        <stop offset="100%" stopColor="#9333ea" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute text-[8px] font-black text-white font-outfit">Platform</div>
+                </div>
+
+                <div className="flex-1 space-y-1">
+                  {[
+                    { label: '🖥️ Desktop', pct: devices.desktopPercent, colorClass: 'bg-emerald-500' },
+                    { label: '📱 Mobile', pct: devices.mobilePercent, colorClass: 'bg-indigo-500' },
+                    { label: '📟 Tablet', pct: devices.tabletPercent, colorClass: 'bg-purple-500' },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center justify-between text-[10px] font-bold">
+                      <div className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.colorClass}`} />
+                        <span className="text-gray-400">{item.label}</span>
+                      </div>
+                      <span className="text-white font-mono">{item.pct}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${devices.desktopPercent}%` }} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] font-bold">
-                <span className="text-gray-400">📱 Mobile Phone</span>
-                <span className="text-white">{devices.mobilePercent}%</span>
-              </div>
-              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${devices.mobilePercent}%` }} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] font-bold">
-                <span className="text-gray-400">📟 Tablet Device</span>
-                <span className="text-white">{devices.tabletPercent}%</span>
-              </div>
-              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-purple-500 h-full rounded-full" style={{ width: `${devices.tabletPercent}%` }} />
-              </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
 
