@@ -170,6 +170,9 @@ export default function AdminPortal() {
   const [couponStart, setCouponStart] = useState('');
   const [couponEnd, setCouponEnd] = useState('');
   const [couponFirstTimeOnly, setCouponFirstTimeOnly] = useState(false);
+  const [couponPlanId, setCouponPlanId] = useState('');
+  const [couponBillingCycle, setCouponBillingCycle] = useState('');
+  const [couponMaxUses, setCouponMaxUses] = useState('');
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   
@@ -543,7 +546,10 @@ export default function AdminPortal() {
           discountValue: parseFloat(couponValue),
           startDate: couponStart,
           endDate: couponEnd,
-          firstTimeOnly: couponFirstTimeOnly
+          firstTimeOnly: couponFirstTimeOnly,
+          planId: couponPlanId || null,
+          billingCycle: couponBillingCycle || null,
+          maxUses: couponMaxUses ? parseInt(couponMaxUses, 10) : null
         })
       });
       const data = await res.json();
@@ -552,6 +558,9 @@ export default function AdminPortal() {
         setCouponCode('');
         setCouponValue('10');
         setCouponFirstTimeOnly(false);
+        setCouponPlanId('');
+        setCouponBillingCycle('');
+        setCouponMaxUses('');
         setCouponStart('');
         setCouponEnd('');
         fetchCoupons();
@@ -3416,6 +3425,56 @@ export default function AdminPortal() {
                     </div>
                   </div>
 
+                  {/* Plan wise and Duration wise coupon options */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Target Restricted Plan</label>
+                      <select
+                        value={couponPlanId}
+                        onChange={e => setCouponPlanId(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                      >
+                        <option value="">-- All Plans --</option>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (${p.price}/{p.billingCycle})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-gray-400 font-bold uppercase tracking-wider block">Plan Billing Duration</label>
+                      <select
+                        value={couponBillingCycle}
+                        onChange={e => setCouponBillingCycle(e.target.value)}
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                      >
+                        <option value="">-- All Durations --</option>
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="QUARTERLY">Quarterly</option>
+                        <option value="YEARLY">Yearly</option>
+                        <option value="TWO_YEAR">2 Years</option>
+                        <option value="LIFETIME">Lifetime / One-time</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Max uses limitation input */}
+                  <div className="space-y-1.5">
+                    <label className="text-gray-400 font-bold uppercase tracking-wider block">Maximum Usage Limit (Redemptions)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={couponMaxUses}
+                      onChange={e => setCouponMaxUses(e.target.value)}
+                      placeholder="e.g. 15 (leave blank for unlimited)"
+                      className="w-full bg-[#030712] border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 font-semibold"
+                    />
+                    <span className="text-[9px] text-gray-500 leading-relaxed block">
+                      Limits the total times this coupon code can be redeemed across the system (e.g. first 15 signups).
+                    </span>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-3 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs transition-all border border-purple-400/20 active:scale-95 flex items-center justify-center gap-1.5"
@@ -3520,8 +3579,8 @@ export default function AdminPortal() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/5 text-gray-500 uppercase tracking-widest font-bold">
-                        <th className="pb-3 pr-2">Code</th>
-                        <th className="pb-3 pr-2">Discount</th>
+                        <th className="pb-3 pr-2">Code & Limits</th>
+                        <th className="pb-3 pr-2">Discount & Usage</th>
                         <th className="pb-3 pr-2">Schedule</th>
                         <th className="pb-3 pr-2 text-right">Action</th>
                       </tr>
@@ -3538,8 +3597,18 @@ export default function AdminPortal() {
                       ) : (
                         coupons.map((c) => (
                           <tr key={c.id} className="text-gray-300">
-                            <td className="py-3 pr-2 font-mono font-bold tracking-wider text-purple-300">
-                              {c.code}
+                            <td className="py-3 pr-2">
+                              <span className="font-mono font-bold tracking-wider text-purple-300 block">{c.code}</span>
+                              {c.planId && (
+                                <span className="block text-[8px] uppercase tracking-wider font-extrabold text-indigo-400 mt-0.5 leading-none">
+                                  Plan: {plans.find(p => p.id === c.planId)?.name || 'Restricted'}
+                                </span>
+                              )}
+                              {c.billingCycle && (
+                                <span className="block text-[8px] uppercase tracking-wider font-extrabold text-amber-400 mt-0.5 leading-none">
+                                  Duration: {c.billingCycle}
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 pr-2">
                               {c.discountType === 'FREE' ? (
@@ -3550,7 +3619,16 @@ export default function AdminPortal() {
                                 <span className="font-semibold text-white">${c.discountValue} Off</span>
                               )}
                               {c.firstTimeOnly && (
-                                <span className="block text-[8px] uppercase tracking-wider font-bold text-gray-500">First-Time</span>
+                                <span className="block text-[8px] uppercase tracking-wider font-bold text-gray-500">First-Time Only</span>
+                              )}
+                              {c.maxUses !== null ? (
+                                <span className="block text-[9px] font-extrabold text-indigo-300 tracking-wider uppercase mt-1">
+                                  🎟️ Uses: {c.usesCount} / {c.maxUses}
+                                </span>
+                              ) : (
+                                <span className="block text-[9px] font-extrabold text-gray-500 tracking-wider uppercase mt-1">
+                                  🎟️ Uses: {c.usesCount} / ∞
+                                </span>
                               )}
                             </td>
                             <td className="py-3 pr-2 font-mono text-[10px] text-gray-500">
