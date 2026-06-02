@@ -642,12 +642,24 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const confidenceValuesRef = useRef(confidenceValues);
   const latestWebcamFrameRef = useRef<string>('');
   const latestScreenFrameRef = useRef<string>('');
+  const localWebcamVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localScreenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const isFullscreenLockedRef = useRef(isFullscreenLocked);
+  const isScreenSharedRef = useRef(isScreenShared);
+  const isScreenShareFallbackRef = useRef(isScreenShareFallback);
+  const timeLeftRef = useRef(timeLeft);
 
   useEffect(() => { selectedAnswersRef.current = selectedAnswers; }, [selectedAnswers]);
   useEffect(() => { proctorLogsRef.current = proctorLogs; }, [proctorLogs]);
   useEffect(() => { cameraStreamRef.current = cameraStream; }, [cameraStream]);
   useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
   useEffect(() => { confidenceValuesRef.current = confidenceValues; }, [confidenceValues]);
+
+  useEffect(() => { isFullscreenLockedRef.current = isFullscreenLocked; }, [isFullscreenLocked]);
+  useEffect(() => { isScreenSharedRef.current = isScreenShared; }, [isScreenShared]);
+  useEffect(() => { isScreenShareFallbackRef.current = isScreenShareFallback; }, [isScreenShareFallback]);
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
   // Device detection helpers evaluated on client
   const rawUA = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
@@ -860,6 +872,17 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const [ownerChatSending, setOwnerChatSending] = useState(false);
 
   const activeVoterIdentifier = voterEmail || openEmail || voterIdentifier || ownerChatEmail;
+
+  // Proctor dynamic value Refs declared here so they have all dependency variables in scope
+  const activeVoterIdentifierRef = useRef(activeVoterIdentifier);
+  const confirmer1Ref = useRef(confirmer1);
+  const voterIdentifierRef = useRef(voterIdentifier);
+  const examineeSessionIdRef = useRef(examineeSessionId);
+
+  useEffect(() => { activeVoterIdentifierRef.current = activeVoterIdentifier; }, [activeVoterIdentifier]);
+  useEffect(() => { confirmer1Ref.current = confirmer1; }, [confirmer1]);
+  useEffect(() => { voterIdentifierRef.current = voterIdentifier; }, [voterIdentifier]);
+  useEffect(() => { examineeSessionIdRef.current = examineeSessionId; }, [examineeSessionId]);
 
   // Fetch owner direct messages
   useEffect(() => {
@@ -1464,6 +1487,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     const isProctorActive = !showIntro && timerActive && poll?.settings?.enableProctorCamera;
     if (!isProctorActive) return;
 
+    // Local off-screen video elements kept as a robust fallback
     const webVideo = document.createElement('video');
     webVideo.autoplay = true;
     webVideo.playsInline = true;
@@ -1496,18 +1520,22 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       let webcamFrame = '';
       let screenFrame = '';
 
-      if (cameraStream && webCtx && webVideo.readyState >= 2) {
+      // Highly robust: Prioritize active DOM video elements playing/decoded inside the document
+      const activeWebVideo = localWebcamVideoRef.current || webVideo;
+      const activeScrVideo = localScreenVideoRef.current || scrVideo;
+
+      if (cameraStream && webCtx && activeWebVideo && (activeWebVideo.readyState >= 1 || activeWebVideo.videoWidth > 0)) {
         try {
-          webCtx.drawImage(webVideo, 0, 0, 160, 120);
+          webCtx.drawImage(activeWebVideo, 0, 0, 160, 120);
           webcamFrame = webCanvas.toDataURL('image/jpeg', 0.5);
         } catch (e) {
           console.error("Webcam capture error:", e);
         }
       }
 
-      if (screenStream && scrCtx && scrVideo.readyState >= 2 && !isScreenShareFallback) {
+      if (screenStream && scrCtx && activeScrVideo && (activeScrVideo.readyState >= 1 || activeScrVideo.videoWidth > 0) && !isScreenShareFallbackRef.current) {
         try {
-          scrCtx.drawImage(scrVideo, 0, 0, 240, 180);
+          scrCtx.drawImage(activeScrVideo, 0, 0, 240, 180);
           screenFrame = scrCanvas.toDataURL('image/jpeg', 0.4);
         } catch (e) {
           console.error("Screen capture error:", e);
@@ -1546,13 +1574,13 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           // 6. Draw Candidate status
           scrCtx.fillStyle = '#a78bfa';
           scrCtx.font = '8px sans-serif';
-          scrCtx.fillText((confirmer1 || activeVoterIdentifier || 'Examinee').slice(0, 25), 10, 56);
+          scrCtx.fillText((confirmer1Ref.current || activeVoterIdentifierRef.current || 'Examinee').slice(0, 25), 10, 56);
 
           // 7. Draw active question details
           const totalQ = poll?.questions?.length || 0;
           // Calculate answered count
           const answered = poll?.questions?.filter((q: any) => {
-            const ans = selectedAnswers[q.id];
+            const ans = selectedAnswersRef.current[q.id];
             if (ans === undefined || ans === null || ans === '') return false;
             if (Array.isArray(ans) && ans.length === 0) return false;
             if (typeof ans === 'object' && Object.keys(ans).length === 0) return false;
@@ -1570,7 +1598,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           scrCtx.font = '7px sans-serif';
           scrCtx.fillText(`Questions Answered: ${answered} / ${totalQ}`, 15, 92);
           
-          const violationCount = proctorLogs.filter((log: string) => log.includes('🚨') || log.includes('⚠️')).length;
+          const violationCount = proctorLogsRef.current.filter((log: string) => log.includes('🚨') || log.includes('⚠️')).length;
           scrCtx.fillStyle = violationCount > 0 ? '#f87171' : '#34d399';
           scrCtx.fillText(`Security Violations: ${violationCount}`, 15, 104);
 
@@ -1590,7 +1618,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           // 9. Draw Footer Timer countdown
           scrCtx.fillStyle = '#94a3b8';
           scrCtx.font = 'bold 8px monospace';
-          const timeString = timeLeft !== null ? formatTime(timeLeft) : 'No Timer';
+          const timeString = timeLeftRef.current !== null ? formatTime(timeLeftRef.current) : 'No Timer';
           scrCtx.fillText(`⏱️ TIME REMAINING: ${timeString}`, 10, 168);
 
           screenFrame = scrCanvas.toDataURL('image/jpeg', 0.4);
@@ -1606,20 +1634,20 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         // Broadcast feeds live temporarily (NOT stored in website database permanently)
         socketRef.current.emit('student-telemetry', {
           pollId,
-          studentId: activeVoterIdentifier || examineeSessionId || 'anonymous',
-          studentName: confirmer1 || activeVoterIdentifier || (examineeSessionId ? `Examinee #${examineeSessionId.slice(-4)}` : 'Anonymous Student'),
-          identifier: voterIdentifier || (examineeSessionId ? `Guest #${examineeSessionId.slice(-4)}` : 'Guest'),
-          status: (isFullscreenLocked && (isScreenShared || isScreenShareFallback) && !document.hidden) ? 'ACTIVE' : 'OFFLINE',
-          alert: !isFullscreenLocked 
+          studentId: activeVoterIdentifierRef.current || examineeSessionIdRef.current || 'anonymous',
+          studentName: confirmer1Ref.current || activeVoterIdentifierRef.current || (examineeSessionIdRef.current ? `Examinee #${examineeSessionIdRef.current.slice(-4)}` : 'Anonymous Student'),
+          identifier: voterIdentifierRef.current || (examineeSessionIdRef.current ? `Guest #${examineeSessionIdRef.current.slice(-4)}` : 'Guest'),
+          status: (isFullscreenLockedRef.current && (isScreenSharedRef.current || isScreenShareFallbackRef.current) && !document.hidden) ? 'ACTIVE' : 'OFFLINE',
+          alert: !isFullscreenLockedRef.current 
             ? '🚨 Exited Fullscreen Mode' 
-            : ((!isScreenShared && !isScreenShareFallback) 
+            : ((!isScreenSharedRef.current && !isScreenShareFallbackRef.current) 
                 ? '🚨 Stopped Screen Share' 
                 : (document.hidden 
                     ? '⚠️ Tab Switched' 
-                    : (isScreenShareFallback ? '🟢 Focus Active (Simulated Screen)' : '🟢 Focus Active (No anomalies)'))),
+                    : (isScreenShareFallbackRef.current ? '🟢 Focus Active (Simulated Screen)' : '🟢 Focus Active (No anomalies)'))),
           webcamFrame,
           screenFrame,
-          logs: proctorLogs,
+          logs: proctorLogsRef.current,
           lastActive: new Date().toLocaleTimeString()
         });
       }
@@ -1633,7 +1661,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       webVideo.srcObject = null;
       scrVideo.srcObject = null;
     };
-  }, [showIntro, timerActive, cameraStream, screenStream, isFullscreenLocked, isScreenShared, isScreenShareFallback, proctorLogs, activeVoterIdentifier, confirmer1, voterIdentifier, selectedAnswers, timeLeft, poll, examineeSessionId]);
+  }, [showIntro, timerActive, cameraStream, screenStream]);
 
   // Clean up media streams and socket on component unmount
   useEffect(() => {
@@ -1672,6 +1700,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
 
   // Callback Ref for the video element to safely bind the stream on mount
   const videoRef = useCallback((node: HTMLVideoElement | null) => {
+    localWebcamVideoRef.current = node;
     if (node && cameraStream) {
       node.srcObject = cameraStream;
     }
@@ -2963,6 +2992,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               {screenStream ? (
                 <video
                   ref={(node) => {
+                    localScreenVideoRef.current = node;
                     if (node && screenStream) node.srcObject = screenStream;
                   }}
                   autoPlay

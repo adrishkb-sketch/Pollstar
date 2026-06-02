@@ -185,19 +185,22 @@ function PollInsightsContent({ params }: PageProps) {
 
     socket.on('student-telemetry', (data: any) => {
       if (data && data.studentId) {
-        setProctorTelemetry((prev) => ({
-          ...prev,
-          [data.studentId]: {
-            status: data.status,
-            alert: data.alert,
-            lastActive: data.lastActive || new Date().toLocaleTimeString(),
-            webcamFrame: data.webcamFrame,
-            screenFrame: data.screenFrame,
-            logs: data.logs || [],
-            studentName: data.studentName,
-            identifier: data.identifier
-          }
-        }));
+        setProctorTelemetry((prev) => {
+          const existing = prev[data.studentId];
+          return {
+            ...prev,
+            [data.studentId]: {
+              status: data.status,
+              alert: data.alert,
+              lastActive: data.lastActive || new Date().toLocaleTimeString(),
+              webcamFrame: data.webcamFrame || existing?.webcamFrame,
+              screenFrame: data.screenFrame || existing?.screenFrame,
+              logs: data.logs || [],
+              studentName: data.studentName,
+              identifier: data.identifier
+            }
+          };
+        });
       }
     });
 
