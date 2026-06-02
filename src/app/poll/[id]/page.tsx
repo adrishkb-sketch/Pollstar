@@ -633,6 +633,22 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const [proctorLogs, setProctorLogs] = useState<string[]>([]);
   const socketRef = useRef<any>(null);
 
+  // Proctor images & dynamic values Refs for stable non-resetting event listeners
+  const [isExamCancelled, setIsExamCancelled] = useState(false);
+  const selectedAnswersRef = useRef(selectedAnswers);
+  const proctorLogsRef = useRef(proctorLogs);
+  const cameraStreamRef = useRef(cameraStream);
+  const screenStreamRef = useRef(screenStream);
+  const confidenceValuesRef = useRef(confidenceValues);
+  const latestWebcamFrameRef = useRef<string>('');
+  const latestScreenFrameRef = useRef<string>('');
+
+  useEffect(() => { selectedAnswersRef.current = selectedAnswers; }, [selectedAnswers]);
+  useEffect(() => { proctorLogsRef.current = proctorLogs; }, [proctorLogs]);
+  useEffect(() => { cameraStreamRef.current = cameraStream; }, [cameraStream]);
+  useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
+  useEffect(() => { confidenceValuesRef.current = confidenceValues; }, [confidenceValues]);
+
   // Device detection helpers evaluated on client
   const rawUA = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
   const isTabletUA = /Tablet|iPad|Playbook|Silk|Kindle/i.test(rawUA) || ( typeof navigator !== 'undefined' && /Android/i.test(rawUA) && !/Mobile/i.test(rawUA) );
@@ -655,6 +671,67 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       setExamineeSessionId(id);
     }
   }, [pollId]);
+
+  const handleForceCancelExam = async () => {
+    setVoteLoading(true);
+    try {
+      let detectedDevice = 'Desktop';
+      if (isMobileUA || isMobilePlatform || (isTouch && screenW <= 480)) {
+        detectedDevice = 'Mobile';
+      } else if (isTabletUA || isTabletPlatform || (isTouch && screenW > 480 && screenW <= 1024 && !/Macintosh/i.test(navigator?.platform || ''))) {
+        detectedDevice = 'Tablet';
+      } else if (isTouch && screenW <= 1024 && /MacIntel/.test(navigator?.platform || '')) {
+        detectedDevice = 'Tablet';
+      }
+
+      const time = new Date().toLocaleTimeString();
+      const updatedLogs = [...proctorLogsRef.current, `🚨 EXAMINATION TERMINATED BY EXAMINER at ${time}`];
+
+      // Send to server to mark exam as voided/cancelled
+      const res = await fetch(`/api/polls/${pollId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: { 
+            ...selectedAnswersRef.current, 
+            __proctorLogs: updatedLogs,
+            __examCancelled: true,
+            __markingStatus: 'CANCELLED',
+            __webcamFrame: latestWebcamFrameRef.current,
+            __screenFrame: latestScreenFrameRef.current,
+          },
+          voterToken: poll?.isOpenVoting ? undefined : voterToken,
+          email: poll?.isOpenVoting && poll?.settings?.limitOneVotePerUser ? openEmail : undefined,
+          latitude: null,
+          longitude: null,
+          device: detectedDevice,
+          isAutoSubmitted: true,
+        }),
+      });
+
+      setIsExamCancelled(true);
+      setVotedSuccessfully(true);
+      setFlaggedSuspicious(true);
+      
+      // Clear localStorage proctor keys so the student is not stuck in a reload loop
+      localStorage.removeItem(`poll_start_time_${pollId}`);
+      localStorage.removeItem(`pollstar_resume_${pollId}`);
+      localStorage.removeItem(`exam_in_progress_${pollId}`);
+      localStorage.removeItem(`selected_answers_${pollId}`);
+      localStorage.removeItem(`proctor_logs_${pollId}`);
+
+      // Stop media tracks
+      if (cameraStreamRef.current) cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      if (screenStreamRef.current) screenStreamRef.current.getTracks().forEach(t => t.stop());
+      if (socketRef.current) socketRef.current.disconnect();
+
+      alert("🚨 This examination has been terminated by the examiner due to integrity infractions.");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setVoteLoading(false);
+    }
+  };
 
   const addProctorLog = (msg: string) => {
     setProctorLogs(prev => {
@@ -742,6 +819,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       const socket = io();
       socketRef.current = socket;
       socket.emit('join-poll', pollId);
+
+      socket.on('cancel-exam', (data: any) => {
+        if (data && (data.studentId === activeVoterIdentifier || data.studentId === examineeSessionId || data.identifier === voterIdentifier)) {
+          handleForceCancelExam();
+        }
+      });
 
       // 6. Enter exam
       setShowIntro(false);
@@ -1088,6 +1171,13 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
             setFlaggedSuspicious(data.flaggedSuspicious || false);
           }
 
+          // Clear localStorage proctor keys so the student is not stuck in a reload loop
+          localStorage.removeItem(`poll_start_time_${pollId}`);
+          localStorage.removeItem(`pollstar_resume_${pollId}`);
+          localStorage.removeItem(`exam_in_progress_${pollId}`);
+          localStorage.removeItem(`selected_answers_${pollId}`);
+          localStorage.removeItem(`proctor_logs_${pollId}`);
+
           // Emit alert socket event so teacher gets notified immediately
           const socket = io();
           socket.emit('join-poll', pollId);
@@ -1217,8 +1307,13 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
-            confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
+            answers: { 
+              ...selectedAnswersRef.current, 
+              __proctorLogs: proctorLogsRef.current,
+              __webcamFrame: latestWebcamFrameRef.current,
+              __screenFrame: latestScreenFrameRef.current,
+            },
+            confidenceValues: Object.keys(confidenceValuesRef.current).length > 0 ? confidenceValuesRef.current : undefined,
             voterToken: poll.isOpenVoting ? undefined : voterToken,
             email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
             latitude: null,
@@ -1242,8 +1337,8 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         localStorage.removeItem(`proctor_logs_${pollId}`);
         
         // Stop active media streams on submission
-        if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
-        if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+        if (cameraStreamRef.current) cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        if (screenStreamRef.current) screenStreamRef.current.getTracks().forEach(t => t.stop());
         if (socketRef.current) socketRef.current.disconnect();
 
       } catch (err: any) {
@@ -1255,7 +1350,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     };
 
     let graceActive = true;
-    const gracePeriodTimer = setTimeout(() => { graceActive = false; }, 3000);
+    const gracePeriodTimer = setTimeout(() => { graceActive = false; }, 10000); // Generous 10s grace period for startup transitions!
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && !graceActive) {
@@ -1302,7 +1397,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       if (shouldLeaveSubmit) {
         const detectedDevice = 'Desktop'; 
         const bodyStr = JSON.stringify({
-          answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
+          answers: { 
+            ...selectedAnswersRef.current, 
+            __proctorLogs: proctorLogsRef.current,
+            __webcamFrame: latestWebcamFrameRef.current,
+            __screenFrame: latestScreenFrameRef.current,
+          },
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,
           latitude: 22.5726, 
@@ -1331,7 +1431,7 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [timerActive, poll, selectedAnswers, confidenceValues, voterToken, openEmail, pollId, proctorLogs, cameraStream, screenStream]);
+  }, [timerActive, pollId]);
 
   // 4. Fullscreen enforcement and exit tracking
   useEffect(() => {
@@ -1495,6 +1595,9 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
           console.error("Simulated screen capture error:", e);
         }
       }
+
+      if (webcamFrame) latestWebcamFrameRef.current = webcamFrame;
+      if (screenFrame) latestScreenFrameRef.current = screenFrame;
 
       if (socketRef.current) {
         // Broadcast feeds live temporarily (NOT stored in website database permanently)
@@ -4059,55 +4162,77 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
       {/* VOTE SUBMITTED SUCCESS VIEW */}
       {votedSuccessfully && (
         <div className="glass-card rounded-3xl p-10 border border-white/5 shadow-2xl space-y-6 text-center animate-fade-in-up">
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
-            <CheckCircle className="w-8 h-8" />
-          </div>
+          {isExamCancelled ? (
+            <>
+              <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full w-16 h-16 flex items-center justify-center mx-auto animate-pulse">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
 
-          <div className="space-y-2">
-            <h3 className="font-outfit text-2xl font-bold text-white">
-              {poll.pollType === 'EXAM' 
-                ? 'Exam Submitted Successfully!' 
-                : (poll.pollType === 'SURVEY' ? 'Survey Submitted Successfully!' : 'Vote Submitted Successfully!')
-              }
-            </h3>
-            <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-              {poll.settings?.postSurveyAction || (
-                poll.pollType === 'EXAM' 
-                  ? 'Your answers have been securely recorded. If instant results release is enabled, you can view your diagnostic report below.' 
-                  : (poll.pollType === 'SURVEY' 
-                      ? 'Thank you for participating! Your valuable feedback and responses have been securely recorded.' 
-                      : 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.')
-              )}
-            </p>
-            {flaggedSuspicious && (
-              <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
-                ⚠️ {poll.pollType === 'EXAM' 
-                  ? 'Exam attempt flagged for Proctor inspection' 
-                  : (poll.pollType === 'SURVEY' ? 'Response flagged for Administrator review' : 'Cast flagged for Administrator inspection')
-                }
-              </span>
-            )}
-            {(() => {
-              if (poll.pollType !== 'EXAM') return null;
-              const isInstant = !!poll.settings?.enableInstantFeedback;
-              const isHideUntilEnd = !!poll.settings?.hideResultsUntilEnd;
-              const isReleasedSetting = !!poll.settings?.resultsReleased;
-              const isReleased = isInstant || (isHideUntilEnd ? new Date() > new Date(poll.endTime) : isReleasedSetting);
+              <div className="space-y-2">
+                <h3 className="font-outfit text-2xl font-bold text-white">
+                  Examination Terminated
+                </h3>
+                <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+                  Your exam session was explicitly terminated by the supervisor due to integrity violations or tab switching.
+                </p>
+                <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider">
+                  🚨 CANCELLED BY PROCTOR
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-8 h-8" />
+              </div>
 
-              if (!isReleased) return null;
-              return (
-                <div className="pt-4 flex justify-center">
-                  <Link
-                    href={`/poll/${poll.id}/analysis?email=${encodeURIComponent(voterEmail || openEmail || voterIdentifier || '')}`}
-                    className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center space-x-2 active:scale-95 animate-pulse-slow"
-                  >
-                    <Award className="w-4 h-4" />
-                    <span>View Grade & Diagnostic Report</span>
-                  </Link>
-                </div>
-              );
-            })()}
-          </div>
+              <div className="space-y-2">
+                <h3 className="font-outfit text-2xl font-bold text-white">
+                  {poll.pollType === 'EXAM' 
+                    ? 'Exam Submitted Successfully!' 
+                    : (poll.pollType === 'SURVEY' ? 'Survey Submitted Successfully!' : 'Vote Submitted Successfully!')
+                  }
+                </h3>
+                <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+                  {poll.settings?.postSurveyAction || (
+                    poll.pollType === 'EXAM' 
+                      ? 'Your answers have been securely recorded. If instant results release is enabled, you can view your diagnostic report below.' 
+                      : (poll.pollType === 'SURVEY' 
+                          ? 'Thank you for participating! Your valuable feedback and responses have been securely recorded.' 
+                          : 'Thank you for participating. Your vote has been cryptographically recorded on our backend ledger.')
+                  )}
+                </p>
+                {flaggedSuspicious && (
+                  <span className="inline-block mt-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg uppercase tracking-wider animate-pulse">
+                    ⚠️ {poll.pollType === 'EXAM' 
+                      ? 'Exam attempt flagged for Proctor inspection' 
+                      : (poll.pollType === 'SURVEY' ? 'Response flagged for Administrator review' : 'Cast flagged for Administrator inspection')
+                    }
+                  </span>
+                )}
+                {(() => {
+                  if (poll.pollType !== 'EXAM') return null;
+                  const isInstant = !!poll.settings?.enableInstantFeedback;
+                  const isHideUntilEnd = !!poll.settings?.hideResultsUntilEnd;
+                  const isReleasedSetting = !!poll.settings?.resultsReleased;
+                  const isReleased = isInstant || (isHideUntilEnd ? new Date() > new Date(poll.endTime) : isReleasedSetting);
+
+                  if (!isReleased) return null;
+                  return (
+                    <div className="pt-4 flex justify-center">
+                      <Link
+                        href={`/poll/${poll.id}/analysis?email=${encodeURIComponent(voterEmail || openEmail || voterIdentifier || '')}`}
+                        className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-95 shadow-lg shadow-indigo-500/20 transition-all text-sm flex items-center space-x-2 active:scale-95 animate-pulse-slow"
+                      >
+                        <Award className="w-4 h-4" />
+                        <span>View Grade & Diagnostic Report</span>
+                      </Link>
+                    </div>
+                  );
+                })()}
+              </div>
+            </>
+          )}
         </div>
       )}
 

@@ -152,6 +152,11 @@ function PollInsightsContent({ params }: PageProps) {
   const [modelAnswerEdits, setModelAnswerEdits] = useState<Record<string, string | string[]>>({});
   const [savingModelAnswer, setSavingModelAnswer] = useState<string | null>(null);
 
+
+
+  const planFeatures = poll?.creator?.plan?.features || {};
+  const isProctoringLocked = !planFeatures.liveWebcamProctoring && poll?.creator?.role !== 'ADMIN';
+
   // Fetch direct messages on mount and poll when active
   useEffect(() => {
     const fetchInbox = async () => {
@@ -171,12 +176,9 @@ function PollInsightsContent({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [pollId]);
 
-  const planFeatures = poll?.creator?.plan?.features || {};
-  const isProctoringLocked = !planFeatures.liveWebcamProctoring && poll?.creator?.role !== 'ADMIN';
-
-  // Real-time Proctoring telemetry from socket
+  // Socket telemetry receiver
   useEffect(() => {
-    if (activeTab !== 'proctor' || isProctoringLocked || !poll) return;
+    if (isProctoringLocked || !poll) return;
 
     const socket = io();
     socket.emit('join-poll', poll.id);
@@ -202,41 +204,74 @@ function PollInsightsContent({ params }: PageProps) {
     return () => {
       socket.disconnect();
     };
-  }, [activeTab, isProctoringLocked, poll]);
+  }, [isProctoringLocked, poll]);
+
+  // Real-time proctor review states
+  const [reviewingExaminee, setReviewingExaminee] = useState<any | null>(null);
+  const [proctorActionLoading, setProctorActionLoading] = useState(false);
+
+  const fetchPoll = async () => {
+    try {
+      const res = await fetch(`/api/polls/${pollId}?focus=${encodeURIComponent(focusedField)}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch poll insights');
+      }
+
+      setPoll(data.poll);
+      setIsOwner(data.isOwner);
+      setCollaboratorRole(data.collaboratorRole || 'VIEWER');
+      setActiveCollaborators(data.activeCollaborators || []);
+      setCreatorCollaborationAllowed(data.creatorCollaborationAllowed !== false);
+      setUserCollaborationAllowed(data.userCollaborationAllowed !== false);
+      setLiveStats(data.poll.stats || {});
+      setLiveTotalVotes(data.poll.totalVotes || 0);
+      setLiveVotesList(data.poll.votes || []);
+      setVelocityNow(Date.now());
+
+      // Initialize draft form states
+      setEditTitle(data.poll.title || '');
+      setEditDescription(data.poll.description || '');
+      setEditQuestions(data.poll.questions || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProctorAction = async (action: 'approve' | 'cancel') => {
+    if (!reviewingExaminee) return;
+    setProctorActionLoading(true);
+    try {
+      const res = await fetch(`/api/polls/${pollId}/proctor-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          voteId: reviewingExaminee.vote?.id || null,
+          studentIdentifier: reviewingExaminee.identifier || reviewingExaminee.email || null,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || 'Failed to apply proctor action');
+      }
+
+      alert(resData.message || `Successfully completed ${action} proctor action.`);
+      setReviewingExaminee(null);
+      await fetchPoll(); // Instantly refresh submission status and lists!
+    } catch (err: any) {
+      alert(err.message || 'An error occurred while updating proctor status.');
+    } finally {
+      setProctorActionLoading(false);
+    }
+  };
 
   // 1. Fetch Poll Details on Mount
   useEffect(() => {
-    const fetchPoll = async () => {
-      try {
-        const res = await fetch(`/api/polls/${pollId}?focus=${encodeURIComponent(focusedField)}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to fetch poll insights');
-        }
-
-        setPoll(data.poll);
-        setIsOwner(data.isOwner);
-        setCollaboratorRole(data.collaboratorRole || 'VIEWER');
-        setActiveCollaborators(data.activeCollaborators || []);
-        setCreatorCollaborationAllowed(data.creatorCollaborationAllowed !== false);
-        setUserCollaborationAllowed(data.userCollaborationAllowed !== false);
-        setLiveStats(data.poll.stats || {});
-        setLiveTotalVotes(data.poll.totalVotes || 0);
-        setLiveVotesList(data.poll.votes || []);
-        setVelocityNow(Date.now());
-
-        // Initialize draft form states
-        setEditTitle(data.poll.title || '');
-        setEditDescription(data.poll.description || '');
-        setEditQuestions(data.poll.questions || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchPoll();
   }, [pollId]);
 
@@ -2558,25 +2593,8 @@ function PollInsightsContent({ params }: PageProps) {
                             ) : '-'}
                           </td>
                           <td className="py-4 px-4">
-                            {ex.voted ? (
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center w-fit gap-1 ${
-                                isFlagged 
-                                  ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' 
-                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              }`}>
-                                {isFlagged ? (
-                                  <>
-                                    <ShieldAlert className="w-3.5 h-3.5" />
-                                    <span>Suspicious Attempt</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                    <span>No Proctor Alerts</span>
-                                  </>
-                                )}
-                              </span>
-                            ) : (() => {
+                            {(() => {
+                              // Check if we have live socket telemetry for this student
                               const telKey = Object.keys(proctorTelemetry).find(key => {
                                 const item = proctorTelemetry[key];
                                 return key === ex.id || 
@@ -2584,29 +2602,37 @@ function PollInsightsContent({ params }: PageProps) {
                                        (item.studentName && ex.name && item.studentName.toLowerCase() === ex.name.toLowerCase());
                               });
                               const tel = telKey ? proctorTelemetry[telKey] : null;
-                              const hasLiveAlert = tel && tel.alert && (tel.alert.includes('⚠️') || tel.alert.includes('🚨'));
 
-                              return tel ? (
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center w-fit gap-1 ${
-                                  hasLiveAlert 
-                                    ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' 
-                                    : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                }`}>
-                                  {hasLiveAlert ? (
-                                    <>
-                                      <ShieldAlert className="w-3.5 h-3.5" />
-                                      <span>Live: {tel.alert.replace('🚨', '').replace('⚠️', '').trim()}</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                                      <span>Live: Focused</span>
-                                    </>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              );
+                              const isExamCancelled = ex.vote ? (() => {
+                                try {
+                                  const parsed = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+                                  return !!parsed?.__examCancelled;
+                                } catch (_) { return false; }
+                              })() : false;
+
+                              if (isExamCancelled) {
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20">
+                                    🚨 Voided / Cancelled
+                                  </span>
+                                );
+                              }
+
+                              if (ex.voted || tel) {
+                                return (
+                                  <button
+                                    onClick={() => setReviewingExaminee({ ...ex, liveTelemetry: tel })}
+                                    className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold flex items-center gap-1 border transition-all ${
+                                      isFlagged || (tel && tel.alert && (tel.alert.includes('⚠️') || tel.alert.includes('🚨')))
+                                        ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20 animate-pulse'
+                                        : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20'
+                                    }`}
+                                  >
+                                    <span>🔍 Review Integrity</span>
+                                  </button>
+                                );
+                              }
+                              return <span className="text-gray-500 italic">Absent / Offline</span>;
                             })()}
                           </td>
                           <td className="py-4 px-4 font-mono text-gray-300">{timeSpentStr}</td>
@@ -5712,6 +5738,196 @@ function PollInsightsContent({ params }: PageProps) {
           </div>
         </div>
       )}
+
+      {/* Proctoring Feeds Review Modal */}
+      {reviewingExaminee && (() => {
+        const ex = reviewingExaminee;
+        // Search in proctorTelemetry for live streams
+        const telKey = Object.keys(proctorTelemetry).find(key => {
+          const item = proctorTelemetry[key];
+          return key === ex.id || 
+                 (item.identifier && ex.identifier && item.identifier.toLowerCase() === ex.identifier.toLowerCase()) || 
+                 (item.studentName && ex.name && item.studentName.toLowerCase() === ex.name.toLowerCase());
+        });
+        const tel = telKey ? proctorTelemetry[telKey] : null;
+
+        // Parse DB submission answers (if submitted)
+        let parsedAnswers: any = null;
+        let dbWebcam = '';
+        let dbScreen = '';
+        let proctorLogsList: string[] = [];
+
+        if (ex.vote) {
+          try {
+            parsedAnswers = typeof ex.vote.answers === 'string' ? JSON.parse(ex.vote.answers) : ex.vote.answers;
+            dbWebcam = parsedAnswers?.__webcamFrame || '';
+            dbScreen = parsedAnswers?.__screenFrame || '';
+            proctorLogsList = parsedAnswers?.__proctorLogs || [];
+          } catch (_) {}
+        } else if (tel) {
+          proctorLogsList = tel.logs || [];
+        }
+
+        const webcamSrc = tel?.webcamFrame || dbWebcam;
+        const screenSrc = tel?.screenFrame || dbScreen;
+        const isLive = !!tel && !ex.voted;
+
+        return (
+          <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="glass-card w-full max-w-4xl rounded-3xl border border-white/10 bg-[#080d1a] p-6 space-y-6 flex flex-col max-h-[90vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-indigo-400" />
+                    <h3 className="font-outfit text-lg font-bold text-white">Review Proctor Integrity Feeds</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider animate-pulse ${
+                      isLive ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {isLive ? '● Live Stream Active' : '🟢 Submitted / Inactive'}
+                    </span>
+                  </div>
+                  <p className="text-gray-400 text-xs font-medium">
+                    Candidate: <strong className="text-white">{ex.name || 'Anonymous Student'}</strong> ({ex.identifier}) • {ex.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReviewingExaminee(null)}
+                  className="text-gray-400 hover:text-white text-lg font-bold transition-all p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Grid content */}
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto no-scrollbar py-2">
+                {/* Visual Feeds stack */}
+                <div className="space-y-4">
+                  <h4 className="font-outfit text-xs font-bold text-gray-400 uppercase tracking-widest">Recorded Image Feeds</h4>
+                  
+                  {/* Webcam */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Candidate Webcam Shot</span>
+                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center">
+                      {webcamSrc ? (
+                        <img 
+                          src={webcamSrc} 
+                          alt="Webcam stream capture" 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <div className="text-center space-y-2 p-4">
+                          <Video className="w-8 h-8 text-gray-600 mx-auto" />
+                          <span className="text-[10px] text-gray-500 block">No webcam proctor feed recorded</span>
+                        </div>
+                      )}
+                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
+                        Webcam Frame
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Screen Capture */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-wider">Candidate Screen Capture</span>
+                    <div className="relative aspect-[4/3] rounded-2xl bg-slate-950 border border-white/5 overflow-hidden flex items-center justify-center">
+                      {screenSrc ? (
+                        <img 
+                          src={screenSrc} 
+                          alt="Screen stream capture" 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <div className="text-center space-y-2 p-4">
+                          <Monitor className="w-8 h-8 text-gray-600 mx-auto" />
+                          <span className="text-[10px] text-gray-500 block">No screen proctor feed recorded</span>
+                        </div>
+                      )}
+                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[8px] font-bold text-gray-400 uppercase tracking-widest border border-white/5">
+                        Shared Screen / simulated Frame
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timeline and details stack */}
+                <div className="flex flex-col space-y-4">
+                  <h4 className="font-outfit text-xs font-bold text-gray-400 uppercase tracking-widest">Proctor Security Logs</h4>
+
+                  <div className="flex-1 bg-slate-950/40 border border-white/5 rounded-2xl p-4 overflow-y-auto max-h-[340px] space-y-3.5 no-scrollbar">
+                    {proctorLogsList.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <ShieldCheck className="w-10 h-10 text-emerald-400 mb-2" />
+                        <span className="text-xs text-gray-400 font-bold uppercase">No Integrity Infractions</span>
+                        <p className="text-[10px] text-gray-500 mt-1 max-w-[200px]">This candidate has completed the exam focusing entirely within the lock window.</p>
+                      </div>
+                    ) : (
+                      proctorLogsList.map((log, index) => (
+                        <div key={index} className="flex gap-2.5 items-start p-2 rounded-xl bg-white/2 border border-white/5 text-[11px] leading-relaxed">
+                          <span className="text-xs select-none shrink-0">
+                            {log.includes('🚨') ? '🚨' : (log.includes('⚠️') ? '⚠️' : '🟢')}
+                          </span>
+                          <span className={log.includes('🚨') ? 'text-red-400 font-medium' : (log.includes('⚠️') ? 'text-amber-400 font-medium' : 'text-emerald-400')}>
+                            {log.replace('🚨', '').replace('⚠️', '').replace('🟢', '').trim()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="bg-[#0c1324] border border-white/5 rounded-2xl p-4 space-y-2">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Integrity Action Recommendation</span>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      If you approve this candidate, all proctoring base64 snapshots will be deleted from our systems immediately to maintain student privacy. If you cancel, the candidate will be barred from this exam report.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="border-t border-white/5 pt-4 flex justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setReviewingExaminee(null)}
+                  className="px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all animate-pulse-slow"
+                >
+                  Close Feeds
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={proctorActionLoading}
+                    onClick={() => handleProctorAction('cancel')}
+                    className="px-5 py-2.5 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-transparent text-red-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    {proctorActionLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                    )}
+                    <span>Cancel Examination</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={proctorActionLoading}
+                    onClick={() => handleProctorAction('approve')}
+                    className="px-5 py-2.5 bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-500/20 hover:border-transparent text-emerald-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/5"
+                  >
+                    {proctorActionLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Approve & Clear Feeds</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* customized printing overrides style */}
       <style jsx global>{`

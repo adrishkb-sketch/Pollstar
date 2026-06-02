@@ -253,6 +253,34 @@ export default function ExamineeAnalysisPage({ params }: PageProps) {
     );
   }
 
+  if (data && data.result?.examinee?.markingStatus === 'CANCELLED') {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center p-6">
+        <div className="glass-card max-w-md w-full border border-red-500/20 bg-red-500/5 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mx-auto animate-pulse">
+            <XCircle className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-outfit text-lg font-bold text-white uppercase tracking-wider">Examination Cancelled</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Your exam paper has been officially <strong className="text-red-400">Cancelled and Voided</strong> by the examiner/proctor due to security infractions or tab switches recorded during the session.
+            </p>
+          </div>
+          <div className="text-[10px] text-red-400/80 font-mono leading-relaxed bg-red-950/20 p-3 rounded-xl border border-red-500/10">
+            Status: VOIDED DUE TO INTEGRITY VIOLATION.<br />
+            No marks or grade report card will be released.
+          </div>
+          <Link
+            href="/"
+            className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-all border border-white/5 block text-center"
+          >
+            Back to Pollstar Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { poll, examinee, score, questions } = data.result;
 
   const scoreEarned = score.earned || 0.0;
