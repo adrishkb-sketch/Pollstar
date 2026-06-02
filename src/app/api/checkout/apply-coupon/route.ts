@@ -65,6 +65,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Coupon code has expired or is not yet active' }, { status: 400 });
     }
 
+    // Plan wise Coupon verification check
+    if (coupon.planId && coupon.planId !== planId) {
+      return NextResponse.json({ error: 'This coupon code is not valid for the selected plan' }, { status: 400 });
+    }
+
+    // Plan duration / billing cycle wise Coupon verification check
+    if (coupon.billingCycle && duration && coupon.billingCycle.toUpperCase() !== duration.toUpperCase()) {
+      return NextResponse.json({ error: `This coupon code is only valid for ${coupon.billingCycle.toLowerCase()} subscriptions` }, { status: 400 });
+    }
+
+    // Maximum usage count verification check
+    if (coupon.maxUses !== null && coupon.usesCount >= coupon.maxUses) {
+      return NextResponse.json({ error: 'This coupon code has reached its maximum usage limit' }, { status: 400 });
+    }
+
     if (coupon.firstTimeOnly) {
       // Check if current user is already on a premium plan
       if (user.planId) {

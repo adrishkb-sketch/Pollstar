@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { code, discountType, discountValue, startDate, endDate, firstTimeOnly } = await req.json();
+    const { code, discountType, discountValue, startDate, endDate, firstTimeOnly, planId, billingCycle, maxUses } = await req.json();
 
     if (!code || !discountType || discountValue === undefined || !startDate || !endDate) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -71,6 +71,9 @@ export async function POST(req: Request) {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         firstTimeOnly: !!firstTimeOnly,
+        planId: planId || null,
+        billingCycle: billingCycle || null,
+        maxUses: maxUses !== undefined && maxUses !== null ? parseInt(String(maxUses), 10) : null,
         isActive: true
       }
     });

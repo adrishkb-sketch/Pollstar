@@ -132,6 +132,18 @@ export async function POST(req: Request) {
           }
         }
 
+        if (coupon.planId && coupon.planId !== planId) {
+          return NextResponse.json({ error: 'This coupon code is not valid for the selected plan' }, { status: 400 });
+        }
+
+        if (coupon.billingCycle && duration && coupon.billingCycle.toUpperCase() !== duration.toUpperCase()) {
+          return NextResponse.json({ error: `This coupon code is only valid for ${coupon.billingCycle.toLowerCase()} subscriptions` }, { status: 400 });
+        }
+
+        if (coupon.maxUses !== null && coupon.usesCount >= coupon.maxUses) {
+          return NextResponse.json({ error: 'This coupon code has reached its maximum usage limit' }, { status: 400 });
+        }
+
         if (validDates && validFirstTime) {
           if (coupon.discountType === 'FREE') {
             discountAmount = basePrice;
@@ -239,6 +251,19 @@ export async function POST(req: Request) {
         screenshotUrl: isManualUPI ? screenshotUrl : null,
       }
     });
+
+    // Atomic increment of the coupon usesCount
+    if (couponCode && discountAmount > 0) {
+      const formattedCode = couponCode.trim().toUpperCase();
+      try {
+        await prisma.coupon.update({
+          where: { code: formattedCode },
+          data: { usesCount: { increment: 1 } }
+        });
+      } catch (err) {
+        console.error('Failed to increment usesCount for coupon:', formattedCode, err);
+      }
+    }
 
     // Process MLM Referral commission splits (only if NOT manual UPI)
     if (!isManualUPI) {

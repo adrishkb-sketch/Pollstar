@@ -493,6 +493,10 @@ model Coupon {
   endDate       DateTime
   firstTimeOnly Boolean  @default(false)
   isActive      Boolean  @default(true)
+  planId        String?  // Plan wise coupon restriction
+  billingCycle  String?  // Subscription duration wise restriction
+  maxUses       Int?     // Maximum number of times this coupon can be used
+  usesCount     Int      @default(0) // Number of times successfully redeemed
   createdAt     DateTime @default(now())
 }
 
