@@ -1103,9 +1103,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }
   }, [proctorLogs, pollId]);
 
+  const hasCheckedReloadRef = useRef(false);
+
   // Page Refresh Detection & Lockout for secure exams
   useEffect(() => {
-    if (!poll || poll.pollType !== 'EXAM') return;
+    if (!poll || poll.pollType !== 'EXAM' || hasCheckedReloadRef.current) return;
+    hasCheckedReloadRef.current = true;
 
     const storageKey = `exam_in_progress_${pollId}`;
     const inProgress = localStorage.getItem(storageKey);
@@ -2392,7 +2395,12 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: { ...selectedAnswers, __proctorLogs: proctorLogs },
+          answers: { 
+            ...selectedAnswers, 
+            __proctorLogs: proctorLogs,
+            __webcamFrame: latestWebcamFrameRef.current,
+            __screenFrame: latestScreenFrameRef.current,
+          },
           confidenceValues: Object.keys(confidenceValues).length > 0 ? confidenceValues : undefined,
           voterToken: poll.isOpenVoting ? undefined : voterToken,
           email: poll.isOpenVoting && poll.settings?.limitOneVotePerUser ? openEmail : undefined,

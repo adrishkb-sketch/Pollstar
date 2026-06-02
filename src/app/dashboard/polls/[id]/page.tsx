@@ -5885,21 +5885,21 @@ function PollInsightsContent({ params }: PageProps) {
               </div>
 
               {/* Actions Footer */}
-              <div className="border-t border-white/5 pt-4 flex justify-between gap-4">
+              <div className="border-t border-white/5 pt-4 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-center gap-4">
                 <button
                   type="button"
                   onClick={() => setReviewingExaminee(null)}
-                  className="px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all animate-pulse-slow"
+                  className="px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all text-center"
                 >
                   Close Feeds
                 </button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <button
                     type="button"
                     disabled={proctorActionLoading}
                     onClick={() => handleProctorAction('cancel')}
-                    className="px-5 py-2.5 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-transparent text-red-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                    className="px-5 py-2.5 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-transparent text-red-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95"
                   >
                     {proctorActionLoading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -5913,7 +5913,7 @@ function PollInsightsContent({ params }: PageProps) {
                     type="button"
                     disabled={proctorActionLoading}
                     onClick={() => handleProctorAction('approve')}
-                    className="px-5 py-2.5 bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-500/20 hover:border-transparent text-emerald-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/5"
+                    className="px-5 py-2.5 bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-500/20 hover:border-transparent text-emerald-400 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/5"
                   >
                     {proctorActionLoading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
