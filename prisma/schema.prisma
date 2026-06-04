@@ -205,6 +205,8 @@ model AllowedVoter {
   bypassOtpUntil  DateTime?
   bypassRequested Boolean   @default(false)
   voterAuthType   String    @default("GLOBAL") // GLOBAL | EMAIL_OTP | EMAIL_PASSWORD | PHONE_PASSWORD
+  otp             String?
+  otpExpiresAt    DateTime?
 
   @@index([pollId])
   @@index([email])
@@ -296,6 +298,7 @@ model PollSettings {
   // Verification Matrices
   verificationMethod      String  @default("EMAIL") // EMAIL, PHONE
   verificationType        String  @default("OTP")   // OTP, PASSWORD
+  creatorPhone            String?
 
   // Online Testing / Exam Engine Toggles
   examTimerDuration            Int?              // Exam duration in minutes

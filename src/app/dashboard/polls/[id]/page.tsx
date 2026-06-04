@@ -5919,7 +5919,9 @@ function PollInsightsContent({ params }: PageProps) {
                       <td className="py-3 px-4 text-gray-500 font-mono">{idx + 1}</td>
                       <td className="py-3 px-4 font-semibold text-white">{voter.identifier}</td>
                       <td className="py-3 px-4 text-gray-300">{voter.confirmer1}</td>
-                      <td className="py-3 px-4 text-gray-400">{voter.email}</td>
+                      <td className="py-3 px-4 text-gray-400">
+                        {voter.email && voter.email.includes('@phone.pollstar') ? (voter.phone || 'Phone Registration') : voter.email}
+                      </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">
                           {Math.floor(requestSecondsLeft / 60)}m {requestSecondsLeft % 60}s

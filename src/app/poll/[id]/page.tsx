@@ -717,6 +717,15 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const [verificationType, setVerificationType] = useState('OTP');
   const [voterPhone, setVoterPhone] = useState('');
   const [voterPassword, setVoterPassword] = useState('');
+  const [isReverseOtp, setIsReverseOtp] = useState(false);
+  const [reverseOtpCode, setReverseOtpCode] = useState('');
+  const [creatorPhone, setCreatorPhone] = useState('');
+  const [smsPollingActive, setSmsPollingActive] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    setIsMobileDevice(/Mobi|Android|iPhone/i.test(navigator.userAgent));
+  }, []);
 
   // Closed voter lookup states
   const [lookupPassed, setLookupPassed] = useState(false);
@@ -1963,6 +1972,42 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
     }, 1000);
     return () => clearInterval(interval);
   }, [otpCooldown]);
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (smsPollingActive && voterId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/polls/${pollId}/verify-voter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              step: 'CHECK_SMS_VERIFIED',
+              voterId,
+            }),
+          });
+          const data = await res.json();
+          if (data.success && data.verified && data.voterToken) {
+            setSmsPollingActive(false);
+            setVoterToken(data.voterToken);
+            setVerifiedVoter(true);
+            if (data.hasVotedAlready) {
+              setVotedSuccessfully(true);
+            }
+            setShowOtpPopup(false);
+            
+            // Standard celebration refresh
+            setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
+            setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
+            setCaptchaAnswer('');
+          }
+        } catch (e) {
+          console.error('Error polling SMS status:', e);
+        }
+      }, 2500);
+    }
+    return () => clearInterval(interval);
+  }, [smsPollingActive, voterId, pollId]);
+
   // 2. Real-Time Serverless Polling Connection
   useEffect(() => {
     if (!poll || !poll.isResultPublic) return;
@@ -2162,6 +2207,17 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
         setCaptchaNum1(Math.floor(Math.random() * 8) + 2);
         setCaptchaNum2(Math.floor(Math.random() * 8) + 2);
         setCaptchaAnswer('');
+        return;
+      }
+
+      if (data.isReverseOtp) {
+        setIsReverseOtp(true);
+        setReverseOtpCode(data.otpCode);
+        setCreatorPhone(data.creatorPhone);
+        setSmsPollingActive(true);
+        setOtpSentOnce(true);
+        setShowOtpPopup(true);
+        setOtpError('');
         return;
       }
 
@@ -3351,92 +3407,181 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
               <VoteIcon className="w-6 h-6" />
             </div>
             
-            <div>
-              <h3 className="font-outfit text-xl font-bold text-white">Enter Email OTP</h3>
-              <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
-                Confirm your identity by entering the 6-digit OTP code dispatched to <br/>
-                <span className="text-indigo-300 font-semibold">{voterEmail}</span>.
-              </p>
-            </div>
+            {isReverseOtp ? (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h3 className="font-outfit text-xl font-bold text-white">Send SMS to Verify</h3>
+                  <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
+                    Please send the verification token from your phone <br/>
+                    <span className="text-indigo-300 font-semibold">{voterPhone}</span> to the number below.
+                  </p>
+                </div>
 
-            {otpError && (
-              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{otpError}</span>
-              </div>
-            )}
+                <div className="bg-white/2 border border-white/5 rounded-2xl p-4 text-left space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Send To:</span>
+                    <span className="text-white font-mono font-bold">{creatorPhone}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Message Body:</span>
+                    <span className="text-indigo-400 font-mono font-bold bg-indigo-500/10 px-2 py-1 rounded select-all">{reverseOtpCode}</span>
+                  </div>
+                </div>
 
-            <form onSubmit={handleVerifyVoterOtp} className="space-y-6">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                required
-                maxLength={6}
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                placeholder="123456"
-                className="w-full text-center tracking-[12px] pl-3 glass-input text-2xl font-bold font-mono placeholder-gray-800"
-              />
-
-              <div className="text-center py-1 select-none">
-                {otpCooldown > 0 ? (
-                  <span className="text-gray-500 text-xs font-bold">Resend available in {otpCooldown}s</span>
+                {isMobileDevice ? (
+                  <div className="space-y-2">
+                    <a
+                      href={`sms:${creatorPhone}?body=${encodeURIComponent(reverseOtpCode)}`}
+                      onClick={() => {
+                        setSmsPollingActive(true);
+                      }}
+                      className="w-full py-3.5 rounded-xl font-bold gradient-btn text-white transition-all text-xs flex items-center justify-center space-x-2"
+                    >
+                      <span>📱 Send SMS to Verify</span>
+                    </a>
+                    <p className="text-[10px] text-gray-500">Clicking will open your native SMS app. Make sure to send it from your whitelisted SIM if you have dual SIMs.</p>
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={otpSendLoading}
-                    onClick={() => handleVoterRequestOtp(null as any)}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all disabled:opacity-50"
-                  >
-                    {otpSendLoading ? 'Requesting resend...' : 'Didn\'t receive code? Resend OTP'}
-                  </button>
-                )}
-              </div>
-
-              {/* SOS Bypass Request Section */}
-              <div className="text-center pb-2">
-                {bypassStatus === 'IDLE' && (
-                  <button
-                    type="button"
-                    onClick={handleRequestBypass}
-                    className="text-xs text-red-400 hover:text-red-300 font-bold transition-all"
-                  >
-                    Can't access email? Request OTP Bypass
-                  </button>
-                )}
-                {bypassStatus === 'REQUESTING' && (
-                  <span className="text-xs text-amber-400 font-bold animate-pulse">Sending request...</span>
-                )}
-                {bypassStatus === 'WAITING' && (
-                  <div className="flex flex-col items-center justify-center space-y-1">
-                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                    <span className="text-xs text-amber-400 font-bold">Request sent! Waiting for creator approval...</span>
+                  <div className="flex flex-col items-center justify-center bg-white/2 border border-white/5 p-4 rounded-2xl gap-2">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('sms:' + creatorPhone + '?body=' + reverseOtpCode)}`}
+                      alt="Scan to Verify SMS"
+                      className="w-32 h-32 bg-white p-1 rounded-xl shadow-lg border border-white/10"
+                    />
+                    <span className="text-[10px] text-gray-500 font-medium">Scan to send verification SMS from your mobile phone</span>
                   </div>
                 )}
-              </div>
 
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowOtpPopup(false)}
-                  className="flex-1 py-3 rounded-xl text-xs font-bold border border-white/5 text-gray-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={otpLoading || otpCode.length !== 6}
-                  className="flex-1 py-3 rounded-xl text-xs font-bold gradient-btn text-white flex items-center justify-center"
-                >
-                  {otpLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span>Confirm OTP</span>
+                <div className="flex items-center justify-center space-x-2 text-xs font-bold text-indigo-400 animate-pulse py-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Awaiting SMS delivery...</span>
+                </div>
+
+                {/* SOS Bypass Request Section */}
+                <div className="text-center pb-2 border-t border-white/5 pt-4">
+                  {bypassStatus === 'IDLE' && (
+                    <button
+                      type="button"
+                      onClick={handleRequestBypass}
+                      className="text-xs text-red-400 hover:text-red-300 font-bold transition-all"
+                    >
+                      Can't send SMS? Request OTP Bypass
+                    </button>
                   )}
-                </button>
+                  {bypassStatus === 'REQUESTING' && (
+                    <span className="text-xs text-amber-400 font-bold animate-pulse">Sending request...</span>
+                  )}
+                  {bypassStatus === 'WAITING' && (
+                    <div className="flex flex-col items-center justify-center space-y-1">
+                      <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                      <span className="text-xs text-amber-400 font-bold">Request sent! Waiting for creator approval...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOtpPopup(false);
+                      setSmsPollingActive(false);
+                    }}
+                    className="flex-1 py-3 rounded-xl text-xs font-bold border border-white/5 text-gray-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </form>
+            ) : (
+              <>
+                <div>
+                  <h3 className="font-outfit text-xl font-bold text-white">Enter Email OTP</h3>
+                  <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
+                    Confirm your identity by entering the 6-digit OTP code dispatched to <br/>
+                    <span className="text-indigo-300 font-semibold">{voterEmail}</span>.
+                  </p>
+                </div>
+
+                {otpError && (
+                  <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{otpError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleVerifyVoterOtp} className="space-y-6">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    required
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full text-center tracking-[12px] pl-3 glass-input text-2xl font-bold font-mono placeholder-gray-800"
+                  />
+
+                  <div className="text-center py-1 select-none">
+                    {otpCooldown > 0 ? (
+                      <span className="text-gray-500 text-xs font-bold">Resend available in {otpCooldown}s</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={otpSendLoading}
+                        onClick={() => handleVoterRequestOtp(null as any)}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all disabled:opacity-50"
+                      >
+                        {otpSendLoading ? 'Requesting resend...' : 'Didn\'t receive code? Resend OTP'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* SOS Bypass Request Section */}
+                  <div className="text-center pb-2">
+                    {bypassStatus === 'IDLE' && (
+                      <button
+                        type="button"
+                        onClick={handleRequestBypass}
+                        className="text-xs text-red-400 hover:text-red-300 font-bold transition-all"
+                      >
+                        Can't access email? Request OTP Bypass
+                      </button>
+                    )}
+                    {bypassStatus === 'REQUESTING' && (
+                      <span className="text-xs text-amber-400 font-bold animate-pulse">Sending request...</span>
+                    )}
+                    {bypassStatus === 'WAITING' && (
+                      <div className="flex flex-col items-center justify-center space-y-1">
+                        <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                        <span className="text-xs text-amber-400 font-bold">Request sent! Waiting for creator approval...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowOtpPopup(false)}
+                      className="flex-1 py-3 rounded-xl text-xs font-bold border border-white/5 text-gray-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={otpLoading || otpCode.length !== 6}
+                      className="flex-1 py-3 rounded-xl text-xs font-bold gradient-btn text-white flex items-center justify-center"
+                    >
+                      {otpLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <span>Confirm OTP</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}

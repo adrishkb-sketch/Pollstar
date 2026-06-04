@@ -82,6 +82,9 @@ export async function POST(
       } else if (perVoterAuthType === 'PHONE_PASSWORD') {
         verificationMethod = 'PHONE';
         verificationType = 'PASSWORD';
+      } else if (perVoterAuthType === 'PHONE_REVERSE_OTP') {
+        verificationMethod = 'PHONE';
+        verificationType = 'REVERSE_OTP';
       }
 
       return NextResponse.json({
@@ -132,6 +135,7 @@ export async function POST(
       if (perVoterAuthType === 'EMAIL_OTP') { verificationMethod = 'EMAIL'; verificationType = 'OTP'; }
       else if (perVoterAuthType === 'EMAIL_PASSWORD') { verificationMethod = 'EMAIL'; verificationType = 'PASSWORD'; }
       else if (perVoterAuthType === 'PHONE_PASSWORD') { verificationMethod = 'PHONE'; verificationType = 'PASSWORD'; }
+      else if (perVoterAuthType === 'PHONE_REVERSE_OTP') { verificationMethod = 'PHONE'; verificationType = 'REVERSE_OTP'; }
       
       const isPhoneMethod = verificationMethod === 'PHONE';
 
@@ -284,6 +288,29 @@ export async function POST(
         });
       }
 
+      if (verificationType === 'REVERSE_OTP') {
+        const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        const prefix = poll.pollType === 'EXAM' ? '#EXAM-' : (poll.pollType === 'SURVEY' ? '#SURVEY-' : '#VOTE-');
+        const otpCode = `${prefix}${randomCode}`;
+        const expiresAtVal = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes for SMS delivery
+
+        await prisma.allowedVoter.update({
+          where: { id: allowedVoter.id },
+          data: {
+            otp: otpCode,
+            otpExpiresAt: expiresAtVal
+          }
+        });
+
+        return NextResponse.json({
+          success: true,
+          isReverseOtp: true,
+          otpCode,
+          creatorPhone: poll.settings?.creatorPhone || '',
+          message: 'Please send the verification token via SMS to verify your identity.'
+        });
+      }
+
       // Generate 6-digit verification code
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
@@ -370,6 +397,54 @@ export async function POST(
         voterToken,
         hasVotedAlready: allowedVoter.voted,
       });
+    }
+
+    // Step 2b: Poll SMS verification status
+    if (step === 'CHECK_SMS_VERIFIED') {
+      const { voterId } = body;
+      if (!voterId) {
+        return NextResponse.json({ error: 'Voter reference is required' }, { status: 400 });
+      }
+
+      const allowedVoter = await prisma.allowedVoter.findUnique({
+        where: { id: voterId }
+      });
+
+      if (!allowedVoter) {
+        return NextResponse.json({ error: 'Voter not found' }, { status: 404 });
+      }
+
+      if (allowedVoter.otp === 'VERIFIED') {
+        // Correctly verified! Clean up OTP record and issue JWT token
+        await prisma.allowedVoter.update({
+          where: { id: allowedVoter.id },
+          data: {
+            otp: null,
+            otpExpiresAt: null
+          }
+        });
+
+        const voterToken = jwt.sign(
+          {
+            voterId: allowedVoter.id,
+            identifier: allowedVoter.identifier,
+            email: allowedVoter.email,
+            phone: allowedVoter.phone,
+            pollId,
+          },
+          JWT_SECRET,
+          { expiresIn: '30m' } // 30m for the session
+        );
+
+        return NextResponse.json({
+          success: true,
+          verified: true,
+          voterToken,
+          hasVotedAlready: allowedVoter.voted
+        });
+      }
+
+      return NextResponse.json({ success: true, verified: false });
     }
 
     // Step 3: Check if bypass was granted (used for polling during SOS request)

@@ -8,7 +8,7 @@ import {
   ArrowLeft, ArrowRight, Save, Check, Vote, 
   Trash2, Plus, Upload, Shield, Calendar, Users, AlertCircle, Award, Trophy, Lock,
   Zap, Brain, TrendingUp, Mail, Eye, EyeOff, Sparkles, Layers, Search, GripVertical,
-  X, Eraser, RotateCcw, FileText, Palette, Clock, Activity
+  X, Eraser, RotateCcw, FileText, Palette, Clock, Activity, Smartphone, Loader2, CheckCircle2
 } from 'lucide-react';
 
 export default function CreatePoll() {
@@ -39,6 +39,9 @@ export default function CreatePoll() {
   // Verification & Access Settings
   const [verificationMethod, setVerificationMethod] = useState('EMAIL'); // EMAIL, PHONE
   const [verificationType, setVerificationType] = useState('OTP'); // OTP, PASSWORD
+  const [creatorPhone, setCreatorPhone] = useState('');
+  const [gatewayVerified, setGatewayVerified] = useState(false);
+  const [testToken, setTestToken] = useState('');
 
   // Exam Safeguards & Proctors Settings
   const [examTimerDuration, setExamTimerDuration] = useState<number>(60);
@@ -920,6 +923,10 @@ export default function CreatePoll() {
 
               setVerificationMethod(s.verificationMethod || 'EMAIL');
               setVerificationType(s.verificationType || 'OTP');
+              setCreatorPhone(s.creatorPhone || '');
+              if (s.creatorPhone) {
+                setGatewayVerified(true);
+              }
 
               setEnableCustomBranding(!!s.enableCustomBranding);
               setCustomLogoUrl(s.customLogoUrl || '');
@@ -1378,6 +1385,58 @@ export default function CreatePoll() {
     setNumVoters(finalRows.length);
   };
 
+  const [testingGateway, setTestingGateway] = useState(false);
+
+  const handleStartGatewayTest = async () => {
+    if (!creatorPhone) return;
+    setError('');
+    setTestingGateway(true);
+    setGatewayVerified(false);
+
+    const token = `#TEST-${Math.floor(1000 + Math.random() * 9000)}`;
+    setTestToken(token);
+
+    try {
+      const res = await fetch('/api/webhooks/sms/setup-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: creatorPhone, token })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to initialize gateway verification');
+      }
+
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        if (attempts > 60) {
+          clearInterval(interval);
+          setTestingGateway(false);
+          setError('Gateway verification timed out. Please ensure the Python script is running on your phone and try again.');
+          return;
+        }
+
+        try {
+          const checkRes = await fetch(`/api/webhooks/sms/check-test?phone=${encodeURIComponent(creatorPhone)}`);
+          const checkData = await checkRes.json();
+          if (checkData.verified) {
+            clearInterval(interval);
+            setGatewayVerified(true);
+            setTestingGateway(false);
+            setTestToken('');
+          }
+        } catch (e) {
+          console.error('Error checking gateway status:', e);
+        }
+      }, 2000);
+
+    } catch (err: any) {
+      setTestingGateway(false);
+      setError(err.message || 'Error configuring gateway test');
+    }
+  };
+
   // Wizard Step verification
   const validateStep = () => {
     setError('');
@@ -1398,10 +1457,24 @@ export default function CreatePoll() {
       }
     }
     if (currentStep === 4 && !isOpenVoting) {
+      if (verificationMethod === 'PHONE' && verificationType === 'REVERSE_OTP') {
+        if (!creatorPhone || !creatorPhone.trim()) {
+          setError('Creator phone number is required for Reverse OTP verification.');
+          return false;
+        }
+        if (!gatewayVerified) {
+          setError('Please verify your SMS gateway phone number before proceeding. Reverse OTP will only work till this gateway script is running on your phone.');
+          return false;
+        }
+      }
       // Validate per-voter based on their effective auth type
       for (let i = 0; i < allowedVoters.length; i++) {
         const v = allowedVoters[i];
-        const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+        const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' 
+          ? v.voterAuthType 
+          : (verificationMethod === 'PHONE' 
+              ? (verificationType === 'REVERSE_OTP' ? 'PHONE_REVERSE_OTP' : 'PHONE_PASSWORD') 
+              : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
         
         if (!v.identifier?.trim() || !v.confirmer1?.trim()) {
           setError(`Row ${i + 1}: Compulsory cells (${identifierLabel} and ${confirmer1Label}) cannot be left blank.`);
@@ -1422,9 +1495,9 @@ export default function CreatePoll() {
           }
         }
 
-        if (authType === 'PHONE_PASSWORD') {
+        if (authType === 'PHONE_PASSWORD' || authType === 'PHONE_REVERSE_OTP') {
           if (!v.phone || !v.phone.trim()) {
-            setError(`Row ${i + 1}: Phone number is required for phone + password auth.`);
+            setError(`Row ${i + 1}: Phone number is required for phone verification.`);
             return false;
           }
         }
@@ -1506,6 +1579,7 @@ export default function CreatePoll() {
         // Verification matrices
         verificationMethod,
         verificationType,
+        creatorPhone,
 
         // Online Testing / Exam Engine Toggles
         examTimerDuration: pollType === 'EXAM' ? examTimerDuration : null,
@@ -1554,8 +1628,12 @@ export default function CreatePoll() {
       allowedVoters: isOpenVoting 
         ? [] 
         : allowedVoters.map(v => {
-            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
-            const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' 
+              ? v.voterAuthType 
+              : (verificationMethod === 'PHONE' 
+                  ? (verificationType === 'REVERSE_OTP' ? 'PHONE_REVERSE_OTP' : 'PHONE_PASSWORD') 
+                  : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+            const cleanEmail = v.email?.trim() || (['PHONE_PASSWORD', 'PHONE_REVERSE_OTP'].includes(authType) ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
             const confirmer2Val = pollType === 'EXAM' 
               ? JSON.stringify({
                   session: v.session || 'General',
@@ -1660,6 +1738,7 @@ export default function CreatePoll() {
         enableTimeAnalytics: pollType === 'SURVEY' ? enableTimeAnalytics : false,
         verificationMethod,
         verificationType,
+        creatorPhone,
         examTimerDuration: pollType === 'EXAM' ? examTimerDuration : null,
         enableProctorCamera: pollType === 'EXAM' ? enableProctorCamera : false,
         enableProctorMicrophone: pollType === 'EXAM' ? enableProctorMicrophone : false,
@@ -1700,8 +1779,12 @@ export default function CreatePoll() {
       allowedVoters: isOpenVoting 
         ? [] 
         : allowedVoters.map(v => {
-            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' ? v.voterAuthType : (verificationMethod === 'PHONE' ? 'PHONE_PASSWORD' : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
-            const cleanEmail = v.email?.trim() || (authType === 'PHONE_PASSWORD' ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
+            const authType = v.voterAuthType && v.voterAuthType !== 'GLOBAL' 
+              ? v.voterAuthType 
+              : (verificationMethod === 'PHONE' 
+                  ? (verificationType === 'REVERSE_OTP' ? 'PHONE_REVERSE_OTP' : 'PHONE_PASSWORD') 
+                  : (verificationType === 'PASSWORD' ? 'EMAIL_PASSWORD' : 'EMAIL_OTP'));
+            const cleanEmail = v.email?.trim() || (['PHONE_PASSWORD', 'PHONE_REVERSE_OTP'].includes(authType) ? `${v.phone || v.identifier || Math.random().toString(36).substring(7)}@phone.pollstar` : '');
             const confirmer2Val = pollType === 'EXAM' 
               ? JSON.stringify({
                   session: v.session || 'General',
@@ -1772,7 +1855,7 @@ export default function CreatePoll() {
   // For EXAM, steps 6+ are shifted up by 1 to skip the anonymity slot
   const renderStep = pollType === 'EXAM' && currentStep >= 6 ? currentStep + 1 : currentStep;
 
-  const showPhoneColumn = pollType === 'EXAM' || verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD');
+  const showPhoneColumn = pollType === 'EXAM' || verificationMethod === 'PHONE' || allowedVoters.some(v => v.voterAuthType === 'PHONE_PASSWORD' || v.voterAuthType === 'PHONE_REVERSE_OTP');
   const showPasswordColumn = verificationType === 'PASSWORD' || allowedVoters.some(v => v.voterAuthType === 'EMAIL_PASSWORD' || v.voterAuthType === 'PHONE_PASSWORD');
 
   // Helper: get which collaborator (if any) is focused on the given field
@@ -3006,9 +3089,10 @@ export default function CreatePoll() {
                         onChange={(e) => {
                           const nextMethod = e.target.value;
                           setVerificationMethod(nextMethod);
-                          // Enforce OTP disablement for phone verification
                           if (nextMethod === 'PHONE') {
-                            setVerificationType('PASSWORD');
+                            setVerificationType('REVERSE_OTP');
+                          } else {
+                            setVerificationType('OTP');
                           }
                         }}
                         className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
@@ -3019,7 +3103,7 @@ export default function CreatePoll() {
                       <p className="text-[10px] text-gray-500 mt-1.5">
                         {verificationMethod === 'EMAIL'
                           ? 'Voters will be verified using their registered email addresses.'
-                          : 'Phone verification is active. Requires pre-assigned passwords as SMS is disabled.'}
+                          : 'Voters will be verified using their registered phone numbers.'}
                       </p>
                     </div>
 
@@ -3029,20 +3113,136 @@ export default function CreatePoll() {
                       </label>
                       <select
                         value={verificationType}
-                        disabled={verificationMethod === 'PHONE'}
                         onChange={(e) => setVerificationType(e.target.value)}
-                        className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-[#030712] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                       >
-                        <option value="OTP">🔢 One-Time Password (OTP)</option>
-                        <option value="PASSWORD">🔑 Pre-Defined Static Password</option>
+                        {verificationMethod === 'EMAIL' ? (
+                          <>
+                            <option value="OTP">🔢 One-Time Password (OTP)</option>
+                            <option value="PASSWORD">🔑 Pre-Defined Static Password</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="REVERSE_OTP">🔄 Reverse OTP (Free & Legal)</option>
+                            <option value="PASSWORD">🔑 Pre-Defined Static Password</option>
+                          </>
+                        )}
                       </select>
                       <p className="text-[10px] text-gray-500 mt-1.5">
-                        {verificationType === 'OTP'
-                          ? 'A 6-digit dynamic OTP will be sent to the voter’s destination address.'
-                          : 'Voters will authenticate instantly using their unique assigned password.'}
+                        {verificationType === 'OTP' && 'A 6-digit dynamic OTP will be sent to the voter’s destination address.'}
+                        {verificationType === 'REVERSE_OTP' && 'Voters send an automated OTP SMS from their mobile app to the creator\'s phone.'}
+                        {verificationType === 'PASSWORD' && 'Voters will authenticate instantly using their unique assigned password.'}
                       </p>
                     </div>
                   </div>
+
+                  {verificationMethod === 'PHONE' && verificationType === 'REVERSE_OTP' && (
+                    <div className="space-y-4 bg-indigo-500/5 border border-indigo-500/10 p-5 rounded-2xl animate-fade-in-up mt-4">
+                      <div className="flex items-center space-x-2">
+                        <Smartphone className="w-5 h-5 text-indigo-400" />
+                        <h4 className="text-sm font-bold text-white">Reverse OTP Gateway Configuration</h4>
+                      </div>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        Instead of the system sending SMS, voters will automatically open their native SMS app and send a token message to your phone number. Your phone must run a small SMS gateway script to forward the incoming token to our server.
+                      </p>
+
+                      <div className="space-y-3">
+                        <label className="block text-gray-300 text-xs font-bold uppercase tracking-wider">
+                          Creator Phone Number (with Country Code) <span className="text-red-400">*</span>
+                        </label>
+                        <div className="flex gap-3">
+                          <input
+                            type="text"
+                            value={creatorPhone}
+                            disabled={gatewayVerified}
+                            onChange={(e) => {
+                              setCreatorPhone(e.target.value);
+                              setGatewayVerified(false);
+                            }}
+                            placeholder="e.g. +919876543210"
+                            className="flex-1 glass-input text-xs py-2.5 disabled:opacity-75 disabled:cursor-not-allowed"
+                          />
+                          {gatewayVerified ? (
+                            <button
+                              type="button"
+                              onClick={() => setGatewayVerified(false)}
+                              className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 rounded-xl text-xs font-bold transition-all shadow-md shrink-0"
+                            >
+                              Reset Verification
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleStartGatewayTest}
+                              disabled={!creatorPhone || testingGateway}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0 flex items-center justify-center gap-1.5"
+                            >
+                              {testingGateway ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Verifying...</span>
+                                </>
+                              ) : (
+                                <span>Verify Gateway</span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] rounded-xl leading-relaxed">
+                          ⚠️ <strong>Important Warning</strong>: The reverse OTP system will only work as long as the SMS Gateway script (or task/app) is active and running on your device ({creatorPhone || 'your phone'}). If the script is stopped, voter verifications will fail.
+                        </div>
+                      </div>
+
+                      {creatorPhone && !gatewayVerified && (
+                        <div className="border-t border-white/5 pt-4 space-y-4 animate-fade-in">
+                          <div>
+                            <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Step 1: Install Gateway Script</h5>
+                            <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
+                              Download our custom Python script to run on your Android device via Termux. This script reads incoming SMS and securely posts them to the gateway server.
+                            </p>
+                            <div className="flex flex-wrap gap-3">
+                              <a
+                                href={`/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`}
+                                className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-[10px] font-bold transition-all"
+                              >
+                                📥 Download Gateway Python Script
+                              </a>
+                            </div>
+                          </div>
+
+                          {testToken && (
+                            <div className="space-y-4">
+                              <h5 className="text-xs font-bold text-white uppercase tracking-wider">Step 2: Send Verification Ping</h5>
+                              <p className="text-[11px] text-gray-400 leading-relaxed">
+                                Once the script is running, send a test SMS containing <strong>{testToken}</strong> to your own number <strong>{creatorPhone}</strong> from the gateway device. 
+                                The script will forward it, and the system will automatically verify it below.
+                              </p>
+                              <div className="flex flex-col items-center justify-center p-4 bg-white/2 border border-white/5 rounded-2xl gap-3">
+                                <img
+                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('sms:' + creatorPhone + '?body=' + testToken)}`}
+                                  alt="SMS Setup QR Code"
+                                  className="w-32 h-32 bg-white p-1 rounded-xl shadow-lg border border-white/10"
+                                />
+                                <span className="text-[10px] text-gray-500 font-medium">Scan to send test SMS automatically from your phone</span>
+                                <div className="flex items-center space-x-2 text-xs font-bold text-amber-400 animate-pulse mt-1">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Waiting for test SMS ping...</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {gatewayVerified && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl flex items-center space-x-2 animate-fade-in">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span><strong>Gateway Active & Verified!</strong> The Termux gateway was successfully connected on {creatorPhone}.</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Confirmer 2 Toggle Option Selector */}
                   <div className="flex items-center space-x-3 bg-white/2 p-4 rounded-xl border border-white/5 mb-4">
@@ -3115,6 +3315,7 @@ export default function CreatePoll() {
                         <thead>
                           <tr className="bg-white/5 text-gray-400 font-bold border-b border-white/10 uppercase tracking-wider">
                             <th className="py-3.5 px-4 w-12 text-center">Row</th>
+                            <th className="py-3.5 px-4 min-w-[130px]">Auth Type</th>
                             <th className="py-3.5 px-4 min-w-[120px]">{identifierLabel} <span className="text-red-400">*</span></th>
                             <th className="py-3.5 px-4 min-w-[120px]">{confirmer1Label} <span className="text-red-400">*</span></th>
                             {pollType === 'EXAM' ? (
@@ -3126,7 +3327,6 @@ export default function CreatePoll() {
                             ) : (
                               useConfirmer2 && <th className="py-3.5 px-4 min-w-[120px]">{confirmer2Label}</th>
                             )}
-                            <th className="py-3.5 px-4 min-w-[130px]">Auth Type</th>
                             <th className="py-3.5 px-4 min-w-[180px]">Email Address <span className="text-red-400">*</span></th>
                             {showPhoneColumn && <th className="py-3.5 px-4 min-w-[150px]">Phone Number <span className="text-red-400">*</span></th>}
                             {showPasswordColumn && <th className="py-3.5 px-4 min-w-[150px]">Password <span className="text-red-400">*</span></th>}
@@ -3137,6 +3337,21 @@ export default function CreatePoll() {
                           {allowedVoters.map((voter, idx) => (
                             <tr key={idx} className="border-b border-white/5 hover:bg-white/2 transition-colors">
                               <td className="py-2.5 px-4 text-center font-mono text-gray-500 font-bold">{idx + 1}</td>
+                              <td className="py-2.5 px-2">
+                                <select
+                                  value={voter.voterAuthType || 'GLOBAL'}
+                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'voterAuthType')}
+                                  className="w-full bg-[#030712] border border-white/10 rounded-xl px-2 py-1 text-white outline-none focus:border-purple-500 font-semibold"
+                                >
+                                  <option value="GLOBAL">
+                                    Global (Inherit: {verificationMethod === 'PHONE' ? (verificationType === 'REVERSE_OTP' ? 'Phone + Reverse OTP' : 'Phone + Password') : (verificationType === 'PASSWORD' ? 'Email + Password' : 'Email + OTP')})
+                                  </option>
+                                  <option value="EMAIL_OTP">Email + OTP</option>
+                                  <option value="EMAIL_PASSWORD">Email + Password</option>
+                                  <option value="PHONE_PASSWORD">Phone + Password</option>
+                                  <option value="PHONE_REVERSE_OTP">Phone + Reverse OTP</option>
+                                </select>
+                              </td>
                               <td className="py-2.5 px-2">
                                 <input
                                   type="text"
@@ -3212,20 +3427,6 @@ export default function CreatePoll() {
                                   </td>
                                 )
                               )}
-                              <td className="py-2.5 px-2">
-                                <select
-                                  value={voter.voterAuthType || 'GLOBAL'}
-                                  onChange={(e) => handleVoterCellChange(e.target.value, idx, 'voterAuthType')}
-                                  className="w-full bg-[#030712] border border-white/10 rounded-xl px-2 py-1 text-white outline-none focus:border-purple-500 font-semibold"
-                                >
-                                  <option value="GLOBAL">
-                                    Global (Inherit: {verificationMethod === 'PHONE' ? 'Phone + Password' : (verificationType === 'PASSWORD' ? 'Email + Password' : 'Email + OTP')})
-                                  </option>
-                                  <option value="EMAIL_OTP">Email + OTP</option>
-                                  <option value="EMAIL_PASSWORD">Email + Password</option>
-                                  <option value="PHONE_PASSWORD">Phone + Password</option>
-                                </select>
-                              </td>
                               <td className="py-2.5 px-2">
                                 <input
                                   type="email"
