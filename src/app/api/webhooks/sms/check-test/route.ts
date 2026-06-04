@@ -11,17 +11,27 @@ export async function GET(req: Request) {
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
-    const configKey = `sms-test-token:${cleanPhone}`;
-
-    const config = await prisma.siteConfig.findUnique({
-      where: { key: configKey }
+    
+    // Find all test token configs
+    const allConfigs = await prisma.siteConfig.findMany({
+      where: {
+        key: {
+          startsWith: 'sms-test-token:'
+        }
+      }
     });
 
-    if (!config) {
+    // Find the one that matches the last 10 digits
+    const matchedConfig = allConfigs.find(config => {
+      const configPhone = config.key.replace('sms-test-token:', '');
+      return configPhone.slice(-10) === cleanPhone.slice(-10);
+    });
+
+    if (!matchedConfig) {
       return NextResponse.json({ verified: false, error: 'No test registered' });
     }
 
-    if (config.value === 'VERIFIED') {
+    if (matchedConfig.value === 'VERIFIED') {
       return NextResponse.json({ verified: true });
     }
 

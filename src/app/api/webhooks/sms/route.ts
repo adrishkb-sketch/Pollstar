@@ -41,22 +41,34 @@ async function handleSms(req: Request) {
     // 1. Check if it's a test token for gateway setup
     if (cleanText.startsWith('#TEST-')) {
       const cleanCreator = creatorPhone ? creatorPhone.replace(/\D/g, '') : cleanSender;
-      // We look up if there is a SiteConfig for this creator phone with "PENDING:[token]"
-      const configKey = `sms-test-token:${cleanCreator}`;
-      const config = await prisma.siteConfig.findUnique({
-        where: { key: configKey }
+      
+      // Let's find all configs matching 'sms-test-token:*'
+      const allConfigs = await prisma.siteConfig.findMany({
+        where: {
+          key: {
+            startsWith: 'sms-test-token:'
+          }
+        }
       });
 
-      if (config && config.value === `PENDING:${cleanText}`) {
+      // Find the one that matches the last 10 digits
+      const matchedConfig = allConfigs.find(config => {
+        const configPhone = config.key.replace('sms-test-token:', '');
+        return configPhone.slice(-10) === cleanCreator.slice(-10);
+      });
+
+      if (matchedConfig && matchedConfig.value === `PENDING:${cleanText}`) {
         await prisma.siteConfig.update({
-          where: { key: configKey },
+          where: { key: matchedConfig.key },
           data: { value: 'VERIFIED' }
         });
+
+        const matchedPhone = matchedConfig.key.replace('sms-test-token:', '');
 
         // Trigger Socket.io notification
         const io = (global as any).io;
         if (io) {
-          io.emit('sms-gateway-verified', { phone: cleanCreator, verified: true });
+          io.emit('sms-gateway-verified', { phone: matchedPhone, verified: true });
         }
 
         return NextResponse.json({ success: true, message: 'Gateway test verified successfully!' });

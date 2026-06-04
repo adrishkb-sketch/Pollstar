@@ -15,6 +15,7 @@ import json
 import time
 import urllib.request
 import urllib.parse
+import ssl
 
 # Pollstar Android Termux SMS Gateway
 # Pre-configured for gateway phone: ${phone}
@@ -30,14 +31,21 @@ print(f"Forwarding target: {API_URL}")
 print("Waiting for incoming messages... Press Ctrl+C to stop.")
 
 seen_ids = set()
+last_err_time = 0
 
 def check_sms():
+    global last_err_time
     try:
         # Run termux-sms-list to get last 10 messages
         res = subprocess.run(["termux-sms-list", "-l", "10"], capture_output=True, text=True)
         if res.returncode != 0:
-            # Silently handle if termux-api tool isn't set up yet
+            err_msg = res.stderr.strip() if res.stderr else "Unknown error"
+            if time.time() - last_err_time > 10:
+                print(f"\n[WARNING] termux-sms-list returned non-zero code: {err_msg}")
+                print("Make sure Termux:API app is installed from F-Droid and has SMS permissions.")
+                last_err_time = time.time()
             return
+            
         messages = json.loads(res.stdout)
         for msg in messages:
             msg_id = msg.get("_id")
@@ -54,7 +62,7 @@ def check_sms():
             # Check for standard tokens
             msg_upper = msg_body.upper()
             if any(t in msg_upper for t in ["#VOTE-", "#EXAM-", "#SURVEY-", "#TEST-"]):
-                print(f"\\n[SMS RECEIVED] From {msg_sender}: {msg_body.strip()}")
+                print(f"\n[SMS RECEIVED] From {msg_sender}: {msg_body.strip()}")
                 
                 # Forward to Next.js API endpoint
                 payload = json.dumps({
@@ -69,15 +77,25 @@ def check_sms():
                     headers={'Content-Type': 'application/json'}
                 )
                 try:
-                    with urllib.request.urlopen(req_obj) as response:
+                    # Ignore SSL certificate checks to support localhost/ngrok tests
+                    ctx = ssl._create_unverified_context()
+                    with urllib.request.urlopen(req_obj, context=ctx) as response:
                         res_body = response.read().decode('utf-8')
                         print(f" -> Forwarded. Server says: {res_body}")
                 except Exception as e:
                     print(f" -> Failed to send to server: {e}")
             
             seen_ids.add(msg_id)
+    except FileNotFoundError:
+        if time.time() - last_err_time > 10:
+            print("\n[ERROR] 'termux-sms-list' executable not found!")
+            print("Please run: pkg install termux-api -y")
+            print("Also install 'Termux:API' app from F-Droid: https://f-droid.org/packages/com.termux.api/")
+            last_err_time = time.time()
     except Exception as e:
-        pass
+        if time.time() - last_err_time > 10:
+            print(f"\n[ERROR] Exception in SMS gateway loop: {e}")
+            last_err_time = time.time()
 
 # Populate seen_ids with existing messages first to avoid double processing historical SMS
 try:
