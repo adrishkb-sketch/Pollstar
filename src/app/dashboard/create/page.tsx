@@ -3247,7 +3247,11 @@ export default function CreatePoll() {
                               </p>
                               <div className="flex flex-col items-center justify-center p-4 bg-white/2 border border-white/5 rounded-2xl gap-3">
                                 <img
-                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('sms:' + creatorPhone + '?body=' + testToken)}`}
+                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                                    origin 
+                                      ? `${origin}/sms-trigger?phone=${encodeURIComponent(creatorPhone)}&code=${encodeURIComponent(testToken)}`
+                                      : `sms:${creatorPhone}?body=${testToken}`
+                                  )}`}
                                   alt="SMS Setup QR Code"
                                   className="w-32 h-32 bg-white p-1 rounded-xl shadow-lg border border-white/10"
                                 />

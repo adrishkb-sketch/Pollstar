@@ -722,9 +722,13 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
   const [creatorPhone, setCreatorPhone] = useState('');
   const [smsPollingActive, setSmsPollingActive] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [origin, setOrigin] = useState('');
 
   useEffect(() => {
     setIsMobileDevice(/Mobi|Android|iPhone/i.test(navigator.userAgent));
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
   }, []);
 
   // Closed voter lookup states
@@ -3444,7 +3448,11 @@ export default function VoterPortal({ params }: { params: Promise<{ id: string }
                 ) : (
                   <div className="flex flex-col items-center justify-center bg-white/2 border border-white/5 p-4 rounded-2xl gap-2">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('sms:' + creatorPhone + '?body=' + reverseOtpCode)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                        origin 
+                          ? `${origin}/sms-trigger?phone=${encodeURIComponent(creatorPhone)}&code=${encodeURIComponent(reverseOtpCode)}`
+                          : `sms:${creatorPhone}?body=${reverseOtpCode}`
+                      )}`}
                       alt="Scan to Verify SMS"
                       className="w-32 h-32 bg-white p-1 rounded-xl shadow-lg border border-white/10"
                     />
