@@ -15,6 +15,7 @@ import json
 import time
 import urllib.request
 import urllib.parse
+import urllib.error
 import ssl
 
 # Pollstar Android Termux SMS Gateway
@@ -56,12 +57,12 @@ def check_sms():
             if msg_id in seen_ids:
                 continue
                 
-            msg_body = msg.get("body", "")
-            msg_sender = msg.get("number", "")
+            msg_body = msg.get("body") or msg.get("message") or msg.get("text") or ""
+            msg_sender = msg.get("number") or msg.get("address") or msg.get("sender") or ""
             
-            # Check for standard tokens
+            # Check for standard tokens case-insensitively and space-insensitively
             msg_upper = msg_body.upper()
-            if any(t in msg_upper for t in ["#VOTE-", "#EXAM-", "#SURVEY-", "#TEST-"]):
+            if any(t in msg_upper for t in ["#VOTE", "#EXAM", "#SURVEY", "#TEST"]):
                 print(f"\n[SMS RECEIVED] From {msg_sender}: {msg_body.strip()}")
                 
                 # Forward to Next.js API endpoint
@@ -82,8 +83,11 @@ def check_sms():
                     with urllib.request.urlopen(req_obj, context=ctx) as response:
                         res_body = response.read().decode('utf-8')
                         print(f" -> Forwarded. Server says: {res_body}")
+                except urllib.error.HTTPError as e:
+                    err_body = e.read().decode('utf-8')
+                    print(f" -> Server rejected request (HTTP {e.code}): {err_body}")
                 except Exception as e:
-                    print(f" -> Failed to send to server: {e}")
+                    print(f" -> Network error: {e}")
             
             seen_ids.add(msg_id)
     except FileNotFoundError:
@@ -96,16 +100,6 @@ def check_sms():
         if time.time() - last_err_time > 10:
             print(f"\n[ERROR] Exception in SMS gateway loop: {e}")
             last_err_time = time.time()
-
-# Populate seen_ids with existing messages first to avoid double processing historical SMS
-try:
-    res = subprocess.run(["termux-sms-list", "-l", "10"], capture_output=True, text=True)
-    if res.returncode == 0:
-        for m in json.loads(res.stdout):
-            if m.get("_id"):
-                seen_ids.add(m.get("_id"))
-except:
-    pass
 
 while True:
     check_sms()

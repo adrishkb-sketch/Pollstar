@@ -43,6 +43,7 @@ export default function CreatePoll() {
   const [gatewayVerified, setGatewayVerified] = useState(false);
   const [testToken, setTestToken] = useState('');
   const [origin, setOrigin] = useState('');
+  const [gatewayTab, setGatewayTab] = useState<'termux' | 'macrodroid'>('termux');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -3203,47 +3204,117 @@ export default function CreatePoll() {
 
                       {creatorPhone && !gatewayVerified && (
                         <div className="border-t border-white/5 pt-4 space-y-4 animate-fade-in">
-                          <div>
-                            <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Step 1: Install Gateway Script</h5>
-                            <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
-                              Download our custom Python script to run on your Android device via Termux. This script reads incoming SMS and securely posts them to the gateway server.
-                            </p>
-                            
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white/2 border border-white/5 p-4 rounded-xl">
-                              <div className="flex-1 flex flex-col justify-center space-y-3">
-                                <p className="text-[10px] text-gray-400 leading-relaxed">
-                                  Click the button below to download the script directly to your computer, or scan the QR code to download it straight to your mobile device.
+                          {/* Tab Selector */}
+                          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setGatewayTab('termux')}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                gatewayTab === 'termux'
+                                  ? 'bg-indigo-600 text-white shadow-md'
+                                  : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              📟 Termux Python Script
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGatewayTab('macrodroid')}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                gatewayTab === 'macrodroid'
+                                  ? 'bg-indigo-600 text-white shadow-md'
+                                  : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              🤖 MacroDroid (No-Code App)
+                            </button>
+                          </div>
+
+                          {gatewayTab === 'termux' ? (
+                            <div className="space-y-4 animate-fade-in">
+                              <div>
+                                <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Step 1: Install Gateway Script</h5>
+                                <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+                                  Download our custom Python script to run on your Android device via Termux. This script reads incoming SMS and securely posts them to the gateway server.
                                 </p>
-                                <div>
-                                  <a
-                                    href={`/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`}
-                                    className="inline-flex items-center px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-[10px] font-bold transition-all"
-                                  >
-                                    📥 Download Gateway Python Script
-                                  </a>
+                                
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white/2 border border-white/5 p-4 rounded-xl">
+                                  <div className="flex-1 flex flex-col justify-center space-y-3">
+                                    <p className="text-[10px] text-gray-400 leading-relaxed">
+                                      Click the button below to download the script directly to your computer, or scan the QR code to download it straight to your mobile device.
+                                    </p>
+                                    <div>
+                                      <a
+                                        href={`/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`}
+                                        className="inline-flex items-center px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-[10px] font-bold transition-all"
+                                      >
+                                        📥 Download Gateway Python Script
+                                      </a>
+                                    </div>
+                                  </div>
+                                  {origin && (
+                                    <div className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/10 rounded-xl self-center sm:self-auto">
+                                      <img
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
+                                          `${origin}/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`
+                                        )}`}
+                                        alt="Script Download QR Code"
+                                        className="w-24 h-24 bg-white p-1 rounded-lg"
+                                      />
+                                      <span className="text-[9px] text-gray-400 font-medium">Scan to Download Script</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              {origin && (
-                                <div className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/10 rounded-xl self-center sm:self-auto">
-                                  <img
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
-                                      `${origin}/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`
-                                    )}`}
-                                    alt="Script Download QR Code"
-                                    className="w-24 h-24 bg-white p-1 rounded-lg"
-                                  />
-                                  <span className="text-[9px] text-gray-400 font-medium">Scan to Download Script</span>
-                                </div>
-                              )}
                             </div>
-                          </div>
+                          ) : (
+                            <div className="space-y-4 animate-fade-in">
+                              <div>
+                                <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Step 1: Install & Configure MacroDroid</h5>
+                                <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+                                  MacroDroid is a free, highly-rated automation app on Google Play Store. It can run reliably in the background forever without being blocked by Play Protect.
+                                </p>
+                                
+                                <div className="bg-white/2 border border-white/5 p-4 rounded-xl space-y-4 text-left">
+                                  <div className="space-y-1.5">
+                                    <h6 className="text-[11px] font-bold text-white">1. Download App</h6>
+                                    <p className="text-[10px] text-gray-400 leading-relaxed">
+                                      Search and install **MacroDroid** from the Google Play Store on your Android gateway device.
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2 border-t border-white/5 pt-3">
+                                    <h6 className="text-[11px] font-bold text-white">2. Add a New Macro (Automation Rule)</h6>
+                                    <ul className="text-[10px] text-gray-400 list-disc list-inside space-y-2 leading-relaxed">
+                                      <li><strong>Trigger (Red)</strong>: SMS Received ➡️ Select <em>Any Number</em> ➡️ Message Content ➡️ <em>Contains</em> ➡️ Type <code className="bg-white/10 text-indigo-300 px-1 rounded">#</code></li>
+                                      <li><strong>Action (Blue)</strong>: HTTP Request ➡️ Method: <em>POST</em> ➡️ Enter URL:
+                                        <div className="bg-black/40 text-emerald-400 font-mono px-2 py-1 rounded select-all mt-1 w-full overflow-x-auto text-[9px] break-all border border-white/5">
+                                          {origin ? `${origin}/api/webhooks/sms` : 'Loading URL...'}
+                                        </div>
+                                      </li>
+                                      <li><strong>HTTP Headers</strong>: Add Header Name: <code className="text-indigo-300 font-mono text-[9px]">Content-Type</code>, Value: <code className="text-indigo-300 font-mono text-[9px]">application/json</code></li>
+                                      <li><strong>HTTP Body (Post Data)</strong>: Choose <em>Text Content</em> and copy/paste this exact JSON:
+                                        <pre className="bg-black/40 text-gray-300 font-mono p-2.5 rounded mt-1 overflow-x-auto text-[9px] select-all border border-white/5 leading-normal">
+{`{
+  "sender": "{sms_number}",
+  "text": "{sms_message}",
+  "creatorPhone": "${creatorPhone}"
+}`}
+                                        </pre>
+                                        <span className="text-[9px] text-gray-500 block mt-1">MacroDroid will automatically replace <code className="text-gray-400">{`{sms_number}`}</code> and <code className="text-gray-400">{`{sms_message}`}</code> with the sender details and SMS message body dynamically!</span>
+                                      </li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {testToken && (
                             <div className="space-y-4">
                               <h5 className="text-xs font-bold text-white uppercase tracking-wider">Step 2: Send Verification Ping</h5>
                               <p className="text-[11px] text-gray-400 leading-relaxed">
-                                Once the script is running, send a test SMS containing <strong>{testToken}</strong> to your own number <strong>{creatorPhone}</strong> from the gateway device. 
-                                The script will forward it, and the system will automatically verify it below.
+                                Once you have started your Termux script or configured MacroDroid, scan the QR code below on your gateway device to automatically type the test SMS and trigger verification.
                               </p>
                               <div className="flex flex-col items-center justify-center p-4 bg-white/2 border border-white/5 rounded-2xl gap-3">
                                 <img
