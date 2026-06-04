@@ -42,6 +42,13 @@ export default function CreatePoll() {
   const [creatorPhone, setCreatorPhone] = useState('');
   const [gatewayVerified, setGatewayVerified] = useState(false);
   const [testToken, setTestToken] = useState('');
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
 
   // Exam Safeguards & Proctors Settings
   const [examTimerDuration, setExamTimerDuration] = useState<number>(60);
@@ -3198,16 +3205,36 @@ export default function CreatePoll() {
                         <div className="border-t border-white/5 pt-4 space-y-4 animate-fade-in">
                           <div>
                             <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Step 1: Install Gateway Script</h5>
-                            <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
+                            <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
                               Download our custom Python script to run on your Android device via Termux. This script reads incoming SMS and securely posts them to the gateway server.
                             </p>
-                            <div className="flex flex-wrap gap-3">
-                              <a
-                                href={`/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`}
-                                className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-[10px] font-bold transition-all"
-                              >
-                                📥 Download Gateway Python Script
-                              </a>
+                            
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white/2 border border-white/5 p-4 rounded-xl">
+                              <div className="flex-1 flex flex-col justify-center space-y-3">
+                                <p className="text-[10px] text-gray-400 leading-relaxed">
+                                  Click the button below to download the script directly to your computer, or scan the QR code to download it straight to your mobile device.
+                                </p>
+                                <div>
+                                  <a
+                                    href={`/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`}
+                                    className="inline-flex items-center px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-[10px] font-bold transition-all"
+                                  >
+                                    📥 Download Gateway Python Script
+                                  </a>
+                                </div>
+                              </div>
+                              {origin && (
+                                <div className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/10 rounded-xl self-center sm:self-auto">
+                                  <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
+                                      `${origin}/api/webhooks/sms/download?phone=${encodeURIComponent(creatorPhone)}`
+                                    )}`}
+                                    alt="Script Download QR Code"
+                                    className="w-24 h-24 bg-white p-1 rounded-lg"
+                                  />
+                                  <span className="text-[9px] text-gray-400 font-medium">Scan to Download Script</span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
