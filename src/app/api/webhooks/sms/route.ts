@@ -15,14 +15,30 @@ async function handleSms(req: Request) {
     const searchParams = url.searchParams;
 
     let body: any = {};
+    let rawBodyText = '';
     if (req.method === 'POST') {
       try {
-        body = await req.json();
-      } catch (e) {
-        try {
-          const formData = await req.formData();
-          body = Object.fromEntries(formData.entries());
-        } catch (err) {}
+        rawBodyText = await req.text();
+        if (rawBodyText) {
+          try {
+            body = JSON.parse(rawBodyText);
+          } catch (e) {
+            // Try parsing url-encoded values
+            const params = new URLSearchParams(rawBodyText);
+            const parsed: any = {};
+            params.forEach((val, key) => {
+              parsed[key] = val;
+            });
+            if (Object.keys(parsed).length > 0 && Array.from(params.keys()).some(k => ['sender', 'text', 'message', 'from'].includes(k))) {
+              body = parsed;
+            } else {
+              // Try form data parsing
+              body = { rawText: rawBodyText };
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Webhook body read error:', err);
       }
     }
 
@@ -31,12 +47,51 @@ async function handleSms(req: Request) {
     const text = (body.text || body.message || body.msg || body.body || searchParams.get('text') || searchParams.get('message') || searchParams.get('msg') || searchParams.get('body') || '').trim();
     const creatorPhone = (body.creator || body.creatorPhone || searchParams.get('creator') || searchParams.get('creatorPhone') || '').trim();
 
+    const cleanSender = sender.replace(/\D/g, '');
+    const cleanText = text.toUpperCase();
+
+    // Persist log for live diagnostics
+    try {
+      const debugKey = 'sms-gateway-debug';
+      const existing = await prisma.siteConfig.findUnique({ where: { key: debugKey } });
+      let logs = [];
+      if (existing) {
+        try {
+          logs = JSON.parse(existing.value);
+        } catch (e) {}
+      }
+      logs.push({
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        headers: {
+          contentType: req.headers.get('content-type'),
+          userAgent: req.headers.get('user-agent'),
+        },
+        rawBody: rawBodyText,
+        parsedBody: body,
+        query: Object.fromEntries(searchParams.entries()),
+        resolved: {
+          sender,
+          text,
+          creatorPhone,
+          cleanSender,
+          cleanText
+        }
+      });
+      // Keep only last 20 logs
+      logs = logs.slice(-20);
+      await prisma.siteConfig.upsert({
+        where: { key: debugKey },
+        update: { value: JSON.stringify(logs) },
+        create: { key: debugKey, value: JSON.stringify(logs) }
+      });
+    } catch (logErr) {
+      console.error('Failed to log webhook debug data:', logErr);
+    }
+
     if (!sender || !text) {
       return NextResponse.json({ error: 'sender and text/message are required parameters' }, { status: 400 });
     }
-
-    const cleanSender = sender.replace(/\D/g, '');
-    const cleanText = text.toUpperCase();
 
     // 1. Check if it's a test token for gateway setup
     if (cleanText.startsWith('#TEST-')) {
